@@ -13,6 +13,7 @@ class Profile(models.Model):
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
     photo = models.ImageField(blank=True,upload_to='pictures/')
+    balance=models.IntegerField(default=0)
 
     def __str__(self):
         return self.name
