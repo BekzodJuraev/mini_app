@@ -15,9 +15,7 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 ALLOWED_HOSTS = ['*']
-CSRF_TRUSTED_ORIGINS = [
-    'https://dd12-213-230-93-50.ngrok-free.app',
-]
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
@@ -28,7 +26,7 @@ SECRET_KEY = 'django-insecure-4h!dnuk3y9o%!*8=9tb72w-^f5da0^i1(7+(svi+lg69#91uw=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+
 
 
 # Application definition
@@ -42,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'backend',
     'rest_framework',
+    'rest_framework.authtoken',
     'pytest_django',
     'drf_yasg',
     'corsheaders',
@@ -126,6 +125,15 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT=os.path.join(BASE_DIR,'static')
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',  # Uncomment if needed
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '2/day',  # Allows 10 requests per minute per user/IP
+    }
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
