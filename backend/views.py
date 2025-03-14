@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -9,6 +9,9 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
+from .models import Profile
+from django.db.models.functions import ExtractYear
+from django.utils.timezone import now
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -53,3 +56,15 @@ class LogoutAPIView(APIView):
         # Delete the token to logout the user
         request.user.auth_token.delete()
         return Response({"message": "Successfully logged out."}, status=status.HTTP_200_OK)
+
+class ProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProfileSer
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ProfileSer()}
+    )
+    def get(self,request):
+        profile= Profile.objects.annotate(age=now().year - ExtractYear('date_birth')).filter(username=request.user).first()
+        serializer = self.serializer_class(profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

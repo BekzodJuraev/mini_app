@@ -74,7 +74,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         place_of_residence=validated_data.get('place_of_residence')
         gender=validated_data.get('gender')
         date_birth=validated_data.get('date_birth')
-        result=get_health_scale(height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,location=place_of_residence,gender=gender,date_birth=date_birth,exp_smoke=exp_smoke)
+        #result=get_health_scale(height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,location=place_of_residence,gender=gender,date_birth=date_birth,exp_smoke=exp_smoke)
 
 
 
@@ -86,3 +86,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
 class LoginSer(serializers.Serializer):
     telegram_id=serializers.CharField(required=True,write_only=True)
 
+class ProfileSer(serializers.ModelSerializer):
+    age=serializers.IntegerField()
+    class Meta:
+        model=Profile
+        fields=['name','lastname','middle_name','gender','age','photo']
