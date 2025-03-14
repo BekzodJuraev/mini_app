@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -67,4 +67,26 @@ class ProfileAPIView(APIView):
         profile= Profile.objects.annotate(age=now().year - ExtractYear('date_birth')).filter(username=request.user).first()
         serializer = self.serializer_class(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ProfileUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=ProfileUpdateSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ProfileUpdateSer()}
+    )
+    def patch(self,request):
+        profile=request.user.profile
+        serializer = self.serializer_class(profile,data=request.data,partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Profile updated successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "message": "Profile update failed!",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 

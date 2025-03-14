@@ -91,3 +91,11 @@ class ProfileSer(serializers.ModelSerializer):
     class Meta:
         model=Profile
         fields=['name','lastname','middle_name','gender','age','photo']
+
+
+
+class ProfileUpdateSer(serializers.ModelSerializer):
+
+    class Meta:
+        model=Profile
+        fields=['name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname']
