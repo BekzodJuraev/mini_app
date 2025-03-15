@@ -12,6 +12,7 @@ from rest_framework.authentication import TokenAuthentication
 from .models import Profile
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
+import time
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
