@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -91,3 +91,15 @@ class ProfileUpdateAPIView(APIView):
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+class ProfileMainSystemAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProfileMainSystemSer
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ProfileMainSystemSer()}
+    )
+    def get(self,request):
+        profile= request.user.profile
+        serializer = self.serializer_class(profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
