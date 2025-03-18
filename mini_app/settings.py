@@ -139,12 +139,13 @@ REST_FRAMEWORK = {
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:5173",
-# ]
-CORS_ALLOW_ALL_ORIGINS = True  # Set False if you only want specific origins
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # Разрешаем только этот домен
+]
 
-# CORS_ALLOW_HEADERS = [
-#     "content-type",
-# ]
+CORS_ALLOW_CREDENTIALS = True  # Включаем поддержку передачи авторизационных данных (Cookies, Authorization)
+
+CORS_ALLOW_HEADERS = [
+    "content-type",
+    "authorization",  # Добавляем поддержку заголовка Authorization
+]
