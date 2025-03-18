@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -13,6 +13,7 @@ from .models import Profile
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
+from .prompt import chat_system
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -103,3 +104,20 @@ class ProfileMainSystemAPIView(APIView):
         profile= request.user.profile
         serializer = self.serializer_class(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ChatAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChatSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatSer()}
+    )
+
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            message = serializer.validated_data.get('message')
+            response_data=chat_system(message)
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

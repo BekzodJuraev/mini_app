@@ -17,6 +17,7 @@ class Profile(models.Model):
     health_system=models.JSONField(null=True,default=None)
     #Overall_tone=models.IntegerField(default=0)
 
+
     def __str__(self):
         return self.name
 
