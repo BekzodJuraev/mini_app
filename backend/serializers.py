@@ -181,3 +181,19 @@ class ProfileMainSystemSer(serializers.ModelSerializer):
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
 
+
+
+class CrashTestSer(serializers.Serializer):
+    smoke_day=serializers.IntegerField()
+    exp_smoke=serializers.IntegerField()
+    drop_smoke=serializers.CharField()
+    alcohol_week=serializers.IntegerField()
+    alcohol_litr=serializers.IntegerField()
+    drug_day=serializers.IntegerField()
+    day_sleep=serializers.IntegerField()
+    work=serializers.CharField()
+    level_stress=serializers.CharField()
+    habit=serializers.CharField()
+    sex=serializers.CharField()
+    environment=serializers.CharField()
+    food=serializers.CharField()

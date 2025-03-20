@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -121,3 +121,21 @@ class ChatAPIView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CrashTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CrashTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CrashTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            #message = serializer.validated_data.get('message')
+            #response_data = chat_system(message)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
