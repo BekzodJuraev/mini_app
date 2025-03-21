@@ -1,5 +1,6 @@
 import openai
-openai.api_key = "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"
+from config import KEY
+openai.api_key = KEY
 
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
     user_input = f"""
