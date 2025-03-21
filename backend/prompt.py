@@ -1,5 +1,5 @@
 import openai
-openai.api_key = "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"
+openai.api_key = "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"
 
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
     user_input = f"""
@@ -12,10 +12,11 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
     Стаж курения: {exp_smoke}
     Место проживания: {location}
 
-    Оцени состояние по шкале от 1 до 10 для следующих категорий:
+    Оцени состояние по шкале от 1 до 10 для следующих категорий, добавляя общий показатель для каждой группы:
 
     - Общий тонус (Overall tone)
     - Дыхательная система (Respiratory System)
+      - Общий показатель
       - Легкие (Lungs)
       - Трахея (Trachea)
       - Носоглотка (Nasopharynx)
@@ -23,10 +24,12 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
       - Рёбра (Ribs)
       - Диафрагма (Diaphragm)
     - Сердечно-сосудистая система (Cardiovascular System)
+      - Общий показатель
       - Пульс (Pulse)
       - Систолическое давление (Systolic Pressure)
       - Диастолическое давление (Diastolic Pressure)
     - Опорно-двигательная система (Skeletal Muscle System)
+      - Общий показатель
       - Скелет (Skeleton)
       - Мышцы (Muscles)
       - Защита (Protection)
@@ -34,77 +37,84 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
       - Амортизация (Shock Absorption)
       - Позвоночник (Spine)
     - Эндокринная система (Endocrine System)
+      - Общий показатель
       - Щитовидная железа (Thyroid Gland)
       - Шишковидная железа (Pineal Gland)
       - Надпочечники (Adrenal Glands)
       - Поджелудочная железа (Pancreas)
       - Вилочковая железа (Thymus)
       - Половые железы (Sex Glands)
-    - Иммунная система (Immune System)
+    - Иммунная система (Immune System) - Общий показатель
     - Пищеварительная система (Digestive System)
+      - Общий показатель
       - Пищевод (Esophagus)
       - Печень (Liver)
       - Желудок (Stomach)
       - Толстый кишечник (Large Intestine)
       - Тонкий кишечник (Small Intestine)
       - Ротовая полость (Oral Cavity)
-    - Выделительная система (Excretory System)
-    - Зубочелюстная система (Dental Jaw System)
-    - Сенсорная система (Sensory System)
-    - Кроветворение и обмен (Hematopoietic Metabolic System)
-    - Психическое здоровье (Mental Health System)
+    - Выделительная система (Excretory System) - Общий показатель
+    - Зубочелюстная система (Dental Jaw System) - Общий показатель
+    - Сенсорная система (Sensory System) - Общий показатель
+    - Кроветворение и обмен (Hematopoietic Metabolic System) - Общий показатель
+    - Психическое здоровье (Mental Health System) - Общий показатель
 
     Ответ должен быть ТОЛЬКО в формате JSON, например:
     {{
-        "Общий тонус": 1,
+        "Общий тонус": 7,
         "Дыхательная система": {{
-            "Легкие": 1,
-            "Трахея": 1,
-            "Носоглотка": 1,
-            "Бронхи": 1,
-            "Рёбра": 1,
-            "Диафрагма": 1
+            "Общий показатель": 6,
+            "Легкие": 5,
+            "Трахея": 6,
+            "Носоглотка": 7,
+            "Бронхи": 6,
+            "Рёбра": 7,
+            "Диафрагма": 6
         }},
         "Сердечно-сосудистая система": {{
-            "Пульс": 1,
-            "Систолическое давление": 1,
-            "Диастолическое давление": 1
+            "Общий показатель": 7,
+            "Пульс": 7,
+            "Систолическое давление": 6,
+            "Диастолическое давление": 7
         }},
         "Опорно-двигательная система": {{
-            "Скелет": 1,
-            "Мышцы": 1,
-            "Защита": 1,
-            "Гибкость суставов": 1,
-            "Амортизация": 1,
-            "Позвоночник": 1
+            "Общий показатель": 8,
+            "Скелет": 8,
+            "Мышцы": 7,
+            "Защита": 7,
+            "Гибкость суставов": 8,
+            "Амортизация": 7,
+            "Позвоночник": 8
         }},
         "Эндокринная система": {{
-            "Щитовидная железа": 1,
-            "Шишковидная железа": 1,
-            "Надпочечники": 1,
-            "Поджелудочная железа": 1,
-            "Вилочковая железа": 1,
-            "Половые железы": 1
+            "Общий показатель": 7,
+            "Щитовидная железа": 6,
+            "Шишковидная железа": 7,
+            "Надпочечники": 7,
+            "Поджелудочная железа": 6,
+            "Вилочковая железа": 7,
+            "Половые железы": 7
         }},
-        "Иммунная система": 1,
+        "Иммунная система": 7,
         "Пищеварительная система": {{
-            "Пищевод": 1,
-            "Печень": 1,
-            "Желудок": 1,
-            "Толстый кишечник": 1,
-            "Тонкий кишечник": 1,
-            "Ротовая полость": 1
+            "Общий показатель": 7,
+            "Пищевод": 7,
+            "Печень": 7,
+            "Желудок": 6,
+            "Толстый кишечник": 7,
+            "Тонкий кишечник": 7,
+            "Ротовая полость": 6
         }},
-        "Выделительная система": 1,
-        "Зубочелюстная система": 1,
-        "Сенсорная система": 1,
-        "Кроветворение и обмен": 1,
-        "Психическое здоровье": 1
+        "Выделительная система": 7,
+        "Зубочелюстная система": 7,
+        "Сенсорная система": 7,
+        "Кроветворение и обмен": 7,
+        "Психическое здоровье": 7
     }}
     """
 
     response = openai.ChatCompletion.create(
-        model="gpt-4-turbo",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
             {"role": "user", "content": user_input}
@@ -116,13 +126,15 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
 
 
 
+
+
 def chat_system(message):
     SYSTEM_PROMPT = """Вы — медицинский ассистент. Вы предоставляете только информацию, связанную со здоровьем.  
     Если пользователь спрашивает о других темах, ответьте:  
     'Извините, я предоставляю только медицинскую информацию.'"""
 
     response = openai.ChatCompletion.create(
-        model="gpt-4-turbo",
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": message}

@@ -53,6 +53,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
                 height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
                 location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke
             )
+            #print(health_system)
             if isinstance(health_system, str):
                 try:
                     health_system = json.loads(health_system)  # Convert JSON string to dictionary
@@ -78,7 +79,7 @@ class ProfileSer(serializers.ModelSerializer):
     age=serializers.IntegerField()
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','age','photo']
+        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance']
 
 
 

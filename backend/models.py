@@ -15,6 +15,8 @@ class Profile(models.Model):
     photo = models.ImageField(blank=True,upload_to='pictures/')
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
+    life_expectancy=models.IntegerField(null=True,default=None)
+
     #Overall_tone=models.IntegerField(default=0)
 
 
