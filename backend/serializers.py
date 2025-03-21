@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile\
+from .models import Profile,Categories_Quest
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -198,3 +198,23 @@ class CrashTestSer(serializers.Serializer):
     sex=serializers.CharField()
     environment=serializers.CharField()
     food=serializers.CharField()
+
+class SymptomsTestSer(serializers.Serializer):
+    symptoms=serializers.CharField()
+    temp=serializers.IntegerField()
+    covid=serializers.CharField()
+    breath=serializers.IntegerField()
+    cough=serializers.IntegerField()
+    congestion=serializers.IntegerField()
+    muscle=serializers.IntegerField()
+    chest=serializers.IntegerField()
+    headache=serializers.IntegerField()
+    vomit=serializers.IntegerField()
+
+
+class QuestSer(serializers.ModelSerializer):
+    status=serializers.BooleanField(default=0)
+
+    class Meta:
+        model=Categories_Quest
+        fields=['name','status']

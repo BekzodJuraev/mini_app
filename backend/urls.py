@@ -8,5 +8,7 @@ urlpatterns=[
  path('api/profile/update',views.ProfileUpdateAPIView.as_view(),name='profile_update'),
  path('api/profile/healthsystem', views.ProfileMainSystemAPIView.as_view(),name='healthsystem'),
  path('api/profile/chat',views.ChatAPIView.as_view(),name='chat'),
- path('api/profile/crashtest',views.CrashTestAPIView.as_view(),name='crashtest')
+ path('api/profile/crashtest',views.CrashTestAPIView.as_view(),name='crashtest'),
+ path('api/profile/symptomstests',views.SymptomsTestAPIView.as_view(),name='symptomstests'),
+ path('api/profile/list_Test',views.QuestAPIView.as_view(),name='list'),
 ]

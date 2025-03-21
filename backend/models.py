@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-
+from django.db.models import F
 
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -23,6 +23,24 @@ class Profile(models.Model):
     def __str__(self):
         return self.name
 
+class Categories_Quest(models.Model):
+    name=models.CharField(max_length=200,null=True,blank=True,default=None)
+
+
+    def __str__(self):
+        return self.name
+
+
+class Quest(models.Model):
+    profile = models.ForeignKey(
+            'Profile', on_delete=models.CASCADE, related_name='quest', verbose_name="Профиль"
+        )
+    tests=models.ForeignKey(Categories_Quest,on_delete=models.CASCADE)
+    created_at=models.DateField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        Profile.objects.filter(id=self.profile.pk).update(balance=F('balance') + 150)  # ✅ Fast
+        super().save(*args, **kwargs)
 
 # class RespiratorySystem(models.Model):
 #     profile = models.OneToOneField(
