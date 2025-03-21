@@ -1,7 +1,7 @@
 import openai
 from config import KEY
 openai.api_key = KEY
-
+#hellp
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
     user_input = f"""
     Рост: {height}
