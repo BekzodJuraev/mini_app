@@ -1,19 +1,24 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer,QuestSer,SymptomsTestSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
+from django.db.models import Exists, OuterRef
+
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile
+from .models import Profile,Quest,Categories_Quest
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
 from .prompt import chat_system
+from django.utils.timezone import localtime, now
+
+
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -133,9 +138,57 @@ class CrashTestAPIView(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            #message = serializer.validated_data.get('message')
-            #response_data = chat_system(message)
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile,created_at=today,tests_id=1)
+
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class SymptomsTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SymptomsTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: SymptomsTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+class QuestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: QuestSer(many=True)}
+    )
+    def get(self,request):
+        profile = request.user.profile
+        today = localtime(now()).date()
+
+        # Annotate all categories with a status field (True if at least one related Quest exists today)
+        categories = Categories_Quest.objects.annotate(
+            status=Exists(
+                Quest.objects.filter(
+                    profile=profile,
+                    created_at=today,
+                    tests=OuterRef('pk')  # Matches each category with its related Quests
+                )
+            )
+        ).values('name', 'status')
+
+
+        serializer = self.serializer_class(categories,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
