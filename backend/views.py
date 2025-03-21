@@ -147,7 +147,7 @@ class CrashTestAPIView(APIView):
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
+#asd
 class SymptomsTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = SymptomsTestSer
