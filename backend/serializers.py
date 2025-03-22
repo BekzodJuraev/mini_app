@@ -211,6 +211,11 @@ class SymptomsTestSer(serializers.Serializer):
     headache=serializers.IntegerField()
     vomit=serializers.IntegerField()
 
+class LifeStyleTestSer(serializers.Serializer):
+    sleep=serializers.IntegerField()
+    food=serializers.IntegerField()
+    training=serializers.IntegerField()
+    couple=serializers.IntegerField()
 
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
