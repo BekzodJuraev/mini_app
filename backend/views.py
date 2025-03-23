@@ -15,10 +15,10 @@ from .models import Profile,Quest,Categories_Quest
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system
+from .prompt import chat_system,crash_test
 from django.utils.timezone import localtime, now
 
-
+import json
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -141,8 +141,17 @@ class CrashTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             Quest.objects.get_or_create(profile=profile,created_at=today,tests_id=1)
+            test=crash_test(serializer.validated_data)
+            # if isinstance(test, str):
+            #     try:
+            #         test = json.loads(test)  # Convert JSON string to dictionary
+            #     except json.JSONDecodeError:
+            #         raise ValueError("Invalid JSON format returned from OpenAI API")
+            # print(test)
 
-            return Response(serializer.data, status=status.HTTP_200_OK)
+
+            #print(test['life_expectancy'])
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 

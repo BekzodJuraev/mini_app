@@ -1,7 +1,7 @@
 import openai
 from config import KEY
 openai.api_key = KEY
-#hellp
+import json
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
     user_input = f"""
     Рост: {height}
@@ -143,3 +143,48 @@ def chat_system(message):
     )
 
     return response["choices"][0]["message"]["content"]
+
+
+def crash_test(user_data):
+    prompt = f"""
+    Попробуйте проверить, насколько прочен ваш организм. В режиме краш-тест вы можете вводить любые параметры вредных привычек и получить расчет, на сколько это сократит вашу жизнь.
+
+    Данные пользователя:
+    - Сигареты в день: {user_data['smoke_day']}
+    - Стаж курения (лет): {user_data['exp_smoke']}
+    - Бросал курить: {user_data['drop_smoke']}
+    - Алкоголь в неделю: {user_data['alcohol_week']}
+    - Алкоголь за день (максимум): {user_data['alcohol_litr']}
+    - Психотропные вещества (дни в месяц): {user_data['drug_day']}
+    - Сон (часов в сутки): {user_data['day_sleep']}
+    - Переработки: {user_data['work']}
+    - Уровень стресса: {user_data['level_stress']}
+    - Склонность к самоповреждению: {user_data['habit']}
+    - Беспорядочные связи: {user_data['sex']}
+    - Экологическая среда: {user_data['environment']}
+    - Рациональное питание: {user_data['food']}
+
+    Определи ожидаемую продолжительность жизни и сформулируй краткий анализ состояния здоровья.
+    
+    Ответ должен быть ТОЛЬКО в формате JSON, например:
+      {{"life_expectancy": 10,
+       "message": str (краткий анализ состояния здоровья, который варьируется в зависимости от введенных данных)}}
+
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Ты эксперт в анализе здоровья и вредных привычек."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+
+
+    return result_text
+
+
+
+

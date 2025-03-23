@@ -1,0 +1,15 @@
+Crash_test{
+    "smoke_day": 10,
+    "exp_smoke": 5,
+    "drop_smoke": "Нет",
+    "alcohol_week": 3,
+    "alcohol_litr": 5,
+    "drug_day": 0,
+    "day_sleep": 6,
+    "work": "Иногда",
+    "level_stress": "😡",
+    "habit": "Нет",
+    "sex": "Нет",
+    "environment": "Грязная вода",
+    "food": "Нет"
+}
