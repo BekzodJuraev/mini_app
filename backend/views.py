@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer,QuestSer,SymptomsTestSer,LifeStyleTestSer
+from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer,QuestSer,SymptomsTestSer,LifeStyleTestSer,HeartLestTestSer
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from django.db.models import Exists, OuterRef
@@ -179,6 +179,23 @@ class LifeStyleTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=4)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartLestTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartLestTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartLestTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
 
             return Response(serializer.data, status=status.HTTP_200_OK)
 

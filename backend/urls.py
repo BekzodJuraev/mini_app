@@ -11,5 +11,6 @@ urlpatterns=[
  path('api/profile/crashtest',views.CrashTestAPIView.as_view(),name='crashtest'),
  path('api/profile/symptomstest',views.SymptomsTestAPIView.as_view(),name='symptomstests'),
  path('api/profile/lifestyletest',views.LifeStyleTestAPIView.as_view(),name='lifestyletest'),
+ path('api/profile/hearttest/lest',views.HeartLestTestAPIView.as_view(),name='hearttest'),
  path('api/profile/list_Test',views.QuestAPIView.as_view(),name='list'),
 ]
