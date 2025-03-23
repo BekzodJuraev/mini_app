@@ -217,7 +217,6 @@ class LifeStyleTestSer(serializers.Serializer):
     training=serializers.IntegerField()
     couple=serializers.IntegerField()
 class HeartLestTestSer(serializers.Serializer):
-    timer=serializers.CharField()
     pulse=serializers.IntegerField()
 
 
