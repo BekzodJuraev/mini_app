@@ -1,5 +1,5 @@
 import openai
-from config import KEY
+from config import KEY,MODEL
 openai.api_key = KEY
 import json
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
@@ -115,11 +115,12 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
     """
 
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
             {"role": "user", "content": user_input}
-        ]
+        ],
+        response_format={"type": "json_object"}
     )
 
     return response["choices"][0]["message"]["content"]
@@ -135,11 +136,12 @@ def chat_system(message):
     'Извините, я предоставляю только медицинскую информацию.'"""
 
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": message}
-        ]
+        ],
+
     )
 
     return response["choices"][0]["message"]["content"]
@@ -173,17 +175,19 @@ def crash_test(user_data):
     """
 
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": "Ты эксперт в анализе здоровья и вредных привычек."},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        response_format={ "type": "json_object" }
     )
 
     result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
 
 
-    return result_text
+    return result_dict
 
 
 

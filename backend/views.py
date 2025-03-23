@@ -123,7 +123,7 @@ class ChatAPIView(APIView):
         if serializer.is_valid():
             message = serializer.validated_data.get('message')
             response_data=chat_system(message)
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response({'message': response_data}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -142,15 +142,8 @@ class CrashTestAPIView(APIView):
             today = localtime(now()).date()
             Quest.objects.get_or_create(profile=profile,created_at=today,tests_id=1)
             test=crash_test(serializer.validated_data)
-            # if isinstance(test, str):
-            #     try:
-            #         test = json.loads(test)  # Convert JSON string to dictionary
-            #     except json.JSONDecodeError:
-            #         raise ValueError("Invalid JSON format returned from OpenAI API")
-            # print(test)
-
-
-            #print(test['life_expectancy'])
+            profile.life_expectancy=test['life_expectancy']
+            profile.save(update_fields=['life_expectancy'])
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
