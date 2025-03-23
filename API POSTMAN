@@ -1,4 +1,5 @@
-Crash_test{
+Crash_test
+{
     "smoke_day": 10,
     "exp_smoke": 5,
     "drop_smoke": "Нет",
