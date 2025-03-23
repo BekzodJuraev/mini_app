@@ -216,6 +216,10 @@ class LifeStyleTestSer(serializers.Serializer):
     food=serializers.IntegerField()
     training=serializers.IntegerField()
     couple=serializers.IntegerField()
+class HeartLestTestSer(serializers.Serializer):
+    timer=serializers.CharField()
+    pulse=serializers.IntegerField()
+
 
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
