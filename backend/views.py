@@ -105,10 +105,21 @@ class ProfileMainSystemAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ProfileMainSystemSer()}
     )
-    def get(self,request):
-        profile= request.user.profile
+    def get(self, request):
+        profile = request.user.profile
         serializer = self.serializer_class(profile)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Extract health_system safely
+        health_system = serializer.data.get('health_system', {})
+
+        # Convert dictionary into a list of {"name": key, "value": value} dictionaries
+        transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
+
+        return Response({
+            "name": serializer.data["name"],
+            "health_system": transformed_health_system
+        }, status=status.HTTP_200_OK)
+
 
 class ChatAPIView(APIView):
     permission_classes = [IsAuthenticated]
