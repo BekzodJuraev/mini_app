@@ -220,6 +220,13 @@ class HeartLestTestSer(serializers.Serializer):
     pulse=serializers.IntegerField()
 
 
+class HeartBreathTestSer(serializers.Serializer):
+    breathing=serializers.IntegerField()
+    breathing_time=serializers.CharField()
+class HeartGenchiTestSer(serializers.Serializer):
+    breathing_time = serializers.CharField()
+    sportsmen=serializers.CharField()
+
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
 
