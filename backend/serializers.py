@@ -215,7 +215,7 @@ class LifeStyleTestSer(serializers.Serializer):
     sleep=serializers.IntegerField()
     food=serializers.IntegerField()
     training=serializers.IntegerField()
-    couple=serializers.IntegerField()
+    couple=serializers.CharField()
 class HeartLestTestSer(serializers.Serializer):
     pulse=serializers.IntegerField()
 

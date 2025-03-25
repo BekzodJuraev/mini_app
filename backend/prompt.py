@@ -142,6 +142,7 @@ def chat_system(message):
             {"role": "user", "content": message}
         ],
 
+
     )
 
     return response["choices"][0]["message"]["content"]
@@ -190,5 +191,32 @@ def crash_test(user_data):
     return result_dict
 
 
+def lifestyle_test(user_data):
+    prompt = f"""
+    Оцените образ жизни на основе следующих данных:
+    - Считаете ли вы свой сон качественным? (1-7): {user_data['sleep']}
+    - Считаете ли вы, что ваш рацион состоит из полезной еды? (1-7): {user_data['food']}
+    - Каждый свой день вы начинаете с зарядки? (1-7): {user_data['training']}
+    - У вас есть вторая половинка или супруг(а)? (да/нет): {user_data['couple']}
+
+    Определите уровень физической подготовки и сформулируйте краткий анализ состояния здоровья.
+
+    Ответ должен быть ТОЛЬКО в формате JSON, например:
+      {{ "message": "Ваш уровень физической подготовки является средним. Возможно, стоит уделить больше внимания физической активности."}}
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "Ты эксперт в области здоровья и образа жизни."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+
+    return result_dict
 
 
