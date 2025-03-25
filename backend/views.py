@@ -1,6 +1,25 @@
 from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegistrationSerializer,LoginSer,ProfileSer,ProfileUpdateSer,ProfileMainSystemSer,ChatSer,CrashTestSer,QuestSer,SymptomsTestSer,LifeStyleTestSer,HeartLestTestSer,HeartBreathTestSer,HeartGenchiTestSer
+from .serializers import (
+    RegistrationSerializer,
+    LoginSer,
+    ProfileSer,
+    ProfileUpdateSer,
+    ProfileMainSystemSer,
+    ChatSer,
+    CrashTestSer,
+    QuestSer,
+    SymptomsTestSer,
+    LifeStyleTestSer,
+    HeartLestTestSer,
+    HeartBreathTestSer,
+    HeartGenchiTestSer,
+    HeartRufeTestSer,
+    HeartKotovaTestSer,
+    HeartMartineTestSer,
+    HeartKuperTestSer,
+)
+
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from django.db.models import Exists, OuterRef
@@ -238,6 +257,74 @@ class HeartGenchiTestAPIView(APIView):
 
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartGenchiTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartRufeTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartRufeTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartRufeTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartKotovaTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartKotovaTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartKotovaTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartMartineTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartMartineTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartMartineTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartKuperTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartKuperTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartKuperTestSer()}
     )
     def post(self, request):
         serializer = self.serializer_class(data=request.data)

@@ -227,6 +227,31 @@ class HeartGenchiTestSer(serializers.Serializer):
     breathing_time = serializers.CharField()
     sportsmen=serializers.CharField()
 
+
+class HeartRufeTestSer(serializers.Serializer):
+    pulse_main=serializers.IntegerField()
+    pulse_first=serializers.IntegerField()
+    pulse_second=serializers.IntegerField()
+
+class HeartKotovaTestSer(serializers.Serializer):
+    pulse_main=serializers.IntegerField()
+    pressure_top=serializers.CharField()
+    pressure_bottom=serializers.CharField()
+    pulse_first = serializers.IntegerField()
+    pulse_second = serializers.IntegerField()
+
+
+class HeartMartineTestSer(serializers.Serializer):
+    pulse_main=serializers.IntegerField()
+    pressure_top = serializers.CharField()
+    pressure_bottom = serializers.CharField()
+    pulse_first = serializers.IntegerField()
+    pulse_second = serializers.IntegerField()
+
+class HeartKuperTestSer(serializers.Serializer):
+    distance=serializers.FloatField()
+
+
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
 

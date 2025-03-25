@@ -14,6 +14,11 @@ urlpatterns=[
  path('api/hearthtest/lest',views.HeartLestTestAPIView.as_view(),name='hearttest'),
  path('api/hearthtest/breath', views.HeartBreathTestAPIView.as_view(),name='breathtest'),
  path('api/hearthtest/genchi', views.HeartGenchiTestAPIView.as_view(), name='genchi'),
+ path('api/hearthtest/rufe', views.HeartRufeTestAPIView.as_view(), name='rufe'),
+ path('api/hearthtest/kotova', views.HeartKotovaTestAPIView.as_view(), name='kotova'),
+ path('api/hearthtest/martine', views.HeartMartineTestAPIView.as_view(), name='martine'),
+ path('api/hearthtest/kuper', views.HeartKuperTestAPIView.as_view(), name='kuper'),
+
 
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
 ]
