@@ -16,7 +16,7 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
-    'https://dd12-213-230-93-50.ngrok-free.app',
+    "https://api.medavatar.xyz",
 ]
 
 
