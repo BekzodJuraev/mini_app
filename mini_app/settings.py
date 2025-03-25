@@ -15,6 +15,9 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 ALLOWED_HOSTS = ['*']
+CSRF_TRUSTED_ORIGINS = [
+    'https://dd12-213-230-93-50.ngrok-free.app',
+]
 
 
 # Quick-start development settings - unsuitable for production
@@ -142,7 +145,8 @@ REST_FRAMEWORK = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Разрешаем только этот домен
+    "http://localhost:3000",
+    "https://medavatar.xyz/"
 ]
 
 CORS_ALLOW_CREDENTIALS = True  # Включаем поддержку передачи авторизационных данных (Cookies, Authorization)
