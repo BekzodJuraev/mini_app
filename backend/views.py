@@ -34,7 +34,7 @@ from .models import Profile,Quest,Categories_Quest
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test
 from django.utils.timezone import localtime, now
 
 import json
@@ -199,8 +199,8 @@ class SymptomsTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2)
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            message = symptoms_test(serializer.validated_data)
+            return Response(message, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
