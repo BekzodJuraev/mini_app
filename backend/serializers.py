@@ -200,7 +200,9 @@ class CrashTestSer(serializers.Serializer):
     food=serializers.CharField()
 
 class SymptomsTestSer(serializers.Serializer):
-    symptoms=serializers.CharField()
+    symptoms=serializers.ListField(
+        child=serializers.CharField()
+    )
     temp=serializers.IntegerField()
     covid=serializers.CharField()
     breath=serializers.IntegerField()
