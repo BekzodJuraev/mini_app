@@ -220,3 +220,36 @@ def lifestyle_test(user_data):
     return result_dict
 
 
+def symptoms_test(user_data):
+    prompt = f"""
+    Оцените симптомы на основе следующих данных:
+    - Выбор симптомов: {', '.join(user_data['symptoms'])}
+    - Насколько нормальной была температура тела в последние дни? (1-7): {user_data['temp']}
+    - Болели ли вы COVID-19 в последние пару лет? (да/нет): {user_data['covid']}
+    - Оцените затрудненность дыхания (1-7): {user_data['breath']}
+    - Было ли у вас  кашель ?(1-7): {user_data['cough']}
+    - Было ли у вас  заложенность носа?(1-7): {user_data['congestion']}
+    - Боль в мышцах (1-7): {user_data['muscle']}
+    - Боль в груди (1-7): {user_data['chest']}
+    - Головная боль и слабость (1-7): {user_data['headache']}
+    - Тошнота, рвота или диарея (1-7): {user_data['vomit']}
+
+    Определите общее состояние здоровья и сформулируйте краткий анализ.
+
+    Ответ должен быть ТОЛЬКО в формате JSON, например:
+      {{ "message": "Согласно отправленным вами данных мы можем предположить, что вам не стоит волноваться по этому поводу." }}
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "Ты медицинский помощник, который анализирует симптомы."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+
+    return result_dict

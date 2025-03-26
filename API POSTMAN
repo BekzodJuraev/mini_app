@@ -14,3 +14,18 @@ Crash_test
     "environment": "Грязная вода",
     "food": "Нет"
 }
+
+
+SYptmons
+{
+        "symptoms": ["Одышка"],
+        "temp": 4,
+        "covid": "нет",
+        "breath": 4,
+        "cough": 3,
+        "congestion": 5,
+        "muscle": 1,
+        "chest": 1,
+        "headache": 1,
+        "vomit": 1
+    }
