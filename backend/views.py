@@ -101,6 +101,12 @@ class ProfileUpdateAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ProfileUpdateSer()}
     )
+    def get(self,request):
+        profile=request.user.profile
+        serializer=self.serializer_class(profile)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
     def patch(self,request):
         profile=request.user.profile
         serializer = self.serializer_class(profile,data=request.data,partial=True)
