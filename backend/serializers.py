@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest
+from .models import Profile,Categories_Quest,Quest
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -252,7 +252,10 @@ class HeartMartineTestSer(serializers.Serializer):
 
 class HeartKuperTestSer(serializers.Serializer):
     distance=serializers.FloatField()
-
+class NotificationSer(serializers.ModelSerializer):
+    class Meta:
+        model=Quest
+        fields=['tests','created_at','read']
 
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)

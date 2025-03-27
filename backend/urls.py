@@ -18,6 +18,7 @@ urlpatterns=[
  path('api/hearthtest/kotova', views.HeartKotovaTestAPIView.as_view(), name='kotova'),
  path('api/hearthtest/martine', views.HeartMartineTestAPIView.as_view(), name='martine'),
  path('api/hearthtest/kuper', views.HeartKuperTestAPIView.as_view(), name='kuper'),
+ path('api/notification',views.NotificationAPIView.as_view(),name='notification'),
 
 
  path('api/tests',views.QuestAPIView.as_view(),name='list'),

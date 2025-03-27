@@ -18,6 +18,7 @@ from .serializers import (
     HeartKotovaTestSer,
     HeartMartineTestSer,
     HeartKuperTestSer,
+    NotificationSer,
 )
 
 from rest_framework.views import APIView
@@ -36,7 +37,7 @@ from django.utils.timezone import now
 import time
 from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test
 from django.utils.timezone import localtime, now
-
+from django.shortcuts import get_object_or_404
 import json
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
@@ -176,9 +177,10 @@ class CrashTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
-            Quest.objects.get_or_create(profile=profile,created_at=today,tests_id=1)
             test=crash_test(serializer.validated_data)
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=1,message=test['message'])
             profile.life_expectancy=test['life_expectancy']
+
             profile.save(update_fields=['life_expectancy'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -198,9 +200,10 @@ class SymptomsTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2)
-            message = symptoms_test(serializer.validated_data)
-            return Response(message, status=status.HTTP_200_OK)
+            test = symptoms_test(serializer.validated_data)
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2, message=test['message'])
+
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -217,9 +220,11 @@ class LifeStyleTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=4)
-            message=lifestyle_test(serializer.validated_data)
+            test=lifestyle_test(serializer.validated_data)
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2, message=test['message'])
 
-            return Response(message, status=status.HTTP_200_OK)
+
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class HeartLestTestAPIView(APIView):
@@ -370,3 +375,27 @@ class QuestAPIView(APIView):
         serializer = self.serializer_class(categories,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class NotificationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: NotificationSer(many=True)}
+    )
+    def get(self,request):
+        profile = request.user.profile
+        cat=Quest.objects.filter(profile=profile)
+
+
+        serializer = self.serializer_class(cat,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class MessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, message_id):
+        profile=request.user.profile
+        message = get_object_or_404(Quest, id=message_id, profile=profile)
+        return Response({'message': message.text})
