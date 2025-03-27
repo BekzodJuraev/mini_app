@@ -37,6 +37,8 @@ class Quest(models.Model):
         )
     tests=models.ForeignKey(Categories_Quest,on_delete=models.CASCADE)
     created_at=models.DateField(auto_now_add=True)
+    read=models.BooleanField(default=False)
+    message=models.TextField(null=True,default=None)
 
     def save(self, *args, **kwargs):
         Profile.objects.filter(id=self.profile.pk).update(balance=F('balance') + 150)  # ✅ Fast
