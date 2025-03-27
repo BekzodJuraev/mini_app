@@ -398,4 +398,7 @@ class MessageView(APIView):
     def get(self, request, message_id):
         profile=request.user.profile
         message = get_object_or_404(Quest, id=message_id, profile=profile)
-        return Response({'message': message.text})
+        if message.read == False:
+            message.read=True
+            message.save(update_fields=['read'])
+        return Response({'message': message.message},status=status.HTTP_200_OK)
