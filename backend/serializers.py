@@ -253,9 +253,10 @@ class HeartMartineTestSer(serializers.Serializer):
 class HeartKuperTestSer(serializers.Serializer):
     distance=serializers.FloatField()
 class NotificationSer(serializers.ModelSerializer):
+    tests=serializers.CharField(source='tests.name')
     class Meta:
         model=Quest
-        fields=['tests','created_at','read']
+        fields=['id','tests','created_at','read']
 
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
