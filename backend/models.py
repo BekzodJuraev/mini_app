@@ -37,12 +37,20 @@ class Quest(models.Model):
         )
     tests=models.ForeignKey(Categories_Quest,on_delete=models.CASCADE)
     created_at=models.DateField(auto_now_add=True)
-    read=models.BooleanField(default=False)
-    message=models.TextField(null=True,default=None)
 
     def save(self, *args, **kwargs):
         Profile.objects.filter(id=self.profile.pk).update(balance=F('balance') + 150)  # ✅ Fast
         super().save(*args, **kwargs)
+
+
+class tests(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
+    )
+    name = models.CharField(max_length=200, db_index=True)
+    read = models.BooleanField(default=False)
+    message = models.TextField(null=True, default=None)
+    created_at = models.DateField(auto_now_add=True)
 
 # class RespiratorySystem(models.Model):
 #     profile = models.OneToOneField(
