@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest
+from .models import Profile,Categories_Quest,Quest,Tests
+
+
+@admin.register(Tests)
+class Tests(admin.ModelAdmin):
+    list_display = ['name','read','created_at']
+
 # Register your models here.
 @admin.register(Profile)
 class Profile(admin.ModelAdmin):
