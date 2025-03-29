@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest
+from .models import Profile,Categories_Quest,Quest,Tests
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -189,7 +189,7 @@ class CrashTestSer(serializers.Serializer):
     exp_smoke=serializers.IntegerField()
     drop_smoke=serializers.CharField()
     alcohol_week=serializers.IntegerField()
-    alcohol_litr=serializers.IntegerField()
+    alcohol_litr=serializers.FloatField()
     drug_day=serializers.IntegerField()
     day_sleep=serializers.IntegerField()
     work=serializers.CharField()
@@ -253,10 +253,9 @@ class HeartMartineTestSer(serializers.Serializer):
 class HeartKuperTestSer(serializers.Serializer):
     distance=serializers.FloatField()
 class NotificationSer(serializers.ModelSerializer):
-    tests=serializers.CharField(source='tests.name')
     class Meta:
-        model=Quest
-        fields=['id','tests','created_at','read']
+        model=Tests
+        fields=['id','name','created_at','read',]
 
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
@@ -264,3 +263,5 @@ class QuestSer(serializers.ModelSerializer):
     class Meta:
         model=Categories_Quest
         fields=['name','status']
+
+

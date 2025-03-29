@@ -43,7 +43,7 @@ class Quest(models.Model):
         super().save(*args, **kwargs)
 
 
-class tests(models.Model):
+class Tests(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
     )
