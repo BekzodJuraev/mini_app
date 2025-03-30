@@ -35,7 +35,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -231,9 +231,8 @@ class LifeStyleTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=4)
             test=lifestyle_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2)
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=4)
             Tests.objects.create(profile=profile,name="Оценка образа жизни",created_at=today,message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
@@ -251,9 +250,10 @@ class HeartLestTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
+            test=lestnica_test(serializer.validated_data['pulse'])
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            Tests.objects.create(profile=profile, name="Тест на лестнице", created_at=today, message=test['message'])
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -269,9 +269,10 @@ class HeartBreathTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
+            test=breath_test(serializer.validated_data)
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            Tests.objects.create(profile=profile, name="Проба Штанге", created_at=today, message=test['message'])
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -287,9 +288,10 @@ class HeartGenchiTestAPIView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             today = localtime(now()).date()
+            test=genchi_test(serializer.data)
             Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            Tests.objects.create(profile=profile, name="Проба Генчи", created_at=today, message=test['message'])
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class HeartRufeTestAPIView(APIView):
@@ -398,7 +400,7 @@ class NotificationAPIView(APIView):
         profile = request.user.profile
         cat = Tests.objects.filter(profile=profile)
         filter = request.query_params.get('filter')
-        print(filter)
+
         if filter:
             cat=Tests.objects.filter(profile=profile,name__icontains=filter)
 

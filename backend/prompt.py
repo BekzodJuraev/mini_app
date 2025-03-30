@@ -136,7 +136,7 @@ def chat_system(message):
     'Извините, я предоставляю только медицинскую информацию.'"""
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4-turbo",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": message}
@@ -250,6 +250,117 @@ def symptoms_test(user_data):
     )
 
     result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+
+    return result_dict
+
+
+def lestnica_test(pulse):
+    prompt = f"""
+    Тест на лестнице Выполнение теста:
+    1. Подниматься на лестницу, используя попеременный шаг, с равномерным темпом в течение 3 минут подряд.
+    2. Через 3 минуты остановиться и сесть на стул.
+    3. Через 1 минуту после завершения теста подсчитать частоту пульса.
+
+    Подсчитайте пульс сидя, на протяжении 15 сек.
+
+    Пульс: {pulse}
+
+    Проанализируй полученные данные и сделай вывод о физической подготовке человека.
+    Ответ должен быть ТОЛЬКО в формате JSON, например:
+    {{ "message":"Исходя из полученных данных, можем сделать вывод, что ваш уровень физической подготовки является [уровень]."}}
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "Ты медицинский эксперт, анализируешь физическую подготовку по пульсу."},
+            {"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+
+    result_text=response["choices"][0]["message"]["content"]
+
+    result_dict = json.loads(result_text)
+
+    return result_dict
+
+
+
+
+def breath_test(user_data):
+    prompt = f"""
+    Проба Штанге (задержка дыхания на вдохе). После 5 мин отдыха сидя сделать 2-3
+    глубоких вдоха и выдоха, а затем, сделав глубокий вдох (80- 90 % максимального),
+    задержать дыхание.
+
+    Данные теста:
+    - Количество вдохов-выдохов: {user_data['breathing']}
+    - Время задержки дыхания: {user_data['breathing_time']} секунд
+
+    Проанализируй данные и сделай вывод о реакции организма. Ответ должен быть ТОЛЬКО в формате JSON:
+
+    {{
+      "message": "Вы задержали дыхание на {user_data['breathing_time']} секунд – это является [оценка реакции организма]."
+    }}
+
+    Подставь правильную оценку вместо [оценка реакции организма]:
+    - Менее 30 секунд – слабая реакция организма.
+    - От 30 до 44 секунд – ниже среднего.
+    - От 45 до 59 секунд – удовлетворительная реакция организма.
+    - От 60 до 89 секунд – хорошая реакция организма.
+    - 90 секунд и более – отличная реакция организма.
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "Ты эксперт по физическим тестам. Дай анализ задержки дыхания."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text=response["choices"][0]["message"]["content"]
+
+    result_dict = json.loads(result_text)
+
+    return result_dict
+
+
+def genchi_test(user_data):
+
+    prompt = f"""
+    Проба Генчи (задержка дыхания на выдохе) выполняется так же, как и проба Штанге, 
+    только задержка дыхания производится после полного выдоха.
+
+    Данные теста:
+    - Время задержки дыхания: {user_data['breathing_time']} секунд
+    - Являетесь ли вы спортсменом?: {user_data['sportsmen']}
+
+    Проанализируй данные и сделай вывод о реакции организма. Ответ должен быть ТОЛЬКО в формате JSON:
+
+    {{
+      "message": f"При задержке дыхания на выдохе ваш результат составил 35 секунд, для человека который  занимается спортом результат является  [оценка реакции организма]."
+    }}
+
+    Подставь правильную оценку вместо [оценка реакции организма]:
+    - Менее 20 секунд – слабая реакция организма.
+    - От 20 до 34 секунд – удовлетворительная реакция.
+    - От 35 до 45 секунд – хорошая реакция.
+    - Более 45 секунд – отличная реакция.
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "Ты эксперт по физическим тестам. Дай анализ задержки дыхания."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text=response["choices"][0]["message"]["content"]
     result_dict = json.loads(result_text)
 
     return result_dict
