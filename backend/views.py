@@ -18,6 +18,7 @@ from .serializers import (
     HeartMartineTestSer,
     HeartKuperTestSer,
     NotificationSer,
+    ChatGETSer
 )
 
 from rest_framework.views import APIView
@@ -30,7 +31,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests
+from .models import Profile,Quest,Categories_Quest,Tests,Chat
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -151,14 +152,25 @@ class ChatAPIView(APIView):
     serializer_class = ChatSer
 
     @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatGETSer(many=True)}
+    )
+    def get(self,request):
+        profile=request.user.profile
+        query=Chat.objects.filter(profile=profile).order_by('-created_at')
+        serializer=ChatGETSer(query,many=True)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+    @swagger_auto_schema(
         responses={status.HTTP_200_OK: ChatSer()}
     )
 
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
+            profile=request.user.profile
             message = serializer.validated_data.get('message')
             response_data=chat_system(message)
+            Chat.objects.create(profile=profile,question=message,answer=response_data)
+
             return Response({'message': response_data}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
