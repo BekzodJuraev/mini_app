@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests
+from .models import Profile,Categories_Quest,Quest,Tests,Chat
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -106,78 +106,7 @@ class ProfileMainSystemSer(serializers.ModelSerializer):
         #fields=['name','Overall_tone','RespiratorySystem','CardiovascularSystem','SkeletalMuscleSystem','EndocrineSystem','ImmuneSystem','DigestiveSystem','ExcretorySystem','DentalJawSystem','SensorySystem','HematopoieticMetabolicSystem','MentalHealthSystem']
         fields=['name','health_system']
 
-# class ProfileHealthSystemSer(serializers.Serializer):
-#     name=serializers.CharField()
-#     Overall_tone=serializers.IntegerField()
-#     RespiratorySystem_total=serializers.IntegerField()
-#     CardiovascularSystem_total=serializers.IntegerField()
-#     SkeletalMuscleSystem_total=serializers.IntegerField()
-#     EndocrineSystem_total=serializers.IntegerField()
-#     ImmuneSystem_total=serializers.IntegerField()
-#     DigestiveSystem_total=serializers.IntegerField()
-#     ExcretorySystem_total=serializers.IntegerField()
-#     DentalJawSystem_total=serializers.IntegerField()
-#     SensorySystem_total=serializers.IntegerField()
-#     HematopoieticMetabolicSystem_total=serializers.IntegerField()
-#     MentalHealthSystem_total=serializers.IntegerField()
 
-
-# class RespiratorySystemSer(serializers.ModelSerializer):
-#
-#     class Meta:
-#         model=RespiratorySystem
-#         fields=['lungs','trachea','nasopharynx','bronchi','ribs','diaphragm','total_rank']
-#
-# class CardiovascularSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=CardiovascularSystem
-#         fields=['pulse','systolic_pressure','diastolic_pressure','total_rank']
-#
-# class SkeletalMuscleSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=SkeletalMuscleSystem
-#         fields=['skeleton','muscles','protection','joint_flexibility','shock_absorption','spine','total_rank']
-#
-# class EndocrineSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=EndocrineSystem
-#         fields=['thyroid_gland','pineal_gland','adrenal_glands','pancreas','thymus','sex_gland','total_rank']
-#
-#
-# class ImmuneSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=ImmuneSystem
-#         fields=['total_rank']
-# #
-# class DigestiveSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=DigestiveSystem
-#         fields=['esophagus','liver','stomach','large_intestine','small_intestine','oral_cavity','total_rank']
-#
-#
-# class ExcretorySystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=ExcretorySystem
-#         fields=['total_rank']
-#
-# class DentalJawSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=DentalJawSystem
-#         fields=['total_rank']
-#
-# class SensorySystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=SensorySystem
-#         fields=['total_rank']
-#
-# class HematopoieticMetabolicSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=HematopoieticMetabolicSystem
-#         fields=['total_rank']
-# class MentalHealthSystemSer(serializers.ModelSerializer):
-#     class Meta:
-#         model=MentalHealthSystem
-#         fields=['total_rank']
 
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
@@ -265,3 +194,80 @@ class QuestSer(serializers.ModelSerializer):
         fields=['name','status']
 
 
+class ChatGETSer(serializers.ModelSerializer):
+    class Meta:
+        model=Chat
+        fields=['question','answer','created_at']
+
+# class ProfileHealthSystemSer(serializers.Serializer):
+#     name=serializers.CharField()
+#     Overall_tone=serializers.IntegerField()
+#     RespiratorySystem_total=serializers.IntegerField()
+#     CardiovascularSystem_total=serializers.IntegerField()
+#     SkeletalMuscleSystem_total=serializers.IntegerField()
+#     EndocrineSystem_total=serializers.IntegerField()
+#     ImmuneSystem_total=serializers.IntegerField()
+#     DigestiveSystem_total=serializers.IntegerField()
+#     ExcretorySystem_total=serializers.IntegerField()
+#     DentalJawSystem_total=serializers.IntegerField()
+#     SensorySystem_total=serializers.IntegerField()
+#     HematopoieticMetabolicSystem_total=serializers.IntegerField()
+#     MentalHealthSystem_total=serializers.IntegerField()
+
+
+# class RespiratorySystemSer(serializers.ModelSerializer):
+#
+#     class Meta:
+#         model=RespiratorySystem
+#         fields=['lungs','trachea','nasopharynx','bronchi','ribs','diaphragm','total_rank']
+#
+# class CardiovascularSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=CardiovascularSystem
+#         fields=['pulse','systolic_pressure','diastolic_pressure','total_rank']
+#
+# class SkeletalMuscleSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=SkeletalMuscleSystem
+#         fields=['skeleton','muscles','protection','joint_flexibility','shock_absorption','spine','total_rank']
+#
+# class EndocrineSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=EndocrineSystem
+#         fields=['thyroid_gland','pineal_gland','adrenal_glands','pancreas','thymus','sex_gland','total_rank']
+#
+#
+# class ImmuneSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=ImmuneSystem
+#         fields=['total_rank']
+# #
+# class DigestiveSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=DigestiveSystem
+#         fields=['esophagus','liver','stomach','large_intestine','small_intestine','oral_cavity','total_rank']
+#
+#
+# class ExcretorySystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=ExcretorySystem
+#         fields=['total_rank']
+#
+# class DentalJawSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=DentalJawSystem
+#         fields=['total_rank']
+#
+# class SensorySystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=SensorySystem
+#         fields=['total_rank']
+#
+# class HematopoieticMetabolicSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=HematopoieticMetabolicSystem
+#         fields=['total_rank']
+# class MentalHealthSystemSer(serializers.ModelSerializer):
+#     class Meta:
+#         model=MentalHealthSystem
+#         fields=['total_rank']

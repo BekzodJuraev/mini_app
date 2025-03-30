@@ -51,7 +51,16 @@ class Tests(models.Model):
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
     created_at = models.DateField(auto_now_add=True)
+class Chat(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='chat', verbose_name="Профиль"
+    )
+    question=models.TextField(null=True, default=None)
+    answer=models.TextField(null=True, default=None)
+    created_at=models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.profile.name
 # class RespiratorySystem(models.Model):
 #     profile = models.OneToOneField(
 #         'Profile', on_delete=models.CASCADE, related_name='res', verbose_name="Профиль"
