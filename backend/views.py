@@ -135,16 +135,21 @@ class ProfileMainSystemAPIView(APIView):
         profile = request.user.profile
         serializer = self.serializer_class(profile)
 
-        # Extract health_system safely
-        health_system = serializer.data.get('health_system', {})
+        try:
+            health_system = serializer.data.get('health_system', {})
 
-        # Convert dictionary into a list of {"name": key, "value": value} dictionaries
-        transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
+            # Convert dictionary into a list of {"name": key, "value": value} dictionaries
+            transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
 
-        return Response({
-            "name": serializer.data["name"],
-            "health_system": transformed_health_system
-        }, status=status.HTTP_200_OK)
+            return Response({
+                "name": serializer.data["name"],
+                "health_system": transformed_health_system
+            }, status=status.HTTP_200_OK)
+        except:
+            return Response({"message":"waiting data"}, status=status.HTTP_200_OK)
+
+
+
 
 
 class ChatAPIView(APIView):
