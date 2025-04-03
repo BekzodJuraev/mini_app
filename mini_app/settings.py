@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
     "https://api.medavatar.xyz",
+    "https://medavatar.xyz"
 ]
 
 
