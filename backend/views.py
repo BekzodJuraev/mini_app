@@ -261,6 +261,24 @@ class HeartLestTestAPIView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class HeartRelaxTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HeartLestTestSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HeartLestTestSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            test=lestnica_test(serializer.validated_data['pulse'])
+            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Tests.objects.create(profile=profile, name="Тест в  состоянии покоя", created_at=today, message=test['message'])
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 class HeartBreathTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -410,11 +428,11 @@ class NotificationAPIView(APIView):
     )
     def get(self,request):
         profile = request.user.profile
-        cat = Tests.objects.filter(profile=profile)
+        cat = Tests.objects.filter(profile=profile).order_by('-created_at')
         filter = request.query_params.get('filter')
 
         if filter:
-            cat=Tests.objects.filter(profile=profile,name__icontains=filter)
+            cat=Tests.objects.filter(profile=profile,name__icontains=filter).order_by('-created_at')
 
 
 
