@@ -20,6 +20,7 @@ from .serializers import (
     NotificationSer,
     ChatGETSer
 )
+from threading import Thread
 
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
@@ -35,7 +36,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -163,6 +164,7 @@ class ChatAPIView(APIView):
         profile=request.user.profile
         query=Chat.objects.filter(profile=profile).order_by('-created_at')
         serializer=ChatGETSer(query,many=True)
+
         return Response(serializer.data,status=status.HTTP_200_OK)
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ChatSer()}
@@ -173,7 +175,20 @@ class ChatAPIView(APIView):
         if serializer.is_valid():
             profile=request.user.profile
             message = serializer.validated_data.get('message')
-            response_data=chat_system(message)
+
+
+
+            def update():
+                update_health = chat_update(profile.health_system, message)
+                profile.health_system = update_health
+                profile.save(update_fields=['health_system'])
+
+
+
+
+            Thread(target=update).start()
+            response_data = chat_system(message)
+
             Chat.objects.create(profile=profile,question=message,answer=response_data)
 
             return Response({'message': response_data}, status=status.HTTP_200_OK)
