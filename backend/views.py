@@ -185,7 +185,7 @@ class ChatAPIView(APIView):
 
 
 
-
+            #asd
             Thread(target=update).start()
             response_data = chat_system(message)
 
