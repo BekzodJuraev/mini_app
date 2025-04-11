@@ -21,6 +21,7 @@ from .serializers import (
     ChatGETSer
 )
 from threading import Thread
+from datetime import date
 
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
@@ -92,7 +93,13 @@ class ProfileAPIView(APIView):
         responses={status.HTTP_200_OK: ProfileSer()}
     )
     def get(self,request):
-        profile= Profile.objects.annotate(age=now().year - ExtractYear('date_birth')).filter(username=request.user).first()
+        def calculate_age(birth_date):
+            today = date.today()
+            return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+        profile = Profile.objects.filter(username=request.user).first()
+        age = calculate_age(profile.date_birth)
+        profile.age = age
         serializer = self.serializer_class(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
