@@ -125,7 +125,9 @@ class CrashTestSer(serializers.Serializer):
     level_stress=serializers.CharField()
     habit=serializers.CharField()
     sex=serializers.CharField()
-    environment=serializers.CharField()
+    environment=serializers.ListField(
+        child=serializers.CharField()
+    )
     food=serializers.CharField()
 
 class SymptomsTestSer(serializers.Serializer):
