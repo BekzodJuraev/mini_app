@@ -216,7 +216,7 @@ class CrashTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=crash_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=1)
+            Quest.objects.get_or_create(profile=profile, tests_id=1)
             Tests.objects.create(profile=profile, name="Краш тест", created_at=today, message=test['message'])
             profile.life_expectancy=test['life_expectancy']
 
@@ -240,7 +240,7 @@ class SymptomsTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test = symptoms_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=2)
+            Quest.objects.get_or_create(profile=profile,  tests_id=2)
             Tests.objects.create(profile=profile, name="Выбор симптомов", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -259,7 +259,7 @@ class LifeStyleTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=lifestyle_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=4)
+            Quest.objects.get_or_create(profile=profile, tests_id=4)
             Tests.objects.create(profile=profile,name="Оценка образа жизни",created_at=today,message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
@@ -278,7 +278,7 @@ class HeartLestTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=lestnica_test(serializer.validated_data['pulse'])
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Тест на лестнице", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -296,7 +296,7 @@ class HeartRelaxTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=lestnica_test(serializer.validated_data['pulse'])
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Тест в  состоянии покоя", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -315,7 +315,7 @@ class HeartBreathTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=breath_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Проба Штанге", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -334,7 +334,7 @@ class HeartGenchiTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=genchi_test(serializer.data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Проба Генчи", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -352,7 +352,7 @@ class HeartRufeTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=ruffier_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile,  tests_id=3)
             Tests.objects.create(profile=profile, name="Тест Руфье", created_at=today, message=test['message'])
 
 
@@ -372,7 +372,7 @@ class HeartKotovaTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test = kotova_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Проба Котова", created_at=today, message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
@@ -391,7 +391,7 @@ class HeartMartineTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=martinet_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Проба Мартинэ", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -409,7 +409,7 @@ class HeartKuperTestAPIView(APIView):
             profile = request.user.profile
             today = localtime(now()).date()
             test=cooper_test(serializer.validated_data)
-            Quest.objects.get_or_create(profile=profile, created_at=today, tests_id=3)
+            Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Тест Купера", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
@@ -431,7 +431,6 @@ class QuestAPIView(APIView):
             status=Exists(
                 Quest.objects.filter(
                     profile=profile,
-                    created_at=today,
                     tests=OuterRef('pk')  # Matches each category with its related Quests
                 )
             )
