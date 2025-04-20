@@ -21,7 +21,5 @@ urlpatterns=[
  path('api/hearthtest/kuper', views.HeartKuperTestAPIView.as_view(), name='kuper'),
  path('api/notification',views.NotificationAPIView.as_view(),name='notification'),
  path('api/notification/message/<int:message_id>',views.MessageView.as_view(),name='message'),
-
-
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
 ]

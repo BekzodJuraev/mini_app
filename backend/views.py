@@ -449,11 +449,11 @@ class NotificationAPIView(APIView):
     )
     def get(self,request):
         profile = request.user.profile
-        cat = Tests.objects.filter(profile=profile).order_by('-created_at')
+        cat = Tests.objects.filter(profile=profile).order_by('-id')
         filter = request.query_params.get('filter')
 
         if filter:
-            cat=Tests.objects.filter(profile=profile,name__icontains=filter).order_by('-created_at')
+            cat=Tests.objects.filter(profile=profile,name__icontains=filter).order_by('-id')
 
 
 
