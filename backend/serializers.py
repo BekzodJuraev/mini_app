@@ -23,7 +23,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     gender=serializers.CharField()
     place_of_residence=serializers.CharField()
     date_birth=serializers.DateField()
-    photo=serializers.URLField(required=False)
+    photo=serializers.CharField(required=False)
     height=serializers.IntegerField()
     weight=serializers.IntegerField()
     recent_smoke=serializers.CharField()
@@ -35,6 +35,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model=User
         fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight']
+
+
 
     def create(self, validated_data):
 

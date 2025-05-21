@@ -12,7 +12,7 @@ class Profile(models.Model):
     gender=models.CharField(max_length=200, null=True, blank=True,default=None)
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
-    photo = models.URLField(blank=True)
+    photo = models.CharField(max_length=200,blank=True)
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
     life_expectancy=models.IntegerField(null=True,default=None)
