@@ -24,5 +24,6 @@ urlpatterns=[
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
  path('api/habit/add',views.HabitView.as_view(), name='habit_add'),
  path('api/habit/tracking',views.Tracking_checkView.as_view(),name='tracking'),
- path('api/habit/list',views.GetTrackingView.as_view(),name='habit_get')
+ path('api/habit/list',views.GetTrackingView.as_view(),name='habit_get'),
+ path('api/habit/get',views.GetTrackingCount.as_view(),name='habit_count')
 ]
