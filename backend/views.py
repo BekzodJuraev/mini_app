@@ -21,7 +21,8 @@ from .serializers import (
     ChatGETSer,
     HabitSer,
     TrackingSer,
-    GetHabitSer
+    GetHabitSer,
+    CountHabitSer
 
 )
 from threading import Thread
@@ -532,9 +533,24 @@ class GetTrackingView(APIView):
 
     def get(self,request):
         profile=request.user.profile
-        #tracking=Tracking_Habit.objects.filter(profile=profile)
-        tracking=Habit.objects.filter(profile=profile).annotate()
+        tracking=Tracking_Habit.objects.filter(profile=profile)
         serializer = self.serializer_class(tracking,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class GetTrackingCount(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CountHabitSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CountHabitSer(many=True)}
+    )
+    def get(self,request):
+        profile = request.user.profile
+        tracking = Habit.objects.filter(profile=profile).annotate(day=Count('habit_tracking',filter=Q(habit_tracking__check_is=False))).values('name_habit','day')
+
+
+
+
+        serializer = self.serializer_class(tracking, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

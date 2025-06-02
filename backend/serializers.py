@@ -219,11 +219,17 @@ class TrackingSer(serializers.Serializer):
     check_is=serializers.BooleanField()
 
 
-class GetHabitSer(serializers.Serializer):
+class GetHabitSer(serializers.ModelSerializer):
+    habit=serializers.CharField(source='habit.name_habit')
+
+
+    class Meta:
+        model=Tracking_Habit
+        fields=['habit','check_is','created_at']
+class CountHabitSer(serializers.Serializer):
     habit=serializers.CharField(source='name_habit')
-    date=serializers.DateField()
-    check_is=serializers.BooleanField()
     day=serializers.IntegerField()
+
 
 
 
