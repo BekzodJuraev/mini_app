@@ -22,6 +22,30 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.name
+class Habit(models.Model):
+    profile=models.ForeignKey(
+            'Profile', on_delete=models.CASCADE, related_name='habit', verbose_name="Профиль"
+        )
+    name_habit=models.CharField(max_length=200)
+    lenght=models.CharField(max_length=200)
+
+
+    def __str__(self):
+        return self.name_habit
+
+
+class Tracking_Habit(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='tracking', verbose_name="Профиль"
+    )
+    habit=models.ForeignKey('Habit',on_delete=models.CASCADE, related_name='habit_tracking')
+    created_at=models.DateField(auto_now_add=True)
+    check_is=models.BooleanField(null=True, default=None)
+
+
+    def __str__(self):
+        return self.profile.name
+
 
 class Categories_Quest(models.Model):
     name=models.CharField(max_length=200,null=True,blank=True,default=None)
