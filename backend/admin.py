@@ -1,6 +1,13 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit
 
+@admin.register(Habit)
+class Habit(admin.ModelAdmin):
+    list_display = ['profile']
+
+@admin.register(Tracking_Habit)
+class Tracking_Habit(admin.ModelAdmin):
+    list_display = ['profile','created_at']
 
 
 @admin.register(Chat)

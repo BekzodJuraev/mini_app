@@ -18,7 +18,11 @@ from .serializers import (
     HeartMartineTestSer,
     HeartKuperTestSer,
     NotificationSer,
-    ChatGETSer
+    ChatGETSer,
+    HabitSer,
+    TrackingSer,
+    GetHabitSer
+
 )
 from threading import Thread
 from datetime import date
@@ -33,7 +37,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -41,6 +45,7 @@ from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
+from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -473,3 +478,63 @@ class MessageView(APIView):
             message.read=True
             message.save(update_fields=['read'])
         return Response({'message': message.message},status=status.HTTP_200_OK)
+
+
+class HabitView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HabitSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HabitSer()}
+    )
+
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            serializer.save(profile=request.user.profile)
+
+            return Response({'message':'Saved a habit'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class Tracking_checkView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TrackingSer
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: TrackingSer()}
+    )
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+
+            profile = request.user.profile
+            habit = Habit.objects.filter(name_habit=serializer.validated_data['habit']).first()
+            if habit:
+                Tracking_Habit.objects.get_or_create(
+                    profile=profile,
+                    habit=habit,
+                    defaults={'check_is': serializer.validated_data['check_is']}
+                )
+                return Response({'message': 'Tracking habit created or already exists'}, status=200)
+            else:
+                return Response({'message': 'Habit not found'}, status=404)
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetTrackingView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GetHabitSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetHabitSer(many=True)}
+    )
+
+    def get(self,request):
+        profile=request.user.profile
+        #tracking=Tracking_Habit.objects.filter(profile=profile)
+        tracking=Habit.objects.filter(profile=profile).annotate()
+        serializer = self.serializer_class(tracking,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+

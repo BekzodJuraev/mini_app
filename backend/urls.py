@@ -22,4 +22,7 @@ urlpatterns=[
  path('api/notification',views.NotificationAPIView.as_view(),name='notification'),
  path('api/notification/message/<int:message_id>',views.MessageView.as_view(),name='message'),
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
+ path('api/habit/add',views.HabitView.as_view(), name='habit_add'),
+ path('api/habit/tracking',views.Tracking_checkView.as_view(),name='tracking'),
+ path('api/habit/list',views.GetTrackingView.as_view(),name='habit_get')
 ]

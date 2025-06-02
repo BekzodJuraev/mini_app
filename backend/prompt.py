@@ -2,7 +2,7 @@ import openai
 from config import KEY,MODEL
 openai.api_key = KEY
 import json
-def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke):
+def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke,smoke_what,smoke_day):
     user_input = f"""
     Рост: {height}
     Вес: {weight}
@@ -12,6 +12,8 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
     Курили ли вы раньше: {smoking_past}
     Стаж курения: {exp_smoke}
     Место проживания: {location}
+    Что курите:{smoke_what}
+    Количество сигарет в день:{smoke_day}
 
     Оцени состояние по шкале от 1 до 10 для следующих категорий, добавляя общий показатель для каждой группы:
 

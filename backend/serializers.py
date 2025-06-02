@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -29,12 +29,14 @@ class RegistrationSerializer(serializers.ModelSerializer):
     recent_smoke=serializers.CharField()
     now_smoke=serializers.CharField()
     exp_smoke=serializers.IntegerField(required=False)
+    smoke_what=serializers.CharField()
+    smoke_day=serializers.IntegerField(required=False)
 
 
 
     class Meta:
         model=User
-        fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight']
+        fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
 
 
 
@@ -49,11 +51,14 @@ class RegistrationSerializer(serializers.ModelSerializer):
         place_of_residence=validated_data.get('place_of_residence')
         gender=validated_data.get('gender')
         date_birth=validated_data.get('date_birth')
+        smoke_what=validated_data.pop('smoke_what')
+        smoke_day=validated_data.pop('smoke_day')
+
 
         def fetch_and_save_health(user):
             health_system = get_health_scale(
                 height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
-                location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke
+                location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke,smoke_what=smoke_what,smoke_day=smoke_day
             )
             #print(health_system)
             if isinstance(health_system, str):
@@ -202,6 +207,25 @@ class ChatGETSer(serializers.ModelSerializer):
     class Meta:
         model=Chat
         fields=['question','answer','created_at']
+
+
+class HabitSer(serializers.ModelSerializer):
+    class Meta:
+        model=Habit
+        fields=['name_habit','lenght']
+
+class TrackingSer(serializers.Serializer):
+    habit=serializers.CharField()
+    check_is=serializers.BooleanField()
+
+
+class GetHabitSer(serializers.Serializer):
+    habit=serializers.CharField(source='name_habit')
+    date=serializers.DateField()
+    check_is=serializers.BooleanField()
+    day=serializers.IntegerField()
+
+
 
 # class ProfileHealthSystemSer(serializers.Serializer):
 #     name=serializers.CharField()
