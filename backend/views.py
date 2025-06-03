@@ -22,7 +22,11 @@ from .serializers import (
     HabitSer,
     TrackingSer,
     GetHabitSer,
-    CountHabitSer
+    CountHabitSer,
+    RelationshipSer,
+    RelationshipBabySer,
+    GetRelationship,
+    GetRelationshipID
 
 )
 from threading import Thread
@@ -38,7 +42,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Relationship
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -554,3 +558,72 @@ class GetTrackingCount(APIView):
 
         serializer = self.serializer_class(tracking, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+class RelationshipView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=RelationshipSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RelationshipSer()}
+    )
+
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data,context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({'message': 'Saved successful'}, status=status.HTTP_201_CREATED)
+
+
+class RelationshipBabyView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=RelationshipBabySer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RelationshipBabySer()}
+    )
+
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data,context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({'message': 'Saved successful'}, status=status.HTTP_201_CREATED)
+
+class GetRelationshipListView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=GetRelationship
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetRelationship(many=True)}
+    )
+    def get(self,request):
+        profile=request.user.profile
+        query=Relationship.objects.filter(profile=profile).order_by('-id').only('name','id')
+        serializer = self.serializer_class(query, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GetRelationshipIDView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GetRelationshipID
+
+    def get(self, request, reletive_id):
+        profile=request.user.profile
+        query = get_object_or_404(Relationship, id=reletive_id, profile=profile)
+        serializer = self.serializer_class(query)
+        try:
+            health_system = serializer.data.get('health_system', {})
+
+            # Convert dictionary into a list of {"name": key, "value": value} dictionaries
+            transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
+
+            return Response({
+                "who_is":serializer.data['who_is'],
+                "name": serializer.data["name"],
+                "health_system": transformed_health_system
+            }, status=status.HTTP_200_OK)
+        except:
+            return Response({"message": "waiting data"}, status=status.HTTP_200_OK)
+
+
+

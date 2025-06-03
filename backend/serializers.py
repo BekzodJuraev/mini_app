@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Relationship
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import time
 from threading import Thread
-from .prompt import get_health_scale
+from .prompt import get_health_scale,get_health_scale_baby
 
 
 
@@ -79,6 +79,116 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
         return user
 
+
+class RelationshipSer(serializers.ModelSerializer):
+    who_is=serializers.CharField()
+    name = serializers.CharField()
+    lastname = serializers.CharField()
+    middle_name = serializers.CharField()
+    gender = serializers.CharField()
+    place_of_residence = serializers.CharField()
+    date_birth = serializers.DateField()
+    photo = serializers.CharField(required=False)
+    height = serializers.IntegerField()
+    weight = serializers.IntegerField()
+    recent_smoke = serializers.CharField()
+    now_smoke = serializers.CharField()
+    exp_smoke = serializers.IntegerField(required=False)
+    smoke_what = serializers.CharField()
+    smoke_day = serializers.IntegerField(required=False)
+
+
+    class Meta:
+        model=Relationship
+        fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
+
+
+
+    def create(self, validated_data):
+        profile = self.context['request'].user.profile
+        recent_smoke=validated_data.pop('recent_smoke')
+        who_is=validated_data.get('who_is')
+        now_smoke=validated_data.pop('now_smoke')
+        exp_smoke=validated_data.pop('exp_smoke',"")
+        height=validated_data.pop('height')
+        weight=validated_data.pop('weight')
+        place_of_residence=validated_data.get('place_of_residence')
+        gender=validated_data.get('gender')
+        date_birth=validated_data.get('date_birth')
+        smoke_what=validated_data.pop('smoke_what')
+        smoke_day=validated_data.pop('smoke_day')
+
+
+        def fetch_and_save_health(rel):
+            health_system = get_health_scale(
+                height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
+                location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke,smoke_what=smoke_what,smoke_day=smoke_day
+            )
+            #print(health_system)
+            if isinstance(health_system, str):
+                try:
+                    health_system = json.loads(health_system)  # Convert JSON string to dictionary
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON format returned from OpenAI API")
+            rel.health_system = health_system
+            rel.save(update_fields=['health_system'])
+
+        rel=Relationship.objects.create(profile=profile,**validated_data)
+
+        Thread(target=fetch_and_save_health, args=(rel,)).start()
+
+
+        return rel
+class RelationshipBabySer(serializers.ModelSerializer):
+    who_is=serializers.CharField()
+    name = serializers.CharField()
+    gender = serializers.CharField()
+    place_of_residence = serializers.CharField()
+    date_birth = serializers.DateField()
+    photo = serializers.CharField(required=False)
+    height = serializers.IntegerField()
+    weight = serializers.IntegerField()
+
+
+
+
+
+
+    class Meta:
+        model=Relationship
+        fields=['who_is','name','gender','place_of_residence','date_birth','photo','height','weight']
+
+
+
+    def create(self, validated_data):
+        profile = self.context['request'].user.profile
+        who_is=validated_data.get('who_is')
+        height=validated_data.pop('height')
+        weight=validated_data.pop('weight')
+        place_of_residence=validated_data.get('place_of_residence')
+        gender=validated_data.get('gender')
+        date_birth=validated_data.get('date_birth')
+
+
+
+        def fetch_and_save_health(rel):
+            health_system = get_health_scale_baby(
+                height=height, weight=weight,location=place_of_residence, gender=gender, date_birth=date_birth)
+
+            if isinstance(health_system, str):
+                try:
+                    health_system = json.loads(health_system)  # Convert JSON string to dictionary
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON format returned from OpenAI API")
+            rel.health_system = health_system
+            rel.save(update_fields=['health_system'])
+
+        rel=Relationship.objects.create(profile=profile,**validated_data)
+
+        Thread(target=fetch_and_save_health, args=(rel,)).start()
+
+
+        return rel
 class LoginSer(serializers.Serializer):
     telegram_id=serializers.CharField(required=True,write_only=True)
 
@@ -231,8 +341,15 @@ class CountHabitSer(serializers.Serializer):
     day=serializers.IntegerField()
 
 
+class GetRelationship(serializers.ModelSerializer):
+    class Meta:
+        model=Relationship
+        fields=['name','id']
 
-
+class GetRelationshipID(serializers.ModelSerializer):
+    class Meta:
+        model=Relationship
+        fields=['who_is','name','health_system']
 # class ProfileHealthSystemSer(serializers.Serializer):
 #     name=serializers.CharField()
 #     Overall_tone=serializers.IntegerField()

@@ -30,3 +30,20 @@ SYptmons
         "vomit": 1
     }
 
+Rel
+{
+  "who_is": "Бабушка/дедушка",
+  "name": "John",
+  "lastname": "Doe",
+  "middle_name": "Michael",
+  "gender": "Мучжина",
+  "place_of_residence": "Москва",
+  "date_birth": "1990-05-20",
+  "height": 180,
+  "weight": 75,
+  "recent_smoke": "да",
+  "now_smoke": "нет",
+  "exp_smoke": 5,
+  "smoke_what": "Cигареты",
+  "smoke_day": 10
+}
