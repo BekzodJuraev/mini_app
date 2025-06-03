@@ -512,6 +512,7 @@ class Tracking_checkView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
+            today = localtime(now()).date()
 
             profile = request.user.profile
             habit = Habit.objects.filter(name_habit=serializer.validated_data['habit']).first()
@@ -519,6 +520,7 @@ class Tracking_checkView(APIView):
                 Tracking_Habit.objects.get_or_create(
                     profile=profile,
                     habit=habit,
+                    created_at=today,
                     defaults={'check_is': serializer.validated_data['check_is']}
                 )
                 return Response({'message': 'Tracking habit created or already exists'}, status=200)
