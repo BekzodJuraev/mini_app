@@ -111,8 +111,21 @@ class Drugs(models.Model):
     day=models.IntegerField(default=0)
     intake=models.CharField(max_length=200)
     notification=models.JSONField(default=list,null=True, blank=True)
-    created_at=models.DateTimeField(auto_now_add=True)
+    created_at=models.DateField(auto_now_add=True)
 
+
+    def __str__(self):
+        return self.profile.name
+
+
+class Check_Drugs(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Профиль"
+    )
+    drugs=models.ForeignKey(
+        'Drugs', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Профиль"
+    )
+    created_at=models.DateField(auto_now_add=True)
 
     def __str__(self):
         return self.profile.name
