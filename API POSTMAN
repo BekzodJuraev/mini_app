@@ -47,3 +47,13 @@ Rel
   "smoke_what": "Cигареты",
   "smoke_day": 10
 }
+
+{
+    "catigories":"Антибиотик4",
+    "name":"Аспирин4",
+    "time_day":3,
+    "day":10,
+    "intake":"С водой",
+    "notification":["12:00"]
+}
+

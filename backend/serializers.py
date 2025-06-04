@@ -30,7 +30,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     now_smoke=serializers.CharField()
     exp_smoke=serializers.IntegerField(required=False)
     smoke_what=serializers.CharField()
-    smoke_day=serializers.IntegerField(required=False)
+    smoke_day=serializers.IntegerField()
 
 
 
@@ -95,7 +95,7 @@ class RelationshipSer(serializers.ModelSerializer):
     now_smoke = serializers.CharField()
     exp_smoke = serializers.IntegerField(required=False)
     smoke_what = serializers.CharField()
-    smoke_day = serializers.IntegerField(required=False)
+    smoke_day = serializers.IntegerField()
 
 
     class Meta:
