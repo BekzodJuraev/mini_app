@@ -667,7 +667,7 @@ class DrugsAPIListView(APIView):
     def get(self,request):
         profile = request.user.profile
         today = localtime(now()).date()
-        query = Drugs.objects.filter(profile=profile).annotate(end_day=ExpressionWrapper(F('created_at') + timedelta(days=1), output_field=DateField()), status=Exists(
+        query = Drugs.objects.filter(profile=profile).annotate(end_day=ExpressionWrapper(F('created_at') + F('interval'), output_field=DateField()), status=Exists(
                 Check_Drugs.objects.filter(
                     profile=profile,
                     drugs=OuterRef('pk'),

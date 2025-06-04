@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import F
-
+from datetime import date,timedelta
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     name=models.CharField(max_length=200,null=True,blank=True,default=None)
@@ -107,13 +107,16 @@ class Drugs(models.Model):
     )
     catigories=models.CharField(max_length=200)
     name=models.CharField(max_length=200)
-    time_day=models.IntegerField(default=0)
-    day=models.IntegerField(default=0)
+    time_day=models.IntegerField()
+    day=models.IntegerField()
     intake=models.CharField(max_length=200)
-    notification=models.JSONField(default=list,null=True, blank=True)
+    interval=models.DurationField(null=True,blank=True)
+    notification=models.JSONField()
     created_at=models.DateField(auto_now_add=True)
 
-
+    def save(self, *args, **kwargs):
+        self.interval=timedelta(days=self.time_day)
+        super().save(*args, **kwargs)
     def __str__(self):
         return self.profile.name
 
