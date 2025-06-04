@@ -101,6 +101,25 @@ class Chat(models.Model):
 
     def __str__(self):
         return self.profile.name
+class Drugs(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='drugs', verbose_name="Профиль"
+    )
+    catigories=models.CharField(max_length=200)
+    name=models.CharField(max_length=200)
+    time_day=models.IntegerField(default=0)
+    day=models.IntegerField(default=0)
+    intake=models.CharField(max_length=200)
+    notification=models.JSONField(default=list,null=True, blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+
+    def __str__(self):
+        return self.profile.name
+
+
+
+
 # class RespiratorySystem(models.Model):
 #     profile = models.OneToOneField(
 #         'Profile', on_delete=models.CASCADE, related_name='res', verbose_name="Профиль"
