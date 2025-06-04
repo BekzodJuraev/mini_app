@@ -1,4 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import ExpressionWrapper, F, DurationField, DateField
+from datetime import date,timedelta
+
 from .serializers import (
     RegistrationSerializer,
     LoginSer,
@@ -26,7 +29,10 @@ from .serializers import (
     RelationshipSer,
     RelationshipBabySer,
     GetRelationship,
-    GetRelationshipID
+    GetRelationshipID,
+    DrugsSer,
+    GetDrugSer,
+    DrugById
 
 )
 from threading import Thread
@@ -42,7 +48,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Relationship
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Relationship,Drugs,Check_Drugs
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -609,6 +615,9 @@ class GetRelationshipIDView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GetRelationshipID
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetRelationshipID()}
+    )
     def get(self, request, reletive_id):
         profile=request.user.profile
         query = get_object_or_404(Relationship, id=reletive_id, profile=profile)
@@ -629,3 +638,71 @@ class GetRelationshipIDView(APIView):
 
 
 
+class DrugsAPiView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DrugsSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DrugsSer()}
+    )
+
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            serializer.save(profile=request.user.profile)
+
+            return Response({'message':'Saved drug'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DrugsAPIListView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GetDrugSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetDrugSer()}
+    )
+
+    def get(self,request):
+        profile = request.user.profile
+        today = localtime(now()).date()
+        query = Drugs.objects.filter(profile=profile).annotate(end_day=ExpressionWrapper(F('created_at') + timedelta(days=1), output_field=DateField()), status=Exists(
+                Check_Drugs.objects.filter(
+                    profile=profile,
+                    drugs=OuterRef('pk'),
+                    created_at=today
+                    # Matches each category with its related Quests
+                )
+            ))
+        serializer = self.serializer_class(query, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class DrugCheckbyDayView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DrugById
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DrugById()}
+    )
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            today = localtime(now()).date()
+            profile = request.user.profile
+            try:
+                Check_Drugs.objects.get_or_create(
+                    profile=profile,
+                    drugs_id=serializer.validated_data['id'],
+                    created_at=today,
+                )
+                return Response({'message': 'Daily check saved'}, status=200)
+            except:
+
+                return Response({'message': 'Not Found'}, status=404)
+
+
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

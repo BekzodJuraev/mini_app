@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Relationship
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Relationship,Drugs
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -350,6 +350,23 @@ class GetRelationshipID(serializers.ModelSerializer):
     class Meta:
         model=Relationship
         fields=['who_is','name','health_system']
+
+class DrugsSer(serializers.ModelSerializer):
+    class Meta:
+        model=Drugs
+        fields=['catigories','name','time_day','day','intake','notification']
+
+class GetDrugSer(serializers.ModelSerializer):
+    end_day=serializers.DateField()
+    status=serializers.BooleanField()
+    class Meta:
+        model=Drugs
+        fields=['id','name','time_day','day','intake','notification','created_at','end_day','status']
+
+class DrugById(serializers.Serializer):
+    id=serializers.IntegerField()
+
+
 # class ProfileHealthSystemSer(serializers.Serializer):
 #     name=serializers.CharField()
 #     Overall_tone=serializers.IntegerField()
