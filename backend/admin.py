@@ -1,6 +1,9 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Relationship
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Relationship,Drugs
 
+@admin.register(Drugs)
+class Drugss(admin.ModelAdmin):
+    list_display = ['profile']
 @admin.register(Relationship)
 class Relationship(admin.ModelAdmin):
     list_display = ['profile']
