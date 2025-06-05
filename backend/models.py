@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import F
 from datetime import date,timedelta
+import uuid
+
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     name=models.CharField(max_length=200,null=True,blank=True,default=None)
@@ -16,6 +18,11 @@ class Profile(models.Model):
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
     life_expectancy=models.IntegerField(null=True,default=None)
+    family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
+    ref = models.UUIDField(default=uuid.uuid4, unique=True)
+    recommended_by_partner = models.ForeignKey("Profile", on_delete=models.CASCADE,
+                                               related_name='ref_system',
+                                               null=True, blank=True)
 
     #Overall_tone=models.IntegerField(default=0)
 
