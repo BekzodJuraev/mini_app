@@ -705,7 +705,19 @@ class RefGetView(APIView):
 
     def get(self,request):
         profile = request.user.profile
-        query=Profile.objects.filter(profile=profile)
 
-        serializer = self.serializer_class(query)
+        counts = Profile.objects.aggregate(
+            family_ref_count=Count('id', filter=Q(recommended_by_family=profile)),
+            partner_ref_count=Count('id', filter=Q(recommended_by_partner=profile)),
+        )
+
+        total = counts['family_ref_count'] + counts['partner_ref_count']
+
+        data = {
+            "total": total,
+            "ref": profile.ref,
+            "family_ref": profile.family_ref
+        }
+
+        serializer = self.serializer_class(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
