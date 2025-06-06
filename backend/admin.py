@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Relationship,Drugs,Check_Drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs
 
 @admin.register(Check_Drugs)
 class Drugss(admin.ModelAdmin):
@@ -8,9 +8,9 @@ class Drugss(admin.ModelAdmin):
 @admin.register(Drugs)
 class Drugss(admin.ModelAdmin):
     list_display = ['profile']
-@admin.register(Relationship)
-class Relationship(admin.ModelAdmin):
-    list_display = ['profile']
+# @admin.register(Relationship)
+# class Relationship(admin.ModelAdmin):
+#     list_display = ['profile']
 @admin.register(Habit)
 class Habit(admin.ModelAdmin):
     list_display = ['profile']
