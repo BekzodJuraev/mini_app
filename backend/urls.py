@@ -32,5 +32,6 @@ urlpatterns=[
  path('api/drugs/create',views.DrugsAPiView.as_view(),name='drugs_create'),
  path('api/drugs/list',views.DrugsAPIListView.as_view(),name='drugs_list'),
  path('api/drugs/check',views.DrugCheckbyDayView.as_view(),name='drugs_check'),
- path('api/ref/list',views.RefGetView.as_view(),name='ref_list')
+ path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
+ path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check')
 ]

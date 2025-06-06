@@ -149,6 +149,16 @@ class Check_Drugs(models.Model):
         return self.profile.name
 
 
+class Daily_check(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='daily_check', verbose_name="Профиль"
+    )
+    message=models.TextField(null=True, default=None)
+    created_at = models.DateField(auto_now_add=True,null=True)
+
+
+    def __str__(self):
+        return self.profile.name
 
 
 # class RespiratorySystem(models.Model):
