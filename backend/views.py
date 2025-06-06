@@ -29,10 +29,10 @@ from .serializers import (
     RelationshipSer,
     RelationshipBabySer,
     GetRelationship,
-    GetRelationshipID,
     DrugsSer,
     GetDrugSer,
-    DrugById
+    DrugById,
+    RefGet
 
 )
 from threading import Thread
@@ -48,7 +48,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Relationship,Drugs,Check_Drugs
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -606,35 +606,23 @@ class GetRelationshipListView(APIView):
     )
     def get(self,request):
         profile=request.user.profile
-        query=Relationship.objects.filter(profile=profile).order_by('-id').only('name','id')
-        serializer = self.serializer_class(query, many=True)
+        profiles = Profile.objects.filter(family=profile).order_by('-id').only('name', 'who_is', 'username')
+
+        response_data = []
+
+        for prof in profiles:
+            token, _ = Token.objects.get_or_create(user=prof.username)
+
+            response_data.append({
+                "name": prof.name,
+                "who_is": prof.who_is,
+                "token": token.key,
+            })
+        serializer = self.serializer_class(response_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class GetRelationshipIDView(APIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = GetRelationshipID
 
-    @swagger_auto_schema(
-        responses={status.HTTP_200_OK: GetRelationshipID()}
-    )
-    def get(self, request, reletive_id):
-        profile=request.user.profile
-        query = get_object_or_404(Relationship, id=reletive_id, profile=profile)
-        serializer = self.serializer_class(query)
-        try:
-            health_system = serializer.data.get('health_system', {})
-
-            # Convert dictionary into a list of {"name": key, "value": value} dictionaries
-            transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
-
-            return Response({
-                "who_is":serializer.data['who_is'],
-                "name": serializer.data["name"],
-                "health_system": transformed_health_system
-            }, status=status.HTTP_200_OK)
-        except:
-            return Response({"message": "waiting data"}, status=status.HTTP_200_OK)
 
 
 
@@ -706,3 +694,18 @@ class DrugCheckbyDayView(APIView):
 
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+class RefGetView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RefGet
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RefGet()}
+    )
+
+    def get(self,request):
+        profile = request.user.profile
+        query=Profile.objects.filter(profile=profile)
+
+        serializer = self.serializer_class(query)
+        return Response(serializer.data, status=status.HTTP_200_OK)

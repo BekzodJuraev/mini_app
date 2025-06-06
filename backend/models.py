@@ -20,9 +20,17 @@ class Profile(models.Model):
     life_expectancy=models.IntegerField(null=True,default=None)
     family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
     ref = models.UUIDField(default=uuid.uuid4, unique=True)
+    family = models.ForeignKey("Profile", on_delete=models.CASCADE,
+                                               related_name='family_family',
+                                               null=True, blank=True)
     recommended_by_partner = models.ForeignKey("Profile", on_delete=models.CASCADE,
                                                related_name='ref_system',
                                                null=True, blank=True)
+    recommended_by_family = models.ForeignKey("Profile", on_delete=models.CASCADE,
+                                               related_name='ref_system_family',
+                                               null=True, blank=True)
+
+    who_is = models.CharField(max_length=150,null=True, blank=True, default=None)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -30,19 +38,19 @@ class Profile(models.Model):
     def __str__(self):
         return self.name
 
-class Relationship(models.Model):
-    profile = models.ForeignKey(
-        'Profile', on_delete=models.CASCADE, related_name='relationship', verbose_name="Профиль"
-    )
-    who_is=models.CharField(max_length=150)
-    name = models.CharField(max_length=200, null=True, blank=True, default=None)
-    lastname = models.CharField(max_length=200, null=True, blank=True, default=None)
-    middle_name = models.CharField(max_length=200, null=True, blank=True, default=None)
-    gender = models.CharField(max_length=200, null=True, blank=True, default=None)
-    photo = models.ImageField(blank=True)
-    place_of_residence = models.CharField(max_length=200, null=True, blank=True, default=None)
-    date_birth = models.DateField(null=True, blank=True, default=None)
-    health_system = models.JSONField(null=True, default=None)
+# class Relationship(models.Model):
+#     profile = models.ForeignKey(
+#         'Profile', on_delete=models.CASCADE, related_name='relationship', verbose_name="Профиль"
+#     )
+#     who_is=models.CharField(max_length=150)
+#     name = models.CharField(max_length=200, null=True, blank=True, default=None)
+#     lastname = models.CharField(max_length=200, null=True, blank=True, default=None)
+#     middle_name = models.CharField(max_length=200, null=True, blank=True, default=None)
+#     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
+#     photo = models.ImageField(blank=True)
+#     place_of_residence = models.CharField(max_length=200, null=True, blank=True, default=None)
+#     date_birth = models.DateField(null=True, blank=True, default=None)
+#     health_system = models.JSONField(null=True, default=None)
 
 
 class Habit(models.Model):

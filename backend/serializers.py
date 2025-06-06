@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Relationship,Drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -8,7 +8,7 @@ import json
 import time
 from threading import Thread
 from .prompt import get_health_scale,get_health_scale_baby
-
+import uuid
 
 
 
@@ -31,12 +31,14 @@ class RegistrationSerializer(serializers.ModelSerializer):
     exp_smoke=serializers.IntegerField(required=False)
     smoke_what=serializers.CharField()
     smoke_day=serializers.IntegerField()
+    ref=serializers.UUIDField(required=False)
+    ref_family=serializers.UUIDField(required=False)
 
 
 
     class Meta:
         model=User
-        fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
+        fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref','ref_family']
 
 
 
@@ -53,6 +55,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
         date_birth=validated_data.get('date_birth')
         smoke_what=validated_data.pop('smoke_what')
         smoke_day=validated_data.pop('smoke_day')
+        ref = validated_data.pop('ref', None)
+        ref_family=validated_data.pop('ref_family',None)
 
 
         def fetch_and_save_health(user):
@@ -73,7 +77,15 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 
         user = User.objects.create_user(username=username)
-        profile = Profile.objects.create(username=user, **validated_data)
+        if ref:
+            ref=Profile.objects.filter(ref=ref).first()
+            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data)
+        elif ref_family:
+            ref_family = Profile.objects.filter(family_ref=ref_family).first()
+            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data)
+        else:
+            profile = Profile.objects.create(username=user, **validated_data)
+
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
 
@@ -99,7 +111,7 @@ class RelationshipSer(serializers.ModelSerializer):
 
 
     class Meta:
-        model=Relationship
+        model=User
         fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
 
 
@@ -130,15 +142,16 @@ class RelationshipSer(serializers.ModelSerializer):
                     health_system = json.loads(health_system)  # Convert JSON string to dictionary
                 except json.JSONDecodeError:
                     raise ValueError("Invalid JSON format returned from OpenAI API")
-            rel.health_system = health_system
-            rel.save(update_fields=['health_system'])
-
-        rel=Relationship.objects.create(profile=profile,**validated_data)
-
-        Thread(target=fetch_and_save_health, args=(rel,)).start()
+            user.profile.health_system = health_system
+            user.profile.save(update_fields=['health_system'])
 
 
-        return rel
+        user = User.objects.create_user(username=str(uuid.uuid4()))
+        profile = Profile.objects.create(username=user, family=profile, **validated_data)
+
+        Thread(target=fetch_and_save_health, args=(user,)).start()
+
+        return user
 class RelationshipBabySer(serializers.ModelSerializer):
     who_is=serializers.CharField()
     name = serializers.CharField()
@@ -155,7 +168,7 @@ class RelationshipBabySer(serializers.ModelSerializer):
 
 
     class Meta:
-        model=Relationship
+        model=Profile
         fields=['who_is','name','gender','place_of_residence','date_birth','photo','height','weight']
 
 
@@ -180,15 +193,15 @@ class RelationshipBabySer(serializers.ModelSerializer):
                     health_system = json.loads(health_system)  # Convert JSON string to dictionary
                 except json.JSONDecodeError:
                     raise ValueError("Invalid JSON format returned from OpenAI API")
-            rel.health_system = health_system
-            rel.save(update_fields=['health_system'])
+            user.profile.health_system = health_system
+            user.profile.save(update_fields=['health_system'])
 
-        rel=Relationship.objects.create(profile=profile,**validated_data)
+        user = User.objects.create_user(username=str(uuid.uuid4()))
+        profile = Profile.objects.create(username=user, family=profile, **validated_data)
 
-        Thread(target=fetch_and_save_health, args=(rel,)).start()
+        Thread(target=fetch_and_save_health, args=(user,)).start()
 
-
-        return rel
+        return user
 class LoginSer(serializers.Serializer):
     telegram_id=serializers.CharField(required=True,write_only=True)
 
@@ -342,14 +355,12 @@ class CountHabitSer(serializers.Serializer):
 
 
 class GetRelationship(serializers.ModelSerializer):
+    token=serializers.UUIDField()
     class Meta:
-        model=Relationship
-        fields=['name','id']
+        model=Profile
+        fields=['name','token','who_is']
 
-class GetRelationshipID(serializers.ModelSerializer):
-    class Meta:
-        model=Relationship
-        fields=['who_is','name','health_system']
+
 
 class DrugsSer(serializers.ModelSerializer):
     class Meta:
@@ -366,7 +377,11 @@ class GetDrugSer(serializers.ModelSerializer):
 class DrugById(serializers.Serializer):
     id=serializers.IntegerField()
 
-
+class RefGet(serializers.ModelSerializer):
+    total=serializers.IntegerField()
+    class Meta:
+        model=Profile
+        fields=['ref','family_ref']
 # class ProfileHealthSystemSer(serializers.Serializer):
 #     name=serializers.CharField()
 #     Overall_tone=serializers.IntegerField()

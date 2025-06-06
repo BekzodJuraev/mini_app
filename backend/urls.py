@@ -29,7 +29,6 @@ urlpatterns=[
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
- path('api/relationship/<int:reletive_id>',views.GetRelationshipIDView.as_view(),name='list_relat_id'),
  path('api/drugs/create',views.DrugsAPiView.as_view(),name='drugs_create'),
  path('api/drugs/list',views.DrugsAPIListView.as_view(),name='drugs_list'),
  path('api/drugs/check',views.DrugCheckbyDayView.as_view(),name='drugs_check')
