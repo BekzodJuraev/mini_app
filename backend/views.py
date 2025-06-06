@@ -32,11 +32,13 @@ from .serializers import (
     DrugsSer,
     GetDrugSer,
     DrugById,
-    RefGet
+    RefGet,
+    DailyCheckSer
 
 )
 from threading import Thread
 from datetime import date
+
 
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
@@ -48,11 +50,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -721,3 +723,29 @@ class RefGetView(APIView):
 
         serializer = self.serializer_class(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class DailyCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DailyCheckSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DailyCheckSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            daily=Daily_check.objects.filter(profile=profile).first()
+            if daily:
+                test = daily_check(serializer.validated_data, daily.message)
+            else:
+                test = daily_check(serializer.validated_data)
+
+
+            Daily_check.objects.get_or_create(profile=profile, message=test['message'],created_at=today)
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

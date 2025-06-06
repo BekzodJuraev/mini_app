@@ -383,7 +383,7 @@ class RefGet(serializers.Serializer):
     family_ref = serializers.UUIDField()
 
 
-class DailyCheck(serializers.Serializer):
+class DailyCheckSer(serializers.Serializer):
     feel_today=serializers.CharField()
     mood=serializers.CharField()
     appetite=serializers.CharField()
