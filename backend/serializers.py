@@ -390,4 +390,11 @@ class DailyCheckSer(serializers.Serializer):
     physical=serializers.CharField()
     sleep=serializers.CharField()
 
+class RentgenSer(serializers.Serializer):
+    photo=serializers.ListField(
+        child=serializers.ImageField(),
+        required=False
+    )
+    message=serializers.CharField(required=False)
+
 

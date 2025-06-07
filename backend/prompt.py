@@ -1,4 +1,6 @@
 import openai
+import base64
+
 from config import KEY,MODEL
 openai.api_key = KEY
 import json
@@ -780,4 +782,56 @@ def daily_check(user_data,yesterday=None):
     result_text = response["choices"][0]["message"]["content"]
     result_dict = json.loads(result_text)
 
+    return result_dict
+
+
+
+def rentgen(photo_files, message):
+
+
+
+
+    try:
+        image_contents = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64.b64encode(photo.read()).decode('utf-8')}"
+                }
+            }
+            for photo in photo_files
+        ]
+    except:
+        image_contents=[]
+
+
+
+    # Текстовый запрос
+    prompt = f"""
+    Твоя задача:
+
+    Проанализируй загруженные изображения. Это могут быть рентгены, УЗИ или другие медицинские сканы.
+
+    {"Дополнительная информация от пользователя: " + message if message else ""}
+
+    - Ответ должен быть ТОЛЬКО в формате JSON:
+    {{
+      "message": "Тут можно более расширенно написать и дать какие-то рекомендации"
+    }}
+    """
+
+    # Собираем сообщение
+    messages = [
+        {"role": "system", "content": "Ты медицинский помощник, который анализирует изображения, загруженные пользователями."},
+        {"role": "user", "content": [{"type": "text", "text": prompt}] + image_contents}
+    ]
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=messages,
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
     return result_dict
