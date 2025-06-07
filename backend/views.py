@@ -33,7 +33,8 @@ from .serializers import (
     GetDrugSer,
     DrugById,
     RefGet,
-    DailyCheckSer
+    DailyCheckSer,
+    RentgenSer
 
 )
 from threading import Thread
@@ -54,7 +55,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -745,6 +746,26 @@ class DailyCheckView(APIView):
 
 
             Daily_check.objects.get_or_create(profile=profile, message=test['message'],created_at=today)
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RentgenView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RentgenSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RentgenSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            #profile = request.user.profile
+            test=rentgen(serializer.validated_data.get('photo'),serializer.validated_data.get('message'))
+
+
 
             return Response(test, status=status.HTTP_200_OK)
 
