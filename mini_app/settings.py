@@ -152,7 +152,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://medavatar.xyz",
     "https://web.telegram.org",
     "https://medavatar.vercel.app",
-    "https://medavatar-dev.vercel.app/"
+    "https://medavatar-dev.vercel.app"
 
 ]
 
