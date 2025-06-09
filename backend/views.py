@@ -35,7 +35,9 @@ from .serializers import (
     RefGet,
     DailyCheckSer,
     RentgenSer,
-    RentgenSerGet
+    RentgenSerGet,
+    PetSerCreate,
+    PetSerGet
 )
 from threading import Thread
 from datetime import date
@@ -51,11 +53,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -240,6 +242,7 @@ class CrashTestAPIView(APIView):
             profile.life_expectancy=test['life_expectancy']
 
             profile.save(update_fields=['life_expectancy'])
+
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
@@ -799,5 +802,46 @@ class RentgenView(APIView):
 
 
             return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PetView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PetSerCreate
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetSerGet(many=True)}
+    )
+    def get(self, request):
+        profile = request.user.profile
+        query = Pet.objects.filter(profile=profile)
+        serializer = PetSerGet(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetSerCreate()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile = request.user.profile
+            pet=Pet.objects.create(profile=profile,klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
+                                   gender=serializer.validated_data.get('gender'))
+            def update():
+                health_system = get_health_scale_pet(serializer.validated_data)
+                pet.health_system = health_system
+                pet.save(update_fields=['health_system'])
+
+
+
+            #asd
+            Thread(target=update).start()
+
+
+
+
+            return Response({'message': 'Pet created'}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

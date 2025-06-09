@@ -34,5 +34,6 @@ urlpatterns=[
  path('api/drugs/check',views.DrugCheckbyDayView.as_view(),name='drugs_check'),
  path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
- path('api/rentgen',views.RentgenView.as_view(),name='rentgen')
+ path('api/rentgen',views.RentgenView.as_view(),name='rentgen'),
+ path('api/pet',views.PetView.as_view(),name='pet')
 ]
