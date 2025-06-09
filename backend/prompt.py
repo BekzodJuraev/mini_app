@@ -250,7 +250,62 @@ def get_health_scale_baby(height,weight,location,gender,date_birth):
 
     return response["choices"][0]["message"]["content"]
 
+def get_health_scale_pet(user_data):
+    user_input = f"""
+    Рост: {height}
+    Вес: {weight}
+    Пол: {gender}
+    Дата рождения: {date_birth}
+    Курите ли вы сейчас: {smoking_now}
+    Курили ли вы раньше: {smoking_past}
+    Стаж курения: {exp_smoke}
+    Место проживания: {location}
+    Что курите:{smoke_what}
+    Количество сигарет в день:{smoke_day}
 
+    Оцени состояние по шкале от 1 до 10 для следующих категорий, добавляя общий показатель для каждой группы:
+
+    - Общий тонус (Overall tone)
+    - Дыхательная система (Respiratory System)
+    - Сердечно-сосудистая система (Cardiovascular System)
+    - Опорно-двигательная система (Skeletal Muscle System)
+    - Эндокринная система (Endocrine System)
+    - Иммунная система (Immune System) - Общий показатель
+    - Пищеварительная система (Digestive System)
+    - Выделительная система (Excretory System) - Общий показатель
+    - Зубочелюстная система (Dental Jaw System) - Общий показатель
+    - Сенсорная система (Sensory System) - Общий показатель
+    - Кроветворение и обмен (Hematopoietic Metabolic System) - Общий показатель
+    - Поведение / Темперамент (Mental Health System) - Общий показатель
+    - Уши,нос,Ротовая полость (Oral Cavity)
+    Ответ должен быть ТОЛЬКО в формате JSON, например:
+    {{
+        "Общий тонус": 7,
+        "Дыхательная система": 8,
+        "Сердечно-сосудистая система": 7,
+        "Опорно-двигательная система": 7,
+        "Эндокринная система": 7,
+        "Иммунная система": 7,
+        "Пищеварительная система": 8
+        "Выделительная система": 7,
+        "Зубочелюстная система": 7,
+        "Сенсорная система": 7,
+        "Кроветворение и обмен": 7,
+        "Поведение / Темперамент": 7,
+        "Уши,нос,Ротовая полость":8
+    }}
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
+            {"role": "user", "content": user_input}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    return response["choices"][0]["message"]["content"]
 def chat_update(data,message):
     prompt = f"""
     У тебя есть следующие данные состояния организма в формате JSON:
