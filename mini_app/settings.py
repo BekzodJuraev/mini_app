@@ -18,7 +18,8 @@ ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
     "https://api.medavatar.xyz",
     "https://medavatar.xyz",
-    "https://testapi.medavatar.xyz"
+    "https://testapi.medavatar.xyz",
+    "https://medavatar-dev.vercel.app"
 ]
 
 
@@ -150,7 +151,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://medavatar.xyz",
     "https://web.telegram.org",
-    "https://medavatar.vercel.app"
+    "https://medavatar.vercel.app",
+    "https://medavatar-dev.vercel.app/"
 
 ]
 
