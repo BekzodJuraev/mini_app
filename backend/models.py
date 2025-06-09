@@ -141,7 +141,7 @@ class Check_Drugs(models.Model):
         'Profile', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Профиль"
     )
     drugs=models.ForeignKey(
-        'Drugs', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Профиль"
+        'Drugs', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Drugs"
     )
     created_at=models.DateField(auto_now_add=True)
 

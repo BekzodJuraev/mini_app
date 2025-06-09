@@ -5,7 +5,7 @@ class Daily_check(admin.ModelAdmin):
     list_display = ['profile']
 @admin.register(Check_Drugs)
 class Drugss(admin.ModelAdmin):
-    list_display = ['profile']
+    list_display = ['profile','created_at']
 
 @admin.register(Drugs)
 class Drugss(admin.ModelAdmin):
