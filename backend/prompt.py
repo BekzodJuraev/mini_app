@@ -252,18 +252,15 @@ def get_health_scale_baby(height,weight,location,gender,date_birth):
 
 def get_health_scale_pet(user_data):
     user_input = f"""
-    Рост: {height}
-    Вес: {weight}
-    Пол: {gender}
-    Дата рождения: {date_birth}
-    Курите ли вы сейчас: {smoking_now}
-    Курили ли вы раньше: {smoking_past}
-    Стаж курения: {exp_smoke}
-    Место проживания: {location}
-    Что курите:{smoke_what}
-    Количество сигарет в день:{smoke_day}
+    Вид: {user_data['pet']}
+    Порода: {user_data['poroda']}
+    Пол: {user_data['gender']}
+    Возраст: {user_data['age']}
+    Хрон. Заболевание: {user_data['disease']}
+    Телосложение: {user_data['body']}
+    
 
-    Оцени состояние по шкале от 1 до 10 для следующих категорий, добавляя общий показатель для каждой группы:
+    Оцени состояние по шкале от 1 до 10 для следующих категорий, это питомец не человек, добавляя общий показатель для каждой группы:
 
     - Общий тонус (Overall tone)
     - Дыхательная система (Respiratory System)
@@ -299,13 +296,18 @@ def get_health_scale_pet(user_data):
     response = openai.ChatCompletion.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
+            {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10 это питомец не человек"},
             {"role": "user", "content": user_input}
         ],
         response_format={"type": "json_object"}
     )
 
-    return response["choices"][0]["message"]["content"]
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+
+    return result_dict
+
+
 def chat_update(data,message):
     prompt = f"""
     У тебя есть следующие данные состояния организма в формате JSON:

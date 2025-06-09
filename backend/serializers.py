@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -410,4 +410,18 @@ class RentgenSerGet(serializers.ModelSerializer):
 
     def get_photo(self, obj):
         return [img.images.url for img in obj.rentgen_image.all()]
-#class PetSerCreate(serializers.)
+class PetSerCreate(serializers.Serializer):
+    klichka=serializers.CharField()
+    pet=serializers.CharField()
+    poroda=serializers.CharField()
+    age=serializers.IntegerField()
+    disease=serializers.CharField()
+    body=serializers.CharField()
+    gender=serializers.CharField()
+
+class PetSerGet(serializers.ModelSerializer):
+
+
+    class Meta:
+        model=Pet
+        fields=['klichka','pet','gender','health_system']
