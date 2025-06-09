@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -393,8 +393,20 @@ class DailyCheckSer(serializers.Serializer):
 class RentgenSer(serializers.Serializer):
     photo=serializers.ListField(
         child=serializers.ImageField(),
-        required=False
+        required=False,
+        default=[]
     )
-    message=serializers.CharField(required=False)
+    message=serializers.CharField(default="")
 
 
+class RentgenSerGet(serializers.ModelSerializer):
+    photo = serializers.SerializerMethodField()
+
+
+
+    class Meta:
+        model=Rentgen
+        fields=['message','answer','created_at','photo']
+
+    def get_photo(self, obj):
+        return [img.images.url for img in obj.rentgen_image.all()]

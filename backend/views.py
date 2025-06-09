@@ -34,8 +34,8 @@ from .serializers import (
     DrugById,
     RefGet,
     DailyCheckSer,
-    RentgenSer
-
+    RentgenSer,
+    RentgenSerGet
 )
 from threading import Thread
 from datetime import date
@@ -51,7 +51,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -548,7 +548,7 @@ class GetTrackingView(APIView):
 
     def get(self,request):
         profile=request.user.profile
-        tracking=Tracking_Habit.objects.filter(profile=profile)
+        tracking=Tracking_Habit.objects.filter(habit__profile=profile)
         serializer = self.serializer_class(tracking,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -757,13 +757,44 @@ class RentgenView(APIView):
     serializer_class = RentgenSer
 
     @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RentgenSerGet(many=True)}
+    )
+    def get(self, request):
+        profile = request.user.profile
+        query = Rentgen.objects.filter(profile=profile).prefetch_related('rentgen_image').order_by('-created_at')
+        serializer = RentgenSerGet(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSer()}
     )
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            #profile = request.user.profile
+            profile = request.user.profile
+
             test=rentgen(serializer.validated_data.get('photo'),serializer.validated_data.get('message'))
+            r=Rentgen.objects.create(profile=profile,message=serializer.validated_data.get('message'),answer=test['message'])
+
+
+            consumables = [
+                Rentgen_Image(rentgen=r, images=image)
+                for image in serializer.validated_data.get('photo')
+            ]
+            Rentgen_Image.objects.bulk_create(consumables)
+
+            def update():
+                update_health = chat_update(profile.health_system, test['message'])
+                profile.health_system = update_health
+
+                profile.save(update_fields=['health_system'])
+
+
+
+            #asd
+            Thread(target=update).start()
+
 
 
 

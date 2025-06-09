@@ -1,5 +1,14 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image
+
+@admin.register(Rentgen)
+class Rentgen(admin.ModelAdmin):
+    list_display = ['profile']
+
+@admin.register(Rentgen_Image)
+class Rentgen_Image(admin.ModelAdmin):
+    list_display = ['rentgen']
+
 @admin.register(Daily_check)
 class Daily_check(admin.ModelAdmin):
     list_display = ['profile']
