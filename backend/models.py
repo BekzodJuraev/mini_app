@@ -181,8 +181,21 @@ class Rentgen_Image(models.Model):
     def __str__(self):
         return self.rentgen.profile.name
 
+class Pet(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='pet', verbose_name="Профиль"
+    )
+    klichka=models.CharField(max_length=200)
+    pet=models.CharField(max_length=200)
+    gender = models.CharField(max_length=200, null=True, blank=True, default=None)
+    health_system = models.JSONField(null=True, default=None)
 
-# class RespiratorySystem(models.Model):
+
+    def __str__(self):
+        return self.profile.name
+
+
+    # class RespiratorySystem(models.Model):
 #     profile = models.OneToOneField(
 #         'Profile', on_delete=models.CASCADE, related_name='res', verbose_name="Профиль"
 #     )

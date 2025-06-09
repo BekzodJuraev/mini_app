@@ -410,3 +410,4 @@ class RentgenSerGet(serializers.ModelSerializer):
 
     def get_photo(self, obj):
         return [img.images.url for img in obj.rentgen_image.all()]
+#class PetSerCreate(serializers.)
