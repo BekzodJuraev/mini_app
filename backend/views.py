@@ -37,7 +37,11 @@ from .serializers import (
     RentgenSer,
     RentgenSerGet,
     PetSerCreate,
-    PetSerGet
+    PetSerGet,
+    PetstyleSer,
+    PetEmotionSer,
+    PetHabitSer
+
 )
 from threading import Thread
 from datetime import date
@@ -57,7 +61,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -843,5 +847,59 @@ class PetView(APIView):
 
 
             return Response({'message': 'Pet created'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PetstyleView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PetEmotionSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetEmotionSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            #profile = request.user.profile
+            test=emotion_test_dog(serializer.validated_data)
+
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+class PetEmotionView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PetEmotionSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetEmotionSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            #profile = request.user.profile
+            test=emotion_test_dog(serializer.validated_data)
+
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class PetHabitView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PetHabitSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetHabitSer()}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            #profile = request.user.profile
+            test=habit_test_dog(serializer.validated_data)
+
+
+            return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
