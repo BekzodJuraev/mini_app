@@ -35,5 +35,8 @@ urlpatterns=[
  path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
  path('api/rentgen',views.RentgenView.as_view(),name='rentgen'),
- path('api/pet',views.PetView.as_view(),name='pet')
+ path('api/pet',views.PetView.as_view(),name='pet'),
+ path('api/pet/dog/lifestyletest',views.PetstyleView.as_view(),name='lifestyletest'),
+ path('api/pet/dog/emotion',views.PetEmotionView.as_view(),name='emotion'),
+ path('api/pet/dog/habit', views.PetHabitView.as_view(), name='habit')
 ]

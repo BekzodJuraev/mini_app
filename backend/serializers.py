@@ -425,3 +425,43 @@ class PetSerGet(serializers.ModelSerializer):
     class Meta:
         model=Pet
         fields=['klichka','pet','gender','health_system']
+
+
+
+class PetstyleSer(serializers.Serializer):
+    dog_street=serializers.CharField()
+    walk=serializers.CharField()
+    time_walk=serializers.CharField()
+    play_home=serializers.CharField()
+    new_pet=serializers.CharField()
+    jump=serializers.CharField()
+    commands=serializers.CharField()
+    fat=serializers.CharField()
+    injury=serializers.CharField()
+    l=serializers.CharField()
+
+
+class PetEmotionSer(serializers.Serializer):
+    avoid=serializers.CharField()
+    run=serializers.CharField()
+    cat_one=serializers.CharField()
+    change=serializers.CharField()
+    agressive=serializers.CharField()
+    tremor=serializers.CharField()
+    place=serializers.CharField()
+    sleep=serializers.CharField()
+    contact=serializers.CharField()
+    fear=serializers.CharField()
+
+class PetHabitSer(serializers.Serializer):
+    apetit = serializers.CharField()
+    vomit = serializers.CharField()
+    change=serializers.CharField()
+    smell = serializers.CharField()
+    mochi = serializers.CharField()
+    pee_problem = serializers.CharField()
+    metorizm = serializers.CharField()
+    predmet = serializers.CharField()
+    vitamin = serializers.CharField()
+    eat = serializers.CharField()
+

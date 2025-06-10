@@ -56,4 +56,30 @@ Rel
     "intake":"С водой",
     "notification":["12:00"]
 }
+Dog test
+{
+  "dog_street": "Часто",
+  "walk": "Спокойно",
+  "time_walk": "15-30 мин",
+  "play_home": "Немного",
+  "new_pet": "Нейтрально",
+  "jump": "Да",
+  "commands": "Часто",
+  "fat": "Да",
+  "injury": "Да",
+  "l": "Немного"
+}
 
+
+{
+  "avoid": "Часто",
+  "run": "Часто",
+  "cat_one": "Нормально",
+  "change": "Да",
+  "agressive": "Да",
+  "tremor": "Да",
+  "place": "Часто",
+  "sleep": "Да",
+  "contact": "Плохо",
+  "fear": "Да"
+}
