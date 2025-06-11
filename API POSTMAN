@@ -83,3 +83,29 @@ Dog test
   "contact": "Плохо",
   "fear": "Да"
 }
+
+{
+  "sleep_place": "В другой комнате",
+  "time_sleep": "1-2 часа",
+  "run": "Немного",
+  "change_place": "Да",
+  "panic": "Да",
+  "tired": "Да",
+  "wake_up": "Да",
+  "dish": "Да",
+  "alone": "Да",
+  "behaviour": "Да"
+}
+
+{
+  "apetit": "Хорошо",
+  "vomit": "Да",
+  "color": "Да",
+  "allergy": "Да",
+  "dish": "Да",
+  "metorizm":"Да",
+  "ration": "Активно",
+  "smell": "Иногда",
+  "interest": "Да",
+  "active": "Да"
+}

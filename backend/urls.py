@@ -38,5 +38,8 @@ urlpatterns=[
  path('api/pet',views.PetView.as_view(),name='pet'),
  path('api/pet/dog/lifestyletest',views.PetstyleView.as_view(),name='lifestyletest'),
  path('api/pet/dog/emotion',views.PetEmotionView.as_view(),name='emotion'),
- path('api/pet/dog/habit', views.PetHabitView.as_view(), name='habit')
+ path('api/pet/dog/habit', views.PetHabitView.as_view(), name='habit'),
+ path('api/pet/cat/emotion',views.PetCatEmotView.as_view(),name='cat_emotion'),
+ path('api/pet/cat/sleep',views.PetCatSleepView.as_view(),name='cat_sleep'),
+ path('api/pet/cat/apetit',views.PetCatApetitView.as_view(),name='cat_apetit'),
 ]
