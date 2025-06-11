@@ -420,11 +420,15 @@ class PetSerCreate(serializers.Serializer):
     gender=serializers.CharField()
 
 class PetSerGet(serializers.ModelSerializer):
+    health = serializers.SerializerMethodField()
 
 
     class Meta:
         model=Pet
-        fields=['klichka','pet','gender','health_system']
+        fields=['klichka','pet','gender','health']
+
+    def get_health(self, obj):
+        return [obj.health_system]
 
 
 
@@ -465,3 +469,37 @@ class PetHabitSer(serializers.Serializer):
     vitamin = serializers.CharField()
     eat = serializers.CharField()
 
+class PetCatEmotSer(serializers.Serializer):
+    avoid = serializers.CharField()
+    agressive = serializers.CharField()
+    change = serializers.CharField()
+    apatiya = serializers.CharField()
+    sound = serializers.CharField()
+    behaviour = serializers.CharField()
+    place = serializers.CharField()
+    fear = serializers.CharField()
+    contact = serializers.CharField()
+    adaption = serializers.CharField()
+class PetCatSleepSer(serializers.Serializer):
+    sleep_place = serializers.CharField()
+    time_sleep = serializers.CharField()
+    run = serializers.CharField()
+    change_place = serializers.CharField()
+    panic = serializers.CharField()
+    tired = serializers.CharField()
+    wake_up = serializers.CharField()
+    dish = serializers.CharField()
+    alone = serializers.CharField()
+    behaviour = serializers.CharField()
+
+class PetCatApetitSer(serializers.Serializer):
+    apetit = serializers.CharField()
+    vomit = serializers.CharField()
+    color = serializers.CharField()
+    allergy = serializers.CharField()
+    dish = serializers.CharField()
+    metorizm = serializers.CharField()
+    ration = serializers.CharField()
+    smell = serializers.CharField()
+    interest = serializers.CharField()
+    active = serializers.CharField()
