@@ -503,3 +503,15 @@ class PetCatApetitSer(serializers.Serializer):
     smell = serializers.CharField()
     interest = serializers.CharField()
     active = serializers.CharField()
+
+class PetGrizunSer(serializers.Serializer):
+    one = serializers.CharField()
+    two = serializers.CharField()
+    three = serializers.CharField()
+    four = serializers.CharField()
+    five = serializers.CharField()
+    six = serializers.CharField()
+    seven = serializers.CharField()
+    eight = serializers.CharField()
+    nine = serializers.CharField()
+    ten = serializers.CharField()
