@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -518,3 +518,21 @@ class PetGrizunSer(serializers.Serializer):
 
 class CaloriesSer(serializers.Serializer):
     photo=serializers.ImageField()
+class GetCaloriesSer(serializers.Serializer):
+    calories=serializers.IntegerField()
+    belok=serializers.IntegerField()
+    jir=serializers.IntegerField()
+    uglevod=serializers.IntegerField()
+    klechatka=serializers.IntegerField()
+
+
+class CaloriesListSer(serializers.ModelSerializer):
+
+    total = serializers.SerializerMethodField()
+    class Meta:
+        model=Calories
+        fields=['created_at','detail','total']
+
+
+    def get_total(self, obj):
+        return [obj.total]

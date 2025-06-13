@@ -45,7 +45,9 @@ from .serializers import (
     PetCatSleepSer,
     PetCatApetitSer,
     PetGrizunSer,
-    CaloriesSer
+    CaloriesSer,
+    GetCaloriesSer,
+    CaloriesListSer
 
 
 )
@@ -63,7 +65,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -1028,16 +1030,65 @@ class CaroiesView(APIView):
     serializer_class=CaloriesSer
 
     @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetCaloriesSer()}
+    )
+    def get(self, request):
+        profile = request.user.profile
+        today = localtime(now()).date()
+        query = Calories.objects.filter(profile=profile,created_at=today).values_list('total',flat=True)
+        calories = belok = jir = uglevod = klechatka = 0
+        if query:
+            for item in query:
+                calories+=item['ккал']
+                belok+=item['белок']
+                jir += item['жир']
+                uglevod+=item['углеводы']
+                klechatka+=item['клечатка']
+
+
+
+
+        dic={
+        "calories":calories,
+        "belok":belok,
+        "jir":jir,
+        "uglevod":uglevod,
+        "klechatka":klechatka
+
+        }
+
+        serializer = GetCaloriesSer(dic)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            #profile = request.user.profile
+            profile = request.user.profile
             test=calories(serializer.validated_data['photo'])
+            Calories.objects.create(profile=profile,detail=test['detail'],total=test['total'])
 
 
-            return Response(test, status=status.HTTP_200_OK)
+            return Response({'message':test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CaroiesListView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=CaloriesListSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CaloriesListSer(many=True)}
+    )
+    def get(self, request):
+        profile = request.user.profile
+        query=Calories.objects.filter(profile=profile)
+
+
+        serializer = self.serializer_class(query,many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
