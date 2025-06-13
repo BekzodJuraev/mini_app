@@ -37,6 +37,8 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.name
+# class Calories(models.Model):
+#
 
 # class Relationship(models.Model):
 #     profile = models.ForeignKey(

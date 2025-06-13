@@ -893,7 +893,54 @@ def rentgen(photo_files, message):
     result_dict = json.loads(result_text)
     return result_dict
 
+def calories(photo_files):
 
+    image_contents = {
+        "type": "image_url",
+        "image_url": {
+            "url": f"data:image/jpeg;base64,{base64.b64encode(photo_files.read()).decode('utf-8')}"
+        }
+    }
+
+
+
+
+
+
+    # Текстовый запрос
+    prompt = f"""
+    Твоя задача:
+
+     должен точно определять продукты на фото и подробно указывать калорийность каждого из них. В этом разделе осуществляется только расчёт калорийности — ИИ не должен отвечать на другие вопросы.
+     
+
+    
+
+    - Ответ должен быть ТОЛЬКО в формате JSON:
+    {{
+      "message": "Добрый день! У вас в блюде имеется есть “еда”, “еда”, “еда”, “еда”, “еда”. “еда” - “кол-во ккал”
+    “еда” - “кол-во ккал”
+    “еда” - “кол-во ккал”
+    “еда” - “кол-во ккал”
+    “еда” - “кол-во ккал Общее кол-во ккал = 5000
+    }}
+    """
+
+    # Собираем сообщение
+    messages = [
+        {"role": "system", "content": "В этом разделе осуществляется только расчёт калорийности"},
+        {"role": "user", "content": [{"type": "text", "text": prompt}] + [image_contents]}
+    ]
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=messages,
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+    return result_dict
 def lifestyle_test_dog(user_data):
     prompt = f"""
     Оцените Энергетический уровень и активность собаки на основе следующих данных:
