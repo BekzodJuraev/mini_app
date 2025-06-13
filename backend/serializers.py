@@ -515,3 +515,6 @@ class PetGrizunSer(serializers.Serializer):
     eight = serializers.CharField()
     nine = serializers.CharField()
     ten = serializers.CharField()
+
+class CaloriesSer(serializers.Serializer):
+    photo=serializers.ImageField()
