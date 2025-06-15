@@ -74,6 +74,27 @@ from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
+
+def update_system(f):
+    def wrapper(self,request,*args,**kwargs):
+        message = f(self, request, *args, **kwargs)
+        if message.status_code == 200 and 'message' in message.data:
+            profile = request.user.profile
+
+
+
+            def update():
+                update_health = chat_update(profile.health_system, message.data['message'])
+                profile.health_system = update_health
+
+                profile.save(update_fields=['health_system'])
+
+            # asd
+            Thread(target=update).start()
+
+
+        return message
+    return wrapper
 class RegisterAPIView(APIView):
     serializer_class = RegistrationSerializer
 
@@ -209,7 +230,7 @@ class ChatAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ChatSer()}
     )
-
+    @update_system
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -218,15 +239,7 @@ class ChatAPIView(APIView):
 
 
 
-            def update():
-                update_health = chat_update(profile.health_system, message)
-                profile.health_system = update_health
-                profile.save(update_fields=['health_system'])
 
-
-
-            #asd
-            Thread(target=update).start()
             response_data = chat_system(message)
 
             Chat.objects.create(profile=profile,question=message,answer=response_data)
@@ -243,6 +256,7 @@ class CrashTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CrashTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -268,6 +282,7 @@ class SymptomsTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: SymptomsTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -287,6 +302,7 @@ class LifeStyleTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: LifeStyleTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -306,6 +322,7 @@ class HeartLestTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartLestTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -324,6 +341,7 @@ class HeartRelaxTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartLestTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -343,6 +361,7 @@ class HeartBreathTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartBreathTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -362,6 +381,7 @@ class HeartGenchiTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartGenchiTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -380,6 +400,7 @@ class HeartRufeTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartRufeTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -400,6 +421,7 @@ class HeartKotovaTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartKotovaTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -412,6 +434,9 @@ class HeartKotovaTestAPIView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 class HeartMartineTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = HeartMartineTestSer
@@ -419,6 +444,7 @@ class HeartMartineTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartMartineTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -427,6 +453,7 @@ class HeartMartineTestAPIView(APIView):
             test=martinet_test(serializer.validated_data)
             Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Проба Мартинэ", created_at=today, message=test['message'])
+
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
@@ -437,6 +464,7 @@ class HeartKuperTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: HeartKuperTestSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -445,6 +473,17 @@ class HeartKuperTestAPIView(APIView):
             test=cooper_test(serializer.validated_data)
             Quest.objects.get_or_create(profile=profile, tests_id=3)
             Tests.objects.create(profile=profile, name="Тест Купера", created_at=today, message=test['message'])
+
+            # def update():
+            #     update_health = chat_update(profile.health_system, test['message'])
+            #     profile.health_system = update_health
+            #
+            #     profile.save(update_fields=['health_system'])
+            #
+            #
+            #
+            # #asd
+            # Thread(target=update).start()
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
@@ -784,6 +823,7 @@ class RentgenView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -799,16 +839,7 @@ class RentgenView(APIView):
             ]
             Rentgen_Image.objects.bulk_create(consumables)
 
-            def update():
-                update_health = chat_update(profile.health_system, test['message'])
-                profile.health_system = update_health
 
-                profile.save(update_fields=['health_system'])
-
-
-
-            #asd
-            Thread(target=update).start()
 
 
 
@@ -1092,3 +1123,37 @@ class CaroiesListView(APIView):
         serializer = self.serializer_class(query,many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ChatPetAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChatSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatGETSer(many=True)}
+    )
+    def get(self,request):
+        profile=request.user.profile
+        query=Chat.objects.filter(profile=profile).order_by('-created_at')
+        serializer=ChatGETSer(query,many=True)
+
+        return Response(serializer.data,status=status.HTTP_200_OK)
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatSer()}
+    )
+    @update_system
+    def post(self,request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            profile=request.user.profile
+            message = serializer.validated_data.get('message')
+
+
+
+
+            response_data = chat_system(message)
+
+            Chat.objects.create(profile=profile,question=message,answer=response_data)
+
+            return Response({'message': response_data}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

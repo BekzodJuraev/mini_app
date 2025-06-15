@@ -208,3 +208,13 @@ class Calories(models.Model):
     def __str__(self):
         return self.profile.name
 
+class PetChat(models.Model):
+    pet = models.ForeignKey(
+        'Pet', on_delete=models.CASCADE, related_name='chat', verbose_name="Питомец"
+    )
+    question=models.TextField(null=True, default=None)
+    answer=models.TextField(null=True, default=None)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.pet.klichka
