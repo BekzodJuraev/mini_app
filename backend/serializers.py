@@ -243,6 +243,9 @@ class ChatSer(serializers.Serializer):
 
 
 
+
+
+
 class CrashTestSer(serializers.Serializer):
     smoke_day=serializers.IntegerField()
     exp_smoke=serializers.IntegerField()
@@ -425,7 +428,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['klichka','pet','gender','health']
+        fields=['id','klichka','pet','gender','health']
 
     def get_health(self, obj):
         return [obj.health_system]
