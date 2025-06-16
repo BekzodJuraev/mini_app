@@ -218,3 +218,5 @@ class PetChat(models.Model):
 
     def __str__(self):
         return self.pet.klichka
+
+
