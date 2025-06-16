@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat
+
+
+@admin.register(PetChat)
+class PetChat(admin.ModelAdmin):
+    list_display = ['pet']
+
 @admin.register(Calories)
 class Calories(admin.ModelAdmin):
     list_display = ['profile']

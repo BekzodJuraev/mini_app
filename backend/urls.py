@@ -45,6 +45,7 @@ urlpatterns=[
  path('api/pet/grizun/pov',views.PetGrizunPovidenieView.as_view(),name='pov'),
  path('api/pet/grizun/forma',views.PetGrizunFormaView.as_view(),name='forma'),
  path('api/pet/grizun/apetit',views.PetGrizunApetitView.as_view(),name='apetit'),
+ path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
  path('api/calories',views.CaroiesView.as_view(),name='calories'),
  path('api/calories/list',views.CaroiesListView.as_view(),name='calories_list')
 ]

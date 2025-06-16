@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -539,3 +539,10 @@ class CaloriesListSer(serializers.ModelSerializer):
 
     def get_total(self, obj):
         return [obj.total]
+
+
+class PetChatGet(serializers.ModelSerializer):
+
+    class Meta:
+        model=PetChat
+        fields=['question','answer','created_at']
