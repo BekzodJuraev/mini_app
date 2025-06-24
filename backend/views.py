@@ -1,6 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import ExpressionWrapper, F, DurationField, DateField
 from datetime import date,timedelta
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .serializers import (
     RegistrationSerializer,
@@ -810,6 +811,7 @@ class DailyCheckView(APIView):
 class RentgenView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = RentgenSer
+    parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSerGet(many=True)}
