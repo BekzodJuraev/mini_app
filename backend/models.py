@@ -189,6 +189,34 @@ class Daily_check(models.Model):
     def __str__(self):
         return self.profile.name
 
+
+class PetDaily_check(models.Model):
+    pet = models.ForeignKey(
+        'Pet', on_delete=models.CASCADE, related_name='pet_daily_check', verbose_name="Питомец"
+    )
+    message=models.TextField(null=True, default=None)
+    created_at = models.DateField(auto_now_add=True,null=True)
+
+
+class PetRentgen(models.Model):
+    pet = models.ForeignKey(
+        'Pet', on_delete=models.CASCADE, related_name='rentgen_pet', verbose_name="Питомец"
+    )
+    message=models.TextField(null=False, default="")
+    answer = models.TextField(null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PetRentgen_Image(models.Model):
+    rentgen = models.ForeignKey(
+        'PetRentgen', on_delete=models.CASCADE, related_name='rentgen_image', verbose_name="Rentgen"
+    )
+    images=models.ImageField(upload_to='rentgen/',default=None)
+
+
+
+
+
 class Rentgen(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='rentgen', verbose_name="Профиль"
