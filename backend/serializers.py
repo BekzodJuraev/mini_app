@@ -544,6 +544,7 @@ class GetCaloriesSer(serializers.Serializer):
 class CaloriesListSer(serializers.ModelSerializer):
 
     total = serializers.SerializerMethodField()
+
     class Meta:
         model=Calories
         fields=['created_at','detail','total']
@@ -551,6 +552,8 @@ class CaloriesListSer(serializers.ModelSerializer):
 
     def get_total(self, obj):
         return [obj.total]
+
+
 
 
 class PetChatGet(serializers.ModelSerializer):

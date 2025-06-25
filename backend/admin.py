@@ -1,5 +1,17 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image
+@admin.register(PetRentgen_Image)
+class PetRentgen_Image(admin.ModelAdmin):
+    pass
+
+@admin.register(PetDaily_check)
+class PetDaily_check(admin.ModelAdmin):
+    pass
+
+@admin.register(PetRentgen)
+class PetRentgen(admin.ModelAdmin):
+    pass
+
 @admin.register(Pet_Drugs)
 class Pet_Drugs(admin.ModelAdmin):
     pass

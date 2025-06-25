@@ -902,6 +902,53 @@ def daily_check(user_data,yesterday=None):
     return result_dict
 
 
+def petdaily_check(user_data, yesterday=None):
+    prompt = f"""
+       **Анализ самочувствия питомеца**
+
+       Твоя задача — сравнить текущее состояние питомеца с предыдущим днём по следующим параметрам:
+       - Был ли стул у питомца? 
+       - Активность питомца
+       - Как питомец вёл себя ночью/днём
+       - Аппетит
+       - Питьевой режим
+
+       **Сегодняшние данные:**
+       - Был ли стул у питомца?: {user_data['feel_today']}
+       - Активность питомца: {user_data['mood']}
+       - Как питомец вёл себя ночью/днём: {user_data['appetite']}
+       - Аппетит: {user_data['physical']}
+       - Питьевой режим: {user_data['sleep']}
+
+
+
+
+
+       **Твоя задача:**
+       - Ответ должен быть ТОЛЬКО в формате JSON:
+       -Вчерашние данные:{yesterday}
+       ИИ анализирует ответы пользователя и сравнивает именно со вчерашним днем, показывая ответ что-то по типу: Общее самочувствие: Есть небольшое снижение по сравнению с предыдущим днём. Возможно, организм требует больше отдыха. Настроение: Осталось на прежнем уровне — без резких изменений. Аппетит: Отмечается положительная динамика — сегодня питание было немного лучше. Физическое состояние: Появились незначительные жалобы, стоит понаблюдать за собой в ближайшие дни. Сон:  Качество сна примерно такое же, как и вчера.
+
+       {{
+         "message":"Общее самочувствие: Есть небольшое снижение по сравнению с предыдущим днём. Возможно, организм требует больше отдыха. Настроение: Осталось на прежнем уровне — без резких изменений. Аппетит: Отмечается положительная динамика — сегодня питание было немного лучше. Физическое состояние: Появились незначительные жалобы, стоит понаблюдать за собой в ближайшие дни. Сон:  Качество сна примерно такое же, как и вчера."
+       }}
+       """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {"role": "system",
+             "content": "Ты эксперт по анализу физического и психоэмоционального состояния питомеца."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+
+    return result_dict
+
 
 def rentgen(photo_files, message):
 
@@ -952,7 +999,55 @@ def rentgen(photo_files, message):
     result_text = response["choices"][0]["message"]["content"]
     result_dict = json.loads(result_text)
     return result_dict
+def petrentgen(photo_files, message):
 
+
+
+
+    try:
+        image_contents = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64.b64encode(photo.read()).decode('utf-8')}"
+                }
+            }
+            for photo in photo_files
+        ]
+    except:
+        image_contents=[]
+
+
+
+
+    prompt = f"""
+    Твоя задача:
+
+   ИИ анализирует загруженное фото Когда пользователь загружает фото, система должна показать, какие части тела животного были проанализированы. Пример: "Глаз — признаков воспаления нет" "Шерсть — блестящая, равномерная" "Ухо — покраснение, рекомендована проверка". Ответы ограничены только вопросами, связанными с животным и его здоровьем..
+
+    {"Дополнительная информация от пользователя: " + message if message else ""}
+
+    - Ответ должен быть ТОЛЬКО в формате JSON:
+    {{
+      "message": "Тут можно более расширенно написать и дать какие-то рекомендации"
+    }}
+    """
+
+    # Собираем сообщение
+    messages = [
+        {"role": "system", "content": "Ты медицинский помощник, который анализирует изображения, загруженные пользователями.связанными с животным и его здоровьем"},
+        {"role": "user", "content": [{"type": "text", "text": prompt}] + image_contents}
+    ]
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=messages,
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    result_dict = json.loads(result_text)
+    return result_dict
 def calories(photo_files):
 
     image_contents = {

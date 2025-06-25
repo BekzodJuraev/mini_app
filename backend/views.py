@@ -69,11 +69,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -869,7 +869,30 @@ class DailyCheckView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+class PetDailyCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DailyCheckSer
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DailyCheckSer()}
+    )
+    def post(self, request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            today = localtime(now()).date()
+            daily=PetDaily_check.objects.filter(pet_id=message_id).first()
+            if daily:
+                test = petdaily_check(serializer.validated_data, daily.message)
+            else:
+                test = petdaily_check(serializer.validated_data)
+
+
+            PetDaily_check.objects.get_or_create(pet_id=message_id, message=test['message'],created_at=today)
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class RentgenView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = RentgenSer
@@ -890,6 +913,7 @@ class RentgenView(APIView):
     )
     @update_system
     def post(self, request):
+
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
@@ -913,7 +937,49 @@ class RentgenView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+class PetRentgenView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RentgenSer
+    parser_classes = [MultiPartParser, FormParser]
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RentgenSerGet(many=True)}
+    )
+    def get(self, request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        query = PetRentgen.objects.filter(pet_id=message_id).prefetch_related('rentgen_image').order_by('-created_at')
+        serializer = RentgenSerGet(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RentgenSer()}
+    )
+
+    def post(self,request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+
+
+            test=petrentgen(serializer.validated_data.get('photo'),serializer.validated_data.get('message'))
+            r=PetRentgen.objects.create(pet_id=message_id,message=serializer.validated_data.get('message'),answer=test['message'])
+
+
+            consumables = [
+                PetRentgen_Image(rentgen=r, images=image)
+                for image in serializer.validated_data.get('photo')
+            ]
+            PetRentgen_Image.objects.bulk_create(consumables)
+
+
+
+
+
+
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class PetView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PetSerCreate
@@ -1183,6 +1249,7 @@ class CaroiesListView(APIView):
     def get(self, request):
         profile = request.user.profile
         query=Calories.objects.filter(profile=profile)
+
 
 
         serializer = self.serializer_class(query,many=True)
