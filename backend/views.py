@@ -49,7 +49,9 @@ from .serializers import (
     CaloriesSer,
     GetCaloriesSer,
     CaloriesListSer,
-    PetChatGet
+    PetChatGet,
+    PetDrugSer,
+    GetPetDrugSer
 
 
 )
@@ -67,7 +69,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -682,7 +684,23 @@ class GetRelationshipListView(APIView):
 
 
 
+class PetDrugsAPiView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PetDrugSer
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetDrugSer()}
+    )
+
+    def post(self,request,message_id):
+        serializer = self.serializer_class(data=request.data)
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        if serializer.is_valid():
+            serializer.save(pet_id=message_id)
+
+            return Response({'message':'Saved drug'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DrugsAPiView(APIView):
@@ -702,7 +720,26 @@ class DrugsAPiView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+class PetDrugsAPIListView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GetPetDrugSer
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: GetPetDrugSer()}
+    )
+
+    def get(self,request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        today = localtime(now()).date()
+        query = Pet_Drugs.objects.filter(pet_id=message_id).annotate(end_day=ExpressionWrapper(F('created_at') + F('interval'), output_field=DateField()), status=Exists(
+                Pet_Check_Drugs.objects.filter(
+                    drugs=OuterRef('pk'),
+                    created_at=today
+                    # Matches each category with its related Quests
+                )
+            ))
+        serializer = self.serializer_class(query, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 class DrugsAPIListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GetDrugSer
@@ -726,7 +763,32 @@ class DrugsAPIListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class PetDrugCheckbyDayView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DrugById
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DrugById()}
+    )
+    def post(self,request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            today = localtime(now()).date()
+            profile = request.user.profile
+            try:
+                Pet_Check_Drugs.objects.get_or_create(
+                    drugs_id=serializer.validated_data['id'],
+                    created_at=today,
+                )
+                return Response({'message': 'Daily check saved'}, status=200)
+            except:
+
+                return Response({'message': 'Not Found'}, status=404)
+
+
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class DrugCheckbyDayView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = DrugById
@@ -1161,3 +1223,5 @@ class ChatPetAPIView(APIView):
             return Response({'message': response_data}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+

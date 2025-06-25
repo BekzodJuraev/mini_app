@@ -118,9 +118,36 @@ class Chat(models.Model):
 
     def __str__(self):
         return self.profile.name
+
+class Pet_Drugs(models.Model):
+    pet = models.ForeignKey(
+        "Pet", on_delete=models.CASCADE, related_name='pet_drugs', verbose_name="Питомец"
+    )
+    catigories = models.CharField(max_length=200)
+    name = models.CharField(max_length=200)
+    time_day = models.IntegerField()
+    day = models.IntegerField()
+    intake = models.CharField(max_length=200)
+    interval = models.DurationField(null=True, blank=True)
+    notification = models.JSONField()
+    created_at = models.DateField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        self.interval = timedelta(days=self.time_day)
+        super().save(*args, **kwargs)
+
+
+class Pet_Check_Drugs(models.Model):
+    drugs=models.ForeignKey(
+        'Pet_Drugs', on_delete=models.CASCADE, related_name='pet_drugs_check', verbose_name="Drugs"
+    )
+    created_at=models.DateField(auto_now_add=True)
+
+
+
 class Drugs(models.Model):
     profile = models.ForeignKey(
-        'Profile', on_delete=models.CASCADE, related_name='drugs', verbose_name="Профиль"
+        Profile, on_delete=models.CASCADE, related_name='drugs', verbose_name="Профиль"
     )
     catigories=models.CharField(max_length=200)
     name=models.CharField(max_length=200)

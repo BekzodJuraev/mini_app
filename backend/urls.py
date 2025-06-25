@@ -46,6 +46,9 @@ urlpatterns=[
  path('api/pet/grizun/forma',views.PetGrizunFormaView.as_view(),name='forma'),
  path('api/pet/grizun/apetit',views.PetGrizunApetitView.as_view(),name='apetit'),
  path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
+ path('api/pet/drugs/create/<int:message_id>',views.PetDrugsAPiView.as_view(),name='create_drugs'),
+ path('api/pet/drugs/list/<int:message_id>',views.PetDrugsAPIListView.as_view(),name='list_drugs'),
+ path('api/pet/drugs/check/<int:message_id>',views.PetDrugCheckbyDayView.as_view(),name='check'),
  path('api/calories',views.CaroiesView.as_view(),name='calories'),
  path('api/calories/list',views.CaroiesListView.as_view(),name='calories_list')
 ]
