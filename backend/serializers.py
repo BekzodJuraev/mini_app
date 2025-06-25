@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -370,6 +370,18 @@ class DrugsSer(serializers.ModelSerializer):
         model=Drugs
         fields=['catigories','name','time_day','day','intake','notification']
 
+class PetDrugSer(serializers.ModelSerializer):
+    class Meta:
+        model=Pet_Drugs
+        fields=['catigories','name','time_day','day','intake','notification']
+
+
+class GetPetDrugSer(serializers.ModelSerializer):
+    end_day=serializers.DateField()
+    status=serializers.BooleanField()
+    class Meta:
+        model=Pet_Drugs
+        fields=['id','name','time_day','day','intake','notification','created_at','end_day','status']
 class GetDrugSer(serializers.ModelSerializer):
     end_day=serializers.DateField()
     status=serializers.BooleanField()
