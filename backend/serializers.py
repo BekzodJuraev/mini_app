@@ -10,7 +10,7 @@ from threading import Thread
 from .prompt import get_health_scale,get_health_scale_baby
 import uuid
 
-
+from rest_framework.authtoken.models import Token
 
 
 
@@ -150,6 +150,7 @@ class RelationshipSer(serializers.ModelSerializer):
         profile = Profile.objects.create(username=user, family=profile, **validated_data)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
+
 
         return user
 class RelationshipBabySer(serializers.ModelSerializer):
@@ -429,7 +430,7 @@ class PetSerCreate(serializers.Serializer):
     klichka=serializers.CharField()
     pet=serializers.CharField()
     poroda=serializers.CharField()
-    age=serializers.IntegerField()
+    age=serializers.FloatField()
     disease=serializers.CharField()
     body=serializers.CharField()
     gender=serializers.CharField()
