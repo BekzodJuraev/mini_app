@@ -638,9 +638,10 @@ class RelationshipView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data,context={'request': request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
 
-        return Response({'message': 'Saved successful'}, status=status.HTTP_201_CREATED)
+        user = serializer.save()
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key}, status=status.HTTP_201_CREATED)
 
 
 class RelationshipBabyView(APIView):
@@ -654,9 +655,9 @@ class RelationshipBabyView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data,context={'request': request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        return Response({'message': 'Saved successful'}, status=status.HTTP_201_CREATED)
+        user=serializer.save()
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key}, status=status.HTTP_201_CREATED)
 
 class GetRelationshipListView(APIView):
     permission_classes = [IsAuthenticated]
