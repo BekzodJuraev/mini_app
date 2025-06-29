@@ -31,6 +31,7 @@ class Profile(models.Model):
                                                null=True, blank=True)
 
     who_is = models.CharField(max_length=150,null=True, blank=True, default=None)
+    IK = models.FloatField(null=True)
 
     #Overall_tone=models.IntegerField(default=0)
 
