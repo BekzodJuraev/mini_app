@@ -12,6 +12,10 @@ import uuid
 
 from rest_framework.authtoken.models import Token
 
+class CaloriesChatSer(serializers.ModelSerializer):
+    class Meta:
+        model=Calories
+        fields=['images','answer','created_at']
 
 
 
@@ -554,15 +558,16 @@ class GetCaloriesSer(serializers.Serializer):
 
 class CaloriesListSer(serializers.ModelSerializer):
 
-    total = serializers.SerializerMethodField()
+    #total = serializers.SerializerMethodField()
+    foods=serializers.JSONField()
 
     class Meta:
         model=Calories
-        fields=['created_at','detail','total']
+        fields=['created_at','foods']
 
 
-    def get_total(self, obj):
-        return [obj.total]
+    # def get_total(self, obj):
+    #     return [obj.total]
 
 
 
