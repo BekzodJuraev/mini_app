@@ -2,7 +2,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import ExpressionWrapper, F, DurationField, DateField
 from datetime import date,timedelta
 from rest_framework.parsers import MultiPartParser, FormParser
-
+from collections import defaultdict
 from .serializers import (
     RegistrationSerializer,
     LoginSer,
@@ -51,7 +51,8 @@ from .serializers import (
     CaloriesListSer,
     PetChatGet,
     PetDrugSer,
-    GetPetDrugSer
+    GetPetDrugSer,
+    CaloriesChatSer
 
 
 )
@@ -1232,7 +1233,7 @@ class CaroiesView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             test=calories(serializer.validated_data['photo'])
-            Calories.objects.create(profile=profile,detail=test['detail'],total=test['total'])
+            Calories.objects.create(profile=profile,detail=test['detail'],total=test['total'],images=serializer.validated_data['photo'],answer=test['message'])
 
 
             return Response({'message':test['message']}, status=status.HTTP_200_OK)
@@ -1251,9 +1252,47 @@ class CaroiesListView(APIView):
         profile = request.user.profile
         query=Calories.objects.filter(profile=profile)
 
+        dic = defaultdict(lambda: {
+            'meals': [],
+            'total_daily': {
+                "вес": 0,
+                "ккал": 0,
+                "белок": 0,
+                "жир": 0,
+                "углеводы": 0,
+                "клечатка": 0
+            }
+        })
+
+        for item in query:
+            dic[item.created_at]['meals'].append({
+                'detail': item.detail,
+                'total': item.total
+            })
+
+            dic[item.created_at]['total_daily']['вес']+=item.total.get('вес',0)
+            dic[item.created_at]['total_daily']['ккал'] += item.total.get('ккал', 0)
+            dic[item.created_at]['total_daily']['белок'] += item.total.get('белок', 0)
+            dic[item.created_at]['total_daily']['жир'] += item.total.get('жир', 0)
+            dic[item.created_at]['total_daily']['углеводы'] += item.total.get('углеводы', 0)
+            dic[item.created_at]['total_daily']['клечатка'] += item.total.get('клечатка', 0)
 
 
-        serializer = self.serializer_class(query,many=True)
+        result=[]
+        for key,item in dic.items():
+            result.append({
+                'created_at':key,
+                'foods':item
+
+            })
+
+
+
+
+
+
+
+        serializer = self.serializer_class(result,many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1293,3 +1332,16 @@ class ChatPetAPIView(APIView):
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class CaloriesChatView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CaloriesChatSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
+    )
+    def get(self,request):
+        profile=request.user.profile
+        query=Calories.objects.filter(profile=profile).order_by('-created_at')[:3]
+        serializer=CaloriesChatSer(query,many=True)
+
+        return Response(serializer.data,status=status.HTTP_200_OK)

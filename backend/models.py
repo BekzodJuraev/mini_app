@@ -259,10 +259,15 @@ class Calories(models.Model):
     created_at=models.DateField(auto_now_add=True)
     detail=models.JSONField(null=True, default=None)
     total=models.JSONField(null=True, default=None)
+    images = models.ImageField(upload_to='calories/', default=None,null=True)
+    answer = models.TextField(null=True, default=None)
 
 
     def __str__(self):
         return self.profile.name
+
+
+
 
 class PetChat(models.Model):
     pet = models.ForeignKey(
