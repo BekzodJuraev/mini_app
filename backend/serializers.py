@@ -58,6 +58,10 @@ class RegistrationSerializer(serializers.ModelSerializer):
         ref = validated_data.pop('ref', None)
         ref_family=validated_data.pop('ref_family',None)
 
+        ik=None
+        if now_smoke and exp_smoke and smoke_day:
+            ik=(smoke_day * exp_smoke / 20)
+
 
         def fetch_and_save_health(user):
             health_system = get_health_scale(
@@ -79,12 +83,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(username=username)
         if ref:
             ref=Profile.objects.filter(ref=ref).first()
-            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data)
+            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data,IK=ik)
         elif ref_family:
             ref_family = Profile.objects.filter(family_ref=ref_family).first()
-            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data)
+            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data,IK=ik)
         else:
-            profile = Profile.objects.create(username=user, **validated_data)
+            profile = Profile.objects.create(username=user, **validated_data,IK=ik)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
@@ -110,6 +114,8 @@ class RelationshipSer(serializers.ModelSerializer):
     smoke_day = serializers.IntegerField()
 
 
+
+
     class Meta:
         model=User
         fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
@@ -130,6 +136,10 @@ class RelationshipSer(serializers.ModelSerializer):
         smoke_what=validated_data.pop('smoke_what')
         smoke_day=validated_data.pop('smoke_day')
 
+        ik = None
+        if now_smoke and exp_smoke and smoke_day:
+            ik = (smoke_day * exp_smoke / 20)
+
 
         def fetch_and_save_health(rel):
             health_system = get_health_scale(
@@ -147,7 +157,7 @@ class RelationshipSer(serializers.ModelSerializer):
 
 
         user = User.objects.create_user(username=str(uuid.uuid4()))
-        profile = Profile.objects.create(username=user, family=profile, **validated_data)
+        profile = Profile.objects.create(username=user, family=profile, **validated_data,IK=ik)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
@@ -210,7 +220,7 @@ class ProfileSer(serializers.ModelSerializer):
     age=serializers.IntegerField()
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance']
+        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK']
 
 
 
