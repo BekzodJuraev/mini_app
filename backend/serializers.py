@@ -555,6 +555,14 @@ class GetCaloriesSer(serializers.Serializer):
     uglevod=serializers.IntegerField()
     klechatka=serializers.IntegerField()
 
+class PetGetCaloriesSer(serializers.Serializer):
+    calories=serializers.IntegerField()
+    belok=serializers.IntegerField()
+    jir=serializers.IntegerField()
+    uglevod=serializers.IntegerField()
+    klechatka=serializers.IntegerField()
+    vitamin = serializers.IntegerField()
+    mineral = serializers.IntegerField()
 
 class CaloriesListSer(serializers.ModelSerializer):
 

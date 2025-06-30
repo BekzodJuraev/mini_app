@@ -52,7 +52,8 @@ from .serializers import (
     PetChatGet,
     PetDrugSer,
     GetPetDrugSer,
-    CaloriesChatSer
+    CaloriesChatSer,
+    PetGetCaloriesSer
 
 
 )
@@ -70,11 +71,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -93,6 +94,26 @@ def update_system(f):
                 profile.health_system = update_health
 
                 profile.save(update_fields=['health_system'])
+
+            # asd
+            Thread(target=update).start()
+
+
+        return message
+    return wrapper
+
+def pet_update_system(f):
+    def wrapper(self,request, message_id,*args,**kwargs):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        message = f(self,request,message_id, *args, **kwargs)
+
+        if message.status_code == 200 and 'message' in message.data:
+
+
+            def update():
+                health_system = chat_update_pet(pet.health_system,message.data['message'])
+                pet.health_system = health_system
+                pet.save(update_fields=['health_system'])
 
             # asd
             Thread(target=update).start()
@@ -957,9 +978,8 @@ class PetRentgenView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSer()}
     )
-
+    @pet_update_system
     def post(self,request,message_id):
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
 
@@ -999,6 +1019,8 @@ class PetView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetSerCreate()}
     )
+
+
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1025,16 +1047,20 @@ class PetView(APIView):
 
 class PetstyleView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = PetEmotionSer
+    serializer_class = PetstyleSer
 
     @swagger_auto_schema(
-        responses={status.HTTP_200_OK: PetEmotionSer()}
+        responses={status.HTTP_200_OK: PetstyleSer()}
     )
-    def post(self, request):
+
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
-            test=emotion_test_dog(serializer.validated_data)
+            test=lifestyle_test_dog(serializer.validated_data)
+
+
 
 
             return Response(test, status=status.HTTP_200_OK)
@@ -1048,7 +1074,8 @@ class PetEmotionView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetEmotionSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1065,7 +1092,8 @@ class PetHabitView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetHabitSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1084,7 +1112,8 @@ class PetCatEmotView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetCatEmotSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1103,7 +1132,8 @@ class PetCatSleepView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetCatSleepSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1123,7 +1153,8 @@ class PetCatApetitView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetCatApetitSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1142,7 +1173,8 @@ class PetGrizunPovidenieView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,messsage_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1160,7 +1192,8 @@ class PetGrizunFormaView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1177,7 +1210,8 @@ class PetGrizunApetitView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
-    def post(self, request):
+    @pet_update_system
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
@@ -1303,6 +1337,7 @@ class ChatPetAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetChatGet(many=True)}
     )
+
     def get(self,request,message_id):
         profile=request.user.profile
         pet = get_object_or_404(Pet, id=message_id, profile=profile)
@@ -1313,7 +1348,7 @@ class ChatPetAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ChatSer()}
     )
-
+    @pet_update_system
     def post(self,request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1323,7 +1358,7 @@ class ChatPetAPIView(APIView):
             pet = get_object_or_404(Pet, id=message_id, profile=profile)
 
 
-            response_data = chat_system(message)
+            response_data = chat_system_pet(message)
 
             PetChat.objects.create(pet_id=message_id,question=message,answer=response_data)
 
@@ -1345,3 +1380,137 @@ class CaloriesChatView(APIView):
         serializer=CaloriesChatSer(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
+
+
+
+class PetCaroiesView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=CaloriesSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PetGetCaloriesSer()}
+    )
+    def get(self, request,message_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        today = localtime(now()).date()
+        query = PetCalories.objects.filter(pet_id=message_id,created_at=today).values_list('total',flat=True)
+        calories = belok = jir = uglevod = klechatka = vitamin = mineral=0
+        if query:
+            for item in query:
+                calories+=item['ккал']
+                belok+=item['белок']
+                jir += item['жир']
+                uglevod+=item['углеводы']
+                klechatka+=item['клечатка']
+                vitamin+=item['витамины']
+                mineral+=item['минералы']
+
+
+
+
+        dic={
+        "calories":calories,
+        "belok":belok,
+        "jir":jir,
+        "uglevod":uglevod,
+        "klechatka":klechatka,
+        "vitamin":vitamin,
+        "mineral":mineral
+
+        }
+
+        serializer = PetGetCaloriesSer(dic)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CaloriesSer()}
+    )
+
+    def post(self, request,message_id):
+        serializer = self.serializer_class(data=request.data)
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        if serializer.is_valid():
+            test=pet_calories(serializer.validated_data['photo'])
+            PetCalories.objects.create(pet_id=message_id,detail=test['detail'],total=test['total'],images=serializer.validated_data['photo'],answer=test['message'])
+
+
+            return Response({'message':test['message']}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PetCaroiesListView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class=CaloriesListSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CaloriesListSer(many=True)}
+    )
+    def get(self, request,message_id):
+
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        query=PetCalories.objects.filter(pet_id=message_id)
+
+        dic = defaultdict(lambda: {
+            'meals': [],
+            'total_daily': {
+                "вес": 0,
+                "ккал": 0,
+                "белок": 0,
+                "жир": 0,
+                "углеводы": 0,
+                "клечатка": 0,
+                "витамны":0,
+                "минералы":0
+            }
+        })
+
+        for item in query:
+            dic[item.created_at]['meals'].append({
+                'detail': item.detail,
+                'total': item.total
+            })
+
+            dic[item.created_at]['total_daily']['вес']+=item.total.get('вес',0)
+            dic[item.created_at]['total_daily']['ккал'] += item.total.get('ккал', 0)
+            dic[item.created_at]['total_daily']['белок'] += item.total.get('белок', 0)
+            dic[item.created_at]['total_daily']['жир'] += item.total.get('жир', 0)
+            dic[item.created_at]['total_daily']['углеводы'] += item.total.get('углеводы', 0)
+            dic[item.created_at]['total_daily']['клечатка'] += item.total.get('клечатка', 0)
+            dic[item.created_at]['total_daily']['витамны'] += item.total.get('витамны', 0)
+            dic[item.created_at]['total_daily']['минералы'] += item.total.get('минералы', 0)
+
+
+        result=[]
+        for key,item in dic.items():
+            result.append({
+                'created_at':key,
+                'foods':item
+
+            })
+
+
+
+
+
+
+
+        serializer = self.serializer_class(result,many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PetCaloriesChatView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CaloriesChatSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
+    )
+    def get(self, request,message_id):
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        query = PetCalories.objects.filter(pet_id=message_id).order_by('-created_at')[:3]
+        serializer = CaloriesChatSer(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
