@@ -91,12 +91,15 @@ def update_system(f):
 
             def update():
                 update_health = chat_update(profile.health_system, message.data['message'])
+
                 profile.health_system = update_health
+
 
                 profile.save(update_fields=['health_system'])
 
             # asd
             Thread(target=update).start()
+
 
 
         return message
@@ -292,8 +295,8 @@ class CrashTestAPIView(APIView):
             Quest.objects.get_or_create(profile=profile, tests_id=1)
             Tests.objects.create(profile=profile, name="Краш тест", created_at=today, message=test['message'])
             profile.life_expectancy=test['life_expectancy']
-
-            profile.save(update_fields=['life_expectancy'])
+            profile.IK=serializer.validated_data.get('ik',0)
+            profile.save(update_fields=['life_expectancy','IK'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -1284,7 +1287,7 @@ class CaroiesListView(APIView):
     )
     def get(self, request):
         profile = request.user.profile
-        query=Calories.objects.filter(profile=profile)
+        query=Calories.objects.filter(profile=profile).exclude(detail=[]).order_by('-id')
 
         dic = defaultdict(lambda: {
             'meals': [],

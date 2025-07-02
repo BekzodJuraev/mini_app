@@ -277,6 +277,7 @@ class CrashTestSer(serializers.Serializer):
         child=serializers.CharField()
     )
     food=serializers.CharField()
+    ik=serializers.FloatField(required=False)
 
 class SymptomsTestSer(serializers.Serializer):
     symptoms=serializers.ListField(
