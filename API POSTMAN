@@ -56,6 +56,16 @@ Rel
     "intake":"С водой",
     "notification":["12:00"]
 }
+
+{
+  "klichka": "Крвсс",
+  "pet": "Кошка",
+  "poroda": "Метис",
+  "age": 1,
+  "disease": "Нет",
+  "body": "Нормальное",
+  "gender": "female"
+}
 Dog test
 {
   "dog_street": "Часто",

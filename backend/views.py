@@ -91,7 +91,6 @@ def update_system(f):
 
             def update():
                 update_health = chat_update(profile.health_system, message.data['message'])
-
                 profile.health_system = update_health
 
 
@@ -1240,11 +1239,11 @@ class CaroiesView(APIView):
         calories = belok = jir = uglevod = klechatka = 0
         if query:
             for item in query:
-                calories+=item['ккал']
-                belok+=item['белок']
-                jir += item['жир']
-                uglevod+=item['углеводы']
-                klechatka+=item['клечатка']
+                calories+=item.get('ккал',0)
+                belok+=item.get('белок',0)
+                jir += item.get('жир',0)
+                uglevod+=item.get('углеводы',0)
+                klechatka+=item.get('клетчатка',0)
 
 
 
@@ -1270,7 +1269,11 @@ class CaroiesView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             test=calories(serializer.validated_data['photo'])
-            Calories.objects.create(profile=profile,detail=test['detail'],total=test['total'],images=serializer.validated_data['photo'],answer=test['message'])
+            if test.get('message')!="Пожалуйста, отправьте фото еды для расчёта калорийности.":
+                Calories.objects.create(profile=profile, detail=test.get('detail', []), total=test.get('total', []),
+                                        images=serializer.validated_data['photo'], answer=test['message'])
+
+
 
 
             return Response({'message':test['message']}, status=status.HTTP_200_OK)
@@ -1297,7 +1300,7 @@ class CaroiesListView(APIView):
                 "белок": 0,
                 "жир": 0,
                 "углеводы": 0,
-                "клечатка": 0
+                "клетчатка": 0
             }
         })
 
@@ -1312,7 +1315,7 @@ class CaroiesListView(APIView):
             dic[item.created_at]['total_daily']['белок'] += item.total.get('белок', 0)
             dic[item.created_at]['total_daily']['жир'] += item.total.get('жир', 0)
             dic[item.created_at]['total_daily']['углеводы'] += item.total.get('углеводы', 0)
-            dic[item.created_at]['total_daily']['клечатка'] += item.total.get('клечатка', 0)
+            dic[item.created_at]['total_daily']['клетчатка'] += item.total.get('клетчатка', 0)
 
 
         result=[]
@@ -1401,13 +1404,13 @@ class PetCaroiesView(APIView):
         calories = belok = jir = uglevod = klechatka = vitamin = mineral=0
         if query:
             for item in query:
-                calories+=item['ккал']
-                belok+=item['белок']
-                jir += item['жир']
-                uglevod+=item['углеводы']
-                klechatka+=item['клечатка']
-                vitamin+=item['витамины']
-                mineral+=item['минералы']
+                calories+=item.get('ккал',0)
+                belok+=item.get('белок')
+                jir += item.get('жир',0)
+                uglevod+=item.get('углеводы',0)
+                klechatka+=item.get('клетчатка',0)
+                vitamin+=item.get('витамины',0)
+                mineral+=item.get('минералы',0)
 
 
 
@@ -1434,8 +1437,12 @@ class PetCaroiesView(APIView):
         serializer = self.serializer_class(data=request.data)
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         if serializer.is_valid():
+
             test=pet_calories(serializer.validated_data['photo'])
-            PetCalories.objects.create(pet_id=message_id,detail=test['detail'],total=test['total'],images=serializer.validated_data['photo'],answer=test['message'])
+            if test.get('message')!="Пожалуйста, отправьте фото еды для расчёта калорийности.":
+                PetCalories.objects.create(pet_id=message_id, detail=test.get('detail', []), total=test.get('total', []),
+                                        images=serializer.validated_data['photo'], answer=test['message'])
+
 
 
             return Response({'message':test['message']}, status=status.HTTP_200_OK)
@@ -1453,7 +1460,7 @@ class PetCaroiesListView(APIView):
     def get(self, request,message_id):
 
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
-        query=PetCalories.objects.filter(pet_id=message_id)
+        query=PetCalories.objects.filter(pet_id=message_id).exclude(detail=[]).order_by('-id')
 
         dic = defaultdict(lambda: {
             'meals': [],
@@ -1463,7 +1470,7 @@ class PetCaroiesListView(APIView):
                 "белок": 0,
                 "жир": 0,
                 "углеводы": 0,
-                "клечатка": 0,
+                "клетчатка": 0,
                 "витамны":0,
                 "минералы":0
             }
@@ -1480,7 +1487,7 @@ class PetCaroiesListView(APIView):
             dic[item.created_at]['total_daily']['белок'] += item.total.get('белок', 0)
             dic[item.created_at]['total_daily']['жир'] += item.total.get('жир', 0)
             dic[item.created_at]['total_daily']['углеводы'] += item.total.get('углеводы', 0)
-            dic[item.created_at]['total_daily']['клечатка'] += item.total.get('клечатка', 0)
+            dic[item.created_at]['total_daily']['клетчатка'] += item.total.get('клетчатка', 0)
             dic[item.created_at]['total_daily']['витамны'] += item.total.get('витамны', 0)
             dic[item.created_at]['total_daily']['минералы'] += item.total.get('минералы', 0)
 
