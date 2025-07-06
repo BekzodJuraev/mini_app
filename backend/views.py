@@ -251,7 +251,7 @@ class ChatAPIView(APIView):
     )
     def get(self,request):
         profile=request.user.profile
-        query=Chat.objects.filter(profile=profile).order_by('-created_at')
+        query=Chat.objects.filter(profile=profile).order_by('created_at')
         serializer=ChatGETSer(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
@@ -1347,7 +1347,7 @@ class ChatPetAPIView(APIView):
     def get(self,request,message_id):
         profile=request.user.profile
         pet = get_object_or_404(Pet, id=message_id, profile=profile)
-        query=PetChat.objects.filter(pet_id=message_id).order_by('-created_at')
+        query=PetChat.objects.filter(pet_id=message_id).order_by('created_at')
         serializer=PetChatGet(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
@@ -1382,7 +1382,7 @@ class CaloriesChatView(APIView):
     )
     def get(self,request):
         profile=request.user.profile
-        query=Calories.objects.filter(profile=profile).order_by('-created_at')[:3]
+        query=Calories.objects.filter(profile=profile).order_by('created_at')[:3]
         serializer=CaloriesChatSer(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
@@ -1520,7 +1520,7 @@ class PetCaloriesChatView(APIView):
     )
     def get(self, request,message_id):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
-        query = PetCalories.objects.filter(pet_id=message_id).order_by('-created_at')[:3]
+        query = PetCalories.objects.filter(pet_id=message_id).order_by('created_at')[:3]
         serializer = CaloriesChatSer(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
