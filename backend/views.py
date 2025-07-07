@@ -223,30 +223,46 @@ class ProfileMainSystemAPIView(APIView):
     )
     def get(self, request):
         profile = request.user.profile
+        serializer = self.serializer_class(profile)
 
-        for _ in range(20):
-            profile.refresh_from_db()
-            serializer = self.serializer_class(profile)
-            health_system = profile.health_system
+        try:
+            health_system = serializer.data.get('health_system', {})
 
+            # Convert dictionary into a list of {"name": key, "value": value} dictionaries
+            transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
 
-
-
-            if health_system:
-                transformed_health_system = [
-                    {"name": key, "value": value}
-                    for key, value in health_system.items()
-                ]
-
-                return Response({
-                    "name": serializer.data["name"],
-                    "health_system": transformed_health_system
-                }, status=status.HTTP_200_OK)
-
-            time.sleep(1)
-
-            # If still no data after retries, return pending
-        return Response({"message": "pending"}, status=status.HTTP_200_OK)
+            return Response({
+                "name": serializer.data["name"],
+                "health_system": transformed_health_system
+            }, status=status.HTTP_200_OK)
+        except:
+            return Response({"message": "waiting data"}, status=status.HTTP_200_OK)
+    # def get(self, request):
+    #     profile = request.user.profile
+    #
+    #     for _ in range(20):
+    #         profile.refresh_from_db()
+    #         serializer = self.serializer_class(profile)
+    #         health_system = profile.health_system
+    #
+    #
+    #
+    #
+    #         if health_system:
+    #             transformed_health_system = [
+    #                 {"name": key, "value": value}
+    #                 for key, value in health_system.items()
+    #             ]
+    #
+    #             return Response({
+    #                 "name": serializer.data["name"],
+    #                 "health_system": transformed_health_system
+    #             }, status=status.HTTP_200_OK)
+    #
+    #         time.sleep(1)
+    #
+    #         # If still no data after retries, return pending
+    #     return Response({"message": "pending"}, status=status.HTTP_200_OK)
 
 
 
@@ -1397,7 +1413,9 @@ class CaloriesChatView(APIView):
     )
     def get(self,request):
         profile=request.user.profile
-        query=Calories.objects.filter(profile=profile).order_by('created_at')[:3]
+        today = localtime(now()).date()
+        three_days_ago = today - timedelta(days=2)
+        query=Calories.objects.filter(profile=profile,created_at__gte=three_days_ago).order_by('created_at')
         serializer=CaloriesChatSer(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
@@ -1534,8 +1552,13 @@ class PetCaloriesChatView(APIView):
         responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
     )
     def get(self, request,message_id):
+        today = localtime(now()).date()
+        three_days_ago = today - timedelta(days=2)
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
-        query = PetCalories.objects.filter(pet_id=message_id).order_by('created_at')[:3]
+        query = PetCalories.objects.filter(
+            pet_id=message_id,
+            created_at__gte=three_days_ago
+        ).order_by('created_at')
         serializer = CaloriesChatSer(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
