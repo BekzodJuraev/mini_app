@@ -223,20 +223,30 @@ class ProfileMainSystemAPIView(APIView):
     )
     def get(self, request):
         profile = request.user.profile
-        serializer = self.serializer_class(profile)
 
-        try:
-            health_system = serializer.data.get('health_system', {})
+        for _ in range(20):
+            profile.refresh_from_db()
+            serializer = self.serializer_class(profile)
+            health_system = profile.health_system
 
-            # Convert dictionary into a list of {"name": key, "value": value} dictionaries
-            transformed_health_system = [{"name": key, "value": value} for key, value in health_system.items()]
 
-            return Response({
-                "name": serializer.data["name"],
-                "health_system": transformed_health_system
-            }, status=status.HTTP_200_OK)
-        except:
-            return Response({"message":"waiting data"}, status=status.HTTP_200_OK)
+
+
+            if health_system:
+                transformed_health_system = [
+                    {"name": key, "value": value}
+                    for key, value in health_system.items()
+                ]
+
+                return Response({
+                    "name": serializer.data["name"],
+                    "health_system": transformed_health_system
+                }, status=status.HTTP_200_OK)
+
+            time.sleep(1)
+
+            # If still no data after retries, return pending
+        return Response({"message": "pending"}, status=status.HTTP_200_OK)
 
 
 
@@ -1029,15 +1039,20 @@ class PetView(APIView):
             profile = request.user.profile
             pet=Pet.objects.create(profile=profile,klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
                                    gender=serializer.validated_data.get('gender'))
-            def update():
-                health_system = get_health_scale_pet(serializer.validated_data)
-                pet.health_system = health_system
-                pet.save(update_fields=['health_system'])
 
+            health_system = get_health_scale_pet(serializer.validated_data)
+            pet.health_system = health_system
+            pet.save(update_fields=['health_system'])
 
-
-            #asd
-            Thread(target=update).start()
+            # def update():
+            #     health_system = get_health_scale_pet(serializer.validated_data)
+            #     pet.health_system = health_system
+            #     pet.save(update_fields=['health_system'])
+            #
+            #
+            #
+            # #asd
+            # Thread(target=update).start()
 
 
 
