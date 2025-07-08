@@ -59,9 +59,9 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
       - Тонкий кишечник (Small Intestine)
       - Ротовая полость (Oral Cavity)
     - Выделительная система (Excretory System) - Общий показатель
-    - Нервная система  - Общий показатель
+    - Слух, зрение, вкус - Общий показатель
     - Кроветворение и обмен (Hematopoietic Metabolic System) - Общий показатель
-    - Психическое здоровье (Mental Health System) - Общий показатель
+    - Психика - Общий показатель
 
     Ответ должен быть ТОЛЬКО в формате JSON, например:
     {{
@@ -178,9 +178,9 @@ def get_health_scale_baby(height,weight,location,gender,date_birth):
       - Тонкий кишечник (Small Intestine)
       - Ротовая полость (Oral Cavity)
     - Выделительная система (Excretory System) - Общий показатель
-    - Сенсорная система (Sensory System) - Общий показатель
+    - Слух, зрение, вкус - Общий показатель
     - Кроветворение и обмен (Hematopoietic Metabolic System) - Общий показатель
-    - Психическое здоровье (Mental Health System) - Общий показатель
+    - Психика - Общий показатель
 
     Ответ должен быть ТОЛЬКО в формате JSON, например:
      {{
