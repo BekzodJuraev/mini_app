@@ -445,7 +445,7 @@ class PetSerCreate(serializers.Serializer):
     klichka=serializers.CharField()
     pet=serializers.CharField()
     poroda=serializers.CharField()
-    age=serializers.FloatField()
+    age=serializers.CharField()
     disease=serializers.CharField()
     body=serializers.CharField()
     gender=serializers.CharField()
