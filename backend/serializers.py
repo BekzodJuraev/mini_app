@@ -32,9 +32,9 @@ class RegistrationSerializer(serializers.ModelSerializer):
     weight=serializers.IntegerField()
     recent_smoke=serializers.CharField()
     now_smoke=serializers.CharField()
-    exp_smoke=serializers.IntegerField(required=False)
-    smoke_what=serializers.CharField()
-    smoke_day=serializers.IntegerField()
+    exp_smoke = serializers.IntegerField(required=False)
+    smoke_what = serializers.CharField(required=False)
+    smoke_day = serializers.IntegerField(required=False)
     ref=serializers.UUIDField(required=False)
     ref_family=serializers.UUIDField(required=False)
 
@@ -57,12 +57,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
         place_of_residence=validated_data.get('place_of_residence')
         gender=validated_data.get('gender')
         date_birth=validated_data.get('date_birth')
-        smoke_what=validated_data.pop('smoke_what')
-        smoke_day=validated_data.pop('smoke_day')
+        smoke_what=validated_data.pop('smoke_what',"")
+        smoke_day=validated_data.pop('smoke_day',0)
         ref = validated_data.pop('ref', None)
         ref_family=validated_data.pop('ref_family',None)
 
-        ik=None
+        ik=0
         if now_smoke and exp_smoke and smoke_day:
             ik=(smoke_day * exp_smoke / 20)
 
@@ -114,8 +114,8 @@ class RelationshipSer(serializers.ModelSerializer):
     recent_smoke = serializers.CharField()
     now_smoke = serializers.CharField()
     exp_smoke = serializers.IntegerField(required=False)
-    smoke_what = serializers.CharField()
-    smoke_day = serializers.IntegerField()
+    smoke_what = serializers.CharField(required=False)
+    smoke_day = serializers.IntegerField(required=False)
 
 
 
@@ -137,10 +137,10 @@ class RelationshipSer(serializers.ModelSerializer):
         place_of_residence=validated_data.get('place_of_residence')
         gender=validated_data.get('gender')
         date_birth=validated_data.get('date_birth')
-        smoke_what=validated_data.pop('smoke_what')
-        smoke_day=validated_data.pop('smoke_day')
+        smoke_what = validated_data.pop('smoke_what', "")
+        smoke_day = validated_data.pop('smoke_day', 0)
 
-        ik = None
+        ik = 0
         if now_smoke and exp_smoke and smoke_day:
             ik = (smoke_day * exp_smoke / 20)
 
