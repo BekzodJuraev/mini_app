@@ -53,7 +53,8 @@ from .serializers import (
     PetDrugSer,
     GetPetDrugSer,
     CaloriesChatSer,
-    PetGetCaloriesSer
+    PetGetCaloriesSer,
+    PublicNotifcationSer
 
 
 )
@@ -310,7 +311,7 @@ class CrashTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CrashTestSer()}
     )
-    @update_system
+
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1562,3 +1563,21 @@ class PetCaloriesChatView(APIView):
         serializer = CaloriesChatSer(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+class PublicNotifcationView(APIView):
+
+    serializer_class = PublicNotifcationSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PublicNotifcationSer(many=True)}
+    )
+    def get(self, request):
+        query=Habit.objects.select_related('profile').values('profile__username__username').distinct()
+
+        serializer = PublicNotifcationSer(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
