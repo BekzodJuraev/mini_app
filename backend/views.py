@@ -54,7 +54,9 @@ from .serializers import (
     GetPetDrugSer,
     CaloriesChatSer,
     PetGetCaloriesSer,
-    PublicNotifcationSer
+    PublicNotifcationSer,
+    PublicNotificationDrugSer,
+    PublicNotificationPetDrugSer
 
 
 )
@@ -1571,13 +1573,38 @@ class PublicNotifcationView(APIView):
         responses={status.HTTP_200_OK: PublicNotifcationSer(many=True)}
     )
     def get(self, request):
-        query=Habit.objects.select_related('profile').values('profile__username__username').distinct()
+        query=Habit.objects.filter(profile__who_is=None).select_related('profile').values('profile__username__username').distinct()
 
         serializer = PublicNotifcationSer(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class PublicNotificationDrugView(APIView):
+
+    serializer_class = PublicNotificationDrugSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PublicNotificationDrugSer(many=True)}
+    )
+    def get(self, request):
+        query=Drugs.objects.filter(profile__who_is=None).select_related('profile','profile__username')
+
+        serializer = PublicNotificationDrugSer(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class PublicNotificationPetDrugView(APIView):
 
+    serializer_class = PublicNotificationPetDrugSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: PublicNotificationPetDrugSer(many=True)}
+    )
+    def get(self, request):
+        query=Pet_Drugs.objects.filter(pet__profile__who_is=None).select_related('pet','pet__profile','pet__profile__username')
+
+        serializer = PublicNotificationPetDrugSer(query, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

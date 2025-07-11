@@ -57,5 +57,7 @@ urlpatterns=[
  path('api/pet/calories/<int:message_id>',views.PetCaroiesView.as_view(),name='calories_pet'),
  path('api/pet/calories/list/<int:message_id>',views.PetCaroiesListView.as_view(),name='calories_list_pet'),
  path('api/pet/calories/chat/<int:message_id>',views.PetCaloriesChatView.as_view(),name='calories_chat_pet'),
- path('api/public/',views.PublicNotifcationView.as_view(),name='public_notification')
+ path('api/public/',views.PublicNotifcationView.as_view(),name='public_notification'),
+ path('api/public/drugs',views.PublicNotificationDrugView.as_view(),name='drug_notication'),
+ path('api/public/pet/drugs',views.PublicNotificationPetDrugView.as_view(),name='drug_notication'),
 ]

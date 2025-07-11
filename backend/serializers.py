@@ -11,6 +11,18 @@ from .prompt import get_health_scale,get_health_scale_baby
 import uuid
 
 from rest_framework.authtoken.models import Token
+
+class PublicNotificationPetDrugSer(serializers.ModelSerializer):
+    telegram_id = serializers.CharField(source='pet.profile.username.username')
+    class Meta:
+        model=Pet_Drugs
+        fields=['telegram_id','catigories','name','time_day','day','intake','notification']
+class PublicNotificationDrugSer(serializers.ModelSerializer):
+    telegram_id = serializers.CharField(source='profile.username.username')
+    class Meta:
+        model=Drugs
+        fields=['telegram_id','catigories','name','time_day','day','intake','notification']
+
 class PublicNotifcationSer(serializers.ModelSerializer):
     telegram_id=serializers.CharField(source='profile__username__username')
     class Meta:
