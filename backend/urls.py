@@ -60,4 +60,6 @@ urlpatterns=[
  path('api/public/',views.PublicNotifcationView.as_view(),name='public_notification'),
  path('api/public/drugs',views.PublicNotificationDrugView.as_view(),name='drug_notication'),
  path('api/public/pet/drugs',views.PublicNotificationPetDrugView.as_view(),name='drug_notication'),
+ path('api/drugs/delete/<int:pk>',views.DeleteDrugsView.as_view(),name='delete_drugs'),
+ path('api/pet/drugs/delete/<int:pk>', views.DeletePetDrugsView.as_view(), name='delete_pet_drugs'),
 ]
