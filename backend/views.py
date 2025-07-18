@@ -756,6 +756,16 @@ class PetDrugsAPiView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+class DeleteDrugsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        item = get_object_or_404(Drugs, pk=pk,profile=request.user.profile)
+        item.delete()
+        return Response({'message':'Drug deleted'}, status=status.HTTP_200_OK)
+
+
+
 
 class DrugsAPiView(APIView):
     permission_classes = [IsAuthenticated]
@@ -816,7 +826,13 @@ class DrugsAPIListView(APIView):
         serializer = self.serializer_class(query, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class DeletePetDrugsView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def delete(self, request,pk):
+        item = get_object_or_404(Pet_Drugs, pk=pk,pet__profile=request.user.profile)
+        item.delete()
+        return Response({'message':'Drug deleted'}, status=status.HTTP_200_OK)
 class PetDrugCheckbyDayView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = DrugById
