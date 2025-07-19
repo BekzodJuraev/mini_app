@@ -62,6 +62,7 @@ class Habit(models.Model):
         )
     name_habit=models.CharField(max_length=200)
     lenght=models.CharField(max_length=200)
+    type = models.CharField(max_length=50, null=True, blank=True)
 
 
     def __str__(self):
@@ -75,6 +76,7 @@ class Tracking_Habit(models.Model):
     habit=models.ForeignKey('Habit',on_delete=models.CASCADE, related_name='habit_tracking')
     created_at=models.DateField(auto_now_add=True)
     check_is=models.BooleanField(null=True, default=None)
+
 
 
     def __str__(self):
