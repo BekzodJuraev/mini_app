@@ -673,7 +673,7 @@ class GetTrackingCount(APIView):
     )
     def get(self,request):
         profile = request.user.profile
-        tracking = Habit.objects.filter(profile=profile).annotate(day=Count('habit_tracking',filter=Q(habit_tracking__check_is=False))).values('name_habit','day')
+        tracking = Habit.objects.filter(profile=profile).annotate(day=Count('habit_tracking',filter=Q(habit_tracking__check_is=False))).values('id','type','name_habit','day')
 
 
 
@@ -764,6 +764,14 @@ class DeleteDrugsView(APIView):
         item.delete()
         return Response({'message':'Drug deleted'}, status=status.HTTP_200_OK)
 
+
+class DeleteHabitView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        item = get_object_or_404(Habit, pk=pk,profile=request.user.profile)
+        item.delete()
+        return Response({'message':'Habit deleted'}, status=status.HTTP_200_OK)
 
 
 
@@ -973,7 +981,7 @@ class RentgenView(APIView):
     )
     def get(self, request):
         profile = request.user.profile
-        query = Rentgen.objects.filter(profile=profile).prefetch_related('rentgen_image').order_by('-created_at')
+        query = Rentgen.objects.filter(profile=profile).prefetch_related('rentgen_image').order_by('created_at')
         serializer = RentgenSerGet(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1017,7 +1025,7 @@ class PetRentgenView(APIView):
     )
     def get(self, request,message_id):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
-        query = PetRentgen.objects.filter(pet_id=message_id).prefetch_related('rentgen_image').order_by('-created_at')
+        query = PetRentgen.objects.filter(pet_id=message_id).prefetch_related('rentgen_image').order_by('created_at')
         serializer = RentgenSerGet(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -370,7 +370,7 @@ class ChatGETSer(serializers.ModelSerializer):
 class HabitSer(serializers.ModelSerializer):
     class Meta:
         model=Habit
-        fields=['name_habit','lenght']
+        fields=['name_habit','lenght','type']
 
 class TrackingSer(serializers.Serializer):
     habit=serializers.CharField()
@@ -381,12 +381,15 @@ class GetHabitSer(serializers.ModelSerializer):
     habit=serializers.CharField(source='habit.name_habit')
 
 
+
     class Meta:
         model=Tracking_Habit
         fields=['habit','check_is','created_at']
 class CountHabitSer(serializers.Serializer):
     habit=serializers.CharField(source='name_habit')
     day=serializers.IntegerField()
+    id=serializers.IntegerField()
+    type=serializers.CharField()
 
 
 class GetRelationship(serializers.ModelSerializer):
