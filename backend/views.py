@@ -78,7 +78,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -1427,6 +1427,31 @@ class ChatPetAPIView(APIView):
             PetChat.objects.create(pet_id=message_id,question=message,answer=response_data)
 
             return Response({'message': response_data}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class CaloriesEdit(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ChatSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatSer()}
+    )
+
+    def post(self,request):
+        profile=request.user.profile
+        cal=Calories.objects.filter(profile=profile).last()
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            test = calories_edit(serializer.validated_data['message'],cal.answer)
+            cal.detail = test.get('detail', [])
+            cal.total = test.get('total', [])
+            cal.answer = test['message']
+            cal.save(update_fields=['detail','total','answer'])
+
+            return Response({'message': test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
