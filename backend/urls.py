@@ -63,4 +63,5 @@ urlpatterns=[
  path('api/drugs/delete/<int:pk>',views.DeleteDrugsView.as_view(),name='delete_drugs'),
  path('api/pet/drugs/delete/<int:pk>', views.DeletePetDrugsView.as_view(), name='delete_pet_drugs'),
  path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
+ path('api/calories/edit',views.CaloriesEdit.as_view(),name='edit_caloires')
 ]
