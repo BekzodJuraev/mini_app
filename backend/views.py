@@ -1446,10 +1446,13 @@ class CaloriesEdit(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             test = calories_edit(serializer.validated_data['message'],cal.answer)
-            cal.detail = test.get('detail', [])
-            cal.total = test.get('total', [])
-            cal.answer = test['message']
-            cal.save(update_fields=['detail','total','answer'])
+            if test['message'] != "Пожалуйста, предоставьте корректное описание еды для расчёта калорийности.":
+                cal.detail = test.get('detail', [])
+                cal.total = test.get('total', [])
+                cal.answer = test['message']
+                cal.save(update_fields=['detail', 'total', 'answer'])
+
+
 
             return Response({'message': test['message']}, status=status.HTTP_200_OK)
 
