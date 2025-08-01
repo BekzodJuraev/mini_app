@@ -19,15 +19,18 @@ class PublicNotificationPetDrugSer(serializers.ModelSerializer):
         fields=['telegram_id','catigories','name','time_day','day','intake','notification']
 class PublicNotificationDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='profile.username.username')
+    city = serializers.CharField(source='profile.place_of_residence')
+
     class Meta:
         model=Drugs
-        fields=['telegram_id','catigories','name','time_day','day','intake','notification']
+        fields=['telegram_id','catigories','name','time_day','day','intake','notification','city']
 
 class PublicNotifcationSer(serializers.ModelSerializer):
     telegram_id=serializers.CharField(source='profile__username__username')
+    city=serializers.CharField(source='profile__place_of_residence')
     class Meta:
         model=Habit
-        fields=['telegram_id']
+        fields=['telegram_id','city']
 class CaloriesChatSer(serializers.ModelSerializer):
     class Meta:
         model=Calories
