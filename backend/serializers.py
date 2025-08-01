@@ -14,9 +14,10 @@ from rest_framework.authtoken.models import Token
 
 class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='pet.profile.username.username')
+    city = serializers.CharField(source='pet.profile.place_of_residence')
     class Meta:
         model=Pet_Drugs
-        fields=['telegram_id','catigories','name','time_day','day','intake','notification']
+        fields=['telegram_id','catigories','name','time_day','day','intake','notification','city']
 class PublicNotificationDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='profile.username.username')
     city = serializers.CharField(source='profile.place_of_residence')
