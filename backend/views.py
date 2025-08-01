@@ -1625,7 +1625,7 @@ class PublicNotifcationView(APIView):
         responses={status.HTTP_200_OK: PublicNotifcationSer(many=True)}
     )
     def get(self, request):
-        query=Habit.objects.filter(profile__who_is=None).select_related('profile').values('profile__username__username').distinct()
+        query=Habit.objects.filter(profile__who_is=None).select_related('profile').values('profile__username__username','profile__place_of_residence').distinct()
 
         serializer = PublicNotifcationSer(query, many=True)
 
