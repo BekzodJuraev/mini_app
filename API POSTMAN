@@ -11,7 +11,7 @@ Crash_test
     "level_stress": "😡",
     "habit": "Нет",
     "sex": "Нет",
-    "environment": "Грязная вода",
+    "environment": ["Грязная вода"],
     "food": "Нет"
 }
 
