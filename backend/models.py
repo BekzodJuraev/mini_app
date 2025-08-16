@@ -14,10 +14,10 @@ class Profile(models.Model):
     gender=models.CharField(max_length=200, null=True, blank=True,default=None)
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
-    photo = models.CharField(max_length=200,blank=True)
+    photo = models.CharField(max_length=400,blank=True)
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
-    life_expectancy=models.IntegerField(null=True,default=None)
+    life_expectancy=models.IntegerField(null=True,default=None,blank=True)
     family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
     ref = models.UUIDField(default=uuid.uuid4, unique=True)
     family = models.ForeignKey("Profile", on_delete=models.CASCADE,
@@ -31,7 +31,7 @@ class Profile(models.Model):
                                                null=True, blank=True)
 
     who_is = models.CharField(max_length=150,null=True, blank=True, default=None)
-    IK = models.FloatField(null=True)
+    IK = models.FloatField(null=True,blank=True)
 
     #Overall_tone=models.IntegerField(default=0)
 
