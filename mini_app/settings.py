@@ -167,3 +167,10 @@ CORS_ALLOW_HEADERS = [
     "content-type",
     "authorization",  # Добавляем поддержку заголовка Authorization
 ]
+from config import EMAIL_HOST,EMAIL_PORT,EMAIL_USE_TLS,EMAIL_HOST_USER,EMAIL_HOST_PASSWORD
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = EMAIL_HOST
+EMAIL_PORT = EMAIL_PORT
+EMAIL_USE_TLS = EMAIL_USE_TLS
+EMAIL_HOST_USER = EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD

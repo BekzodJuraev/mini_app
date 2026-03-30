@@ -3,7 +3,11 @@ from . import views
 urlpatterns=[
  path('api/register/first',views.RegisterFirstAPIView.as_view(),name='register1'),
  path('api/register/second',views.RegisterAPIView.as_view(),name='register'),
+
  path('api/login',views.LoginAPIView.as_view(),name='login'),
+ path('api/reset/email',views.RequestPasswordReset.as_view(),name='reset_email'),
+ path('api/reset/set_password',views.SetPasswordView.as_view(),name='set_passowrd'),
+ path('api/reset/code',views.VerifyResetCode.as_view(),name='reset_code'),
  path('api/logout',views.LogoutAPIView.as_view(),name='logout'),
  path('api/profile/main',views.ProfileAPIView.as_view(),name='profile_main'),
  path('api/profile/update',views.ProfileUpdateAPIView.as_view(),name='profile_update'),
