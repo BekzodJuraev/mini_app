@@ -37,12 +37,26 @@ class CaloriesChatSer(serializers.ModelSerializer):
         model=Calories
         fields=['images','answer','created_at']
 
+class SetResetPasswordSer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=True)
+    password2 = serializers.CharField(write_only=True, required=True)
+    def validate_password(self, value):
+        if len(value) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters long.")
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['password2']:
+            raise serializers.ValidationError("The two password fields didn't match.")
+        return data
+
 
 
 class RegistrationFirstSer(serializers.ModelSerializer):
     login = serializers.CharField(source='username', required=True)
     password2 = serializers.CharField(write_only=True,required=True)
     email = serializers.EmailField(required=True)
+
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -276,6 +290,11 @@ class LoginSer(serializers.Serializer):
     login=serializers.CharField(required=True)
     password=serializers.CharField(required=True)
 
+class ResetPasswordRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+class VerifyCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
 class ProfileSer(serializers.ModelSerializer):
     age=serializers.IntegerField()
     class Meta:

@@ -4,7 +4,16 @@ from datetime import date,timedelta
 from rest_framework.parsers import MultiPartParser, FormParser
 from collections import defaultdict
 from django.contrib.auth import authenticate,login,logout
+from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from config import EMAIL_HOST_USER
+import random
+from django.core.mail import send_mail
+from django.core.cache import cache
 from .serializers import (
+    SetResetPasswordSer,
+    VerifyCodeSerializer,
+    ResetPasswordRequestSerializer,
     RegistrationFirstSer,
     RegistrationSerializer,
     LoginSer,
@@ -128,6 +137,37 @@ def pet_update_system(f):
 
         return message
     return wrapper
+
+
+class SetPasswordView(APIView):
+    serializer_class = SetResetPasswordSer
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=SetResetPasswordSer,
+        responses={status.HTTP_200_OK: "Password updated successfully"}
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+
+        if serializer.is_valid():
+
+            new_password = serializer.validated_data['password']
+
+
+            user = request.user
+
+
+            user.set_password(new_password)
+            user.save()
+
+            return Response(
+                {"message": "Your password has been reset successfully."},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class RegisterAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = RegistrationSerializer
@@ -179,6 +219,77 @@ class LoginAPIView(APIView):
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+class RequestPasswordReset(APIView):
+    serializer_class = ResetPasswordRequestSerializer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ResetPasswordRequestSerializer()}
+    )
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+        reset_code = str(random.randint(100000, 999999))
+
+
+        cache.set(f"reset_code_{email}", reset_code, timeout=600)
+
+
+        send_mail(
+            'Password Reset Code',
+            f'Your 6-digit verification code is: {reset_code}',
+            EMAIL_HOST_USER,
+            [email],
+            fail_silently=False,
+        )
+
+        return Response({'message': 'Code sent to email'}, status=status.HTTP_200_OK)
+
+
+class VerifyResetCode(APIView):
+    serializer_class = VerifyCodeSerializer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: VerifyCodeSerializer()}
+    )
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        input_code = serializer.validated_data['code']
+
+
+        cached_code = cache.get(f"reset_code_{email}")
+
+
+
+        if cached_code and input_code == cached_code:
+            cache.set(f"verified_email_{email}", True, timeout=300)
+            user=User.objects.filter(email=email).first()
+            if not user:
+                return Response({"error": "User no longer exists."}, status=404)
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                "message": "Code verified. You can now change your password.",
+                "email": email,
+                "token":token.key
+            }, status=status.HTTP_200_OK)
+
+        return Response(
+            {"error": "Invalid or expired code."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 class LogoutAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
