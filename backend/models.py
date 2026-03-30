@@ -6,6 +6,7 @@ import uuid
 
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    telegram_id=models.IntegerField(default=0)
     name=models.CharField(max_length=200,null=True,blank=True,default=None)
     lastname = models.CharField(max_length=200, null=True, blank=True,default=None)
     middle_name=models.CharField(max_length=200, null=True, blank=True,default=None)

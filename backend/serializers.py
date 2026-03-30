@@ -39,6 +39,39 @@ class CaloriesChatSer(serializers.ModelSerializer):
 
 
 
+class RegistrationFirstSer(serializers.ModelSerializer):
+    login = serializers.CharField(source='username', required=True)
+    password2 = serializers.CharField(write_only=True,required=True)
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("This email address is already registered. Please use a different one.")
+        return value
+
+    def validate_password(self, value):
+        if len(value) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters long.")
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['password2']:
+            raise serializers.ValidationError("The two password fields didn't match.")
+        return data
+
+    class Meta:
+        model = User
+        fields = ['login','email', 'password', 'password2']
+
+    def create(self, validated_data):
+
+        validated_data.pop('password2')
+
+        user = User.objects.create_user(**validated_data)
+        return user
+
+
+
 
 class RegistrationSerializer(serializers.ModelSerializer):
     name=serializers.CharField()
@@ -57,18 +90,19 @@ class RegistrationSerializer(serializers.ModelSerializer):
     smoke_day = serializers.IntegerField(required=False)
     ref=serializers.UUIDField(required=False)
     ref_family=serializers.UUIDField(required=False)
+    telegram_id=serializers.IntegerField(required=True)
+
 
 
 
     class Meta:
-        model=User
-        fields=['username','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref','ref_family']
+        model=Profile
+        fields=['telegram_id','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref','ref_family']
 
 
 
     def create(self, validated_data):
-
-        username=validated_data.pop('username')
+        user=validated_data.pop('user')
         recent_smoke=validated_data.pop('recent_smoke')
         now_smoke=validated_data.pop('now_smoke')
         exp_smoke=validated_data.pop('exp_smoke',"")
@@ -104,7 +138,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 
 
-        user = User.objects.create_user(username=username)
+       # user = User.objects.create_user(username=username)
         if ref:
             ref=Profile.objects.filter(ref=ref).first()
             profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data,IK=ik)
@@ -238,7 +272,9 @@ class RelationshipBabySer(serializers.ModelSerializer):
 
         return user
 class LoginSer(serializers.Serializer):
-    telegram_id=serializers.CharField(required=True,write_only=True)
+    #telegram_id=serializers.CharField(required=True,write_only=True)
+    login=serializers.CharField(required=True)
+    password=serializers.CharField(required=True)
 
 class ProfileSer(serializers.ModelSerializer):
     age=serializers.IntegerField()
