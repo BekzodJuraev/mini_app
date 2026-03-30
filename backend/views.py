@@ -3,7 +3,9 @@ from django.db.models import ExpressionWrapper, F, DurationField, DateField
 from datetime import date,timedelta
 from rest_framework.parsers import MultiPartParser, FormParser
 from collections import defaultdict
+from django.contrib.auth import authenticate,login,logout
 from .serializers import (
+    RegistrationFirstSer,
     RegistrationSerializer,
     LoginSer,
     ProfileSer,
@@ -127,6 +129,7 @@ def pet_update_system(f):
         return message
     return wrapper
 class RegisterAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = RegistrationSerializer
 
     @swagger_auto_schema(
@@ -135,11 +138,23 @@ class RegisterAPIView(APIView):
     def post(self,request,*args,**kwargs):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        serializer.save(user=request.user)
 
-        return Response({'message': 'Registration successful'}, status=status.HTTP_201_CREATED)
+        return Response({'message': 'Profile Created'}, status=status.HTTP_201_CREATED)
 
+class RegisterFirstAPIView(APIView):
+    serializer_class = RegistrationFirstSer
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RegistrationFirstSer()}
+    )
+    def post(self,request,*args,**kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user=serializer.save()
+        token, created = Token.objects.get_or_create(user=user)
+
+        return Response({'message': 'Registration successful', 'token': token.key}, status=status.HTTP_201_CREATED)
 
 class LoginAPIView(APIView):
     serializer_class = LoginSer
@@ -150,8 +165,10 @@ class LoginAPIView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            username=serializer.validated_data.get('telegram_id')
-            user=User.objects.filter(username=username).first()
+            username=serializer.validated_data.get('login')
+            password = serializer.validated_data.get('password')
+
+            user = authenticate(username=username, password=password)
             if user is not None:
                 token, created = Token.objects.get_or_create(user=user)
                 response_data = {'message': 'Login successful', 'token': token.key}
