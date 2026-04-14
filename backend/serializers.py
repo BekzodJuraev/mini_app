@@ -94,7 +94,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
     gender=serializers.CharField()
     place_of_residence=serializers.CharField()
     date_birth=serializers.DateField()
-    photo=serializers.CharField(required=False)
+    photo=serializers.ImageField(required=False)
     height=serializers.IntegerField()
     weight=serializers.IntegerField()
     recent_smoke=serializers.CharField()
