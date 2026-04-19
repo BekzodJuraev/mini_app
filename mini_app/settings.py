@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'pytest_django',
     'drf_yasg',
     'corsheaders',
+    'nested_admin'
 
 ]
 

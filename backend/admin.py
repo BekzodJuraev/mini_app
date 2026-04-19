@@ -1,5 +1,43 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,HealthSystem, Subsection, Test, Question, Choice
+import nested_admin
+class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
+    model = Choice
+    extra = 1
+
+class QuestionInline(nested_admin.NestedStackedInline): # Вложенные вопросы
+    model = Question
+    extra = 1
+    inlines = [ChoiceInline] #
+
+@admin.register(Test)
+class TestAdmin(nested_admin.NestedModelAdmin):
+    list_display = ('title', 'subsection', 'get_system')
+    list_filter = ('subsection__system', 'subsection')
+    search_fields = ('title',)
+    inlines = [QuestionInline]
+
+    # Показываем систему организма в списке тестов для удобства
+    def get_system(self, obj):
+        return obj.subsection.system.name
+    get_system.short_description = 'Система'
+
+@admin.register(Question)
+class QuestionAdmin(admin.ModelAdmin):
+    list_display = ('text', 'test', 'question_type', 'order')
+    list_filter = ('test', 'question_type')
+    inlines = [ChoiceInline]
+
+# Простая регистрация для категорий
+@admin.register(HealthSystem)
+class HealthSystemAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+
+@admin.register(Subsection)
+class SubsectionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'system')
+    list_filter = ('system',)
+
 @admin.register(PetRentgen_Image)
 class PetRentgen_Image(admin.ModelAdmin):
     pass
