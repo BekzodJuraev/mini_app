@@ -4,6 +4,72 @@ from django.db.models import F
 from datetime import date,timedelta
 import uuid
 
+from django.db import models
+
+# 1. Система здоровья (например, Пищеварительная)
+class HealthSystem(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Система организма")
+
+    class Meta:
+        verbose_name = "Система организма"
+        verbose_name_plural = "1. Системы организма"
+
+    def __str__(self):
+        return self.name
+
+# 2. Подраздел (например, Печень)
+class Subsection(models.Model):
+    system = models.ForeignKey(HealthSystem, on_delete=models.CASCADE, related_name='subsections', verbose_name="Подраздел (орган)")
+    name = models.CharField(max_length=255, verbose_name="Подраздел (орган)")
+
+    class Meta:
+        verbose_name = "Подраздел"
+        verbose_name_plural = "2. Подразделы (Органы)"
+    def __str__(self):
+        return f"{self.system.name} -> {self.name}"
+
+# 3. Тест (Название теста, описание)
+class Test(models.Model):
+    subsection = models.ForeignKey(Subsection, on_delete=models.CASCADE, related_name='tests',verbose_name="Подраздел (орган)")
+    title = models.CharField(max_length=255, verbose_name="Название теста")
+    description = models.TextField(blank=True, verbose_name="Описание для пользователя")
+
+    class Meta:
+        verbose_name = "Тест"
+        verbose_name_plural = "3. Тесты"
+
+    def __str__(self):
+        return self.title
+
+# 4. Вопрос
+class Question(models.Model):
+    # Типы вопросов как на картинке
+    TYPE_CHOICES = [
+        ('slider', 'Слайдер (Плохо - Хорошо)'),
+        ('binary', 'Да/Нет'),
+        ('radio', 'Одиночный выбор'),
+        ('emoji', 'Смайлики'),
+    ]
+
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='questions')
+    text = models.CharField(max_length=500, verbose_name="Текст вопроса")
+    question_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='radio')
+    order = models.PositiveIntegerField(default=0, verbose_name="Порядок вопроса")
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.text
+
+# 5. Варианты ответов (если это не слайдер)
+class Choice(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
+    text = models.CharField(max_length=255, verbose_name="Вариант ответа")
+    points = models.IntegerField(default=0, verbose_name="Баллы за этот ответ") # Для итогового отчета
+
+    def __str__(self):
+        return self.text
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     telegram_id=models.IntegerField(default=0)
