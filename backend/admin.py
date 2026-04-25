@@ -3,7 +3,7 @@ from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Hab
 import nested_admin
 class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
     model = Choice
-    extra = 1
+    extra = 3
 
 class QuestionInline(nested_admin.NestedStackedInline): # Вложенные вопросы
     model = Question
@@ -17,7 +17,11 @@ class TestAdmin(nested_admin.NestedModelAdmin):
     search_fields = ('title',)
     inlines = [QuestionInline]
 
-    # Показываем систему организма в списке тестов для удобства
+    class Media:
+        js = (
+            'admin/js/vendor/jquery/jquery.js', # Принудительно грузим jQuery первым
+            'admin/js/question_type_toggle.js',
+        )
     def get_system(self, obj):
         return obj.subsection.system.name
     get_system.short_description = 'Система'

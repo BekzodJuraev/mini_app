@@ -49,6 +49,7 @@ class Question(models.Model):
         ('binary', 'Да/Нет'),
         ('radio', 'Одиночный выбор'),
         ('emoji', 'Смайлики'),
+        ('text', 'Текстовый ответ (Поле ввода)'),
     ]
 
     test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='questions')
