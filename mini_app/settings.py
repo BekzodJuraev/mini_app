@@ -19,7 +19,9 @@ CSRF_TRUSTED_ORIGINS = [
     "https://api.medavatar.xyz",
     "https://medavatar.xyz",
     "https://testapi.medavatar.xyz",
-    "https://medavatar-dev.vercel.app"
+    "https://medavatar-dev.vercel.app",
+    "https://092b-5-133-120-92.ngrok-free.app",
+    "https://medavatar-wk2a.vercel.app"
 ]
 
 
@@ -160,7 +162,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://web.telegram.org",
     "https://medavatar.vercel.app",
     "https://medavatar-dev.vercel.app",
-    "https://medavatar-v2-dev.vercel.app"
+    "https://medavatar-v2-dev.vercel.app",
+    "https://medavatar-wk2a.vercel.app"
 
 ]
 
