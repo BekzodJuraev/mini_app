@@ -33,9 +33,10 @@ class PublicNotifcationSer(serializers.ModelSerializer):
         model=Habit
         fields=['telegram_id','city']
 class CaloriesChatSer(serializers.ModelSerializer):
+
     class Meta:
         model=Calories
-        fields=['images','answer','created_at']
+        fields=['images','answer','detail','total','created_at']
 
 class SetResetPasswordSer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True)
