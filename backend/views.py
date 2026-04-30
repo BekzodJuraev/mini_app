@@ -67,7 +67,8 @@ from .serializers import (
     PetGetCaloriesSer,
     PublicNotifcationSer,
     PublicNotificationDrugSer,
-    PublicNotificationPetDrugSer
+    PublicNotificationPetDrugSer,
+    Notification_drugs_Ser
 
 
 )
@@ -85,7 +86,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -914,9 +915,12 @@ class DrugsAPiView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            serializer.save(profile=request.user.profile)
+            drug_instance = serializer.save(profile=request.user.profile)
 
-            return Response({'message':'Saved drug'}, status=status.HTTP_200_OK)
+            return Response({
+                'message': 'Saved drug',
+                'id': drug_instance.id  # Фронтенд возьмет этот ID для создания уведомлений
+            }, status=status.HTTP_201_CREATED)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -940,6 +944,51 @@ class PetDrugsAPIListView(APIView):
             ))
         serializer = self.serializer_class(query, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class Notification_create(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Используем many=True в схеме, так как ожидаем список времен
+    @swagger_auto_schema(
+        request_body=Notification_drugs_Ser(many=True),
+        responses={status.HTTP_201_CREATED: Notification_drugs_Ser(many=True)}
+    )
+    def post(self, request, drug_id):  # переименовал message_id в drug_id для ясности
+        profile = request.user.profile
+
+        # Проверяем, что лекарство принадлежит именно этому профилю
+        drug = get_object_or_404(Drugs, id=drug_id, profile=profile)
+
+        # Передаем данные в сериализатор. many=True позволяет принять список [{}, {}]
+        serializer = Notification_drugs_Ser(data=request.data, many=True)
+
+        if serializer.is_valid():
+            # При сохранении передаем drug, чтобы связать уведомления с объектом
+            serializer.save(drugs=drug)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class Notification_Detail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        # Ищем уведомление по его ID
+        # Добавляем фильтр drugs__profile, чтобы юзер не мог удалить чужое уведомление
+        notification = get_object_or_404(
+            Notification_drugs,
+            id=pk,
+            drugs__profile=request.user.profile
+        )
+
+        notification.delete()
+
+        return Response(
+            {"message": f"Deleted {pk} "},
+            status=status.HTTP_200_OK
+        )
 class DrugsAPIListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GetDrugSer
@@ -1021,6 +1070,8 @@ class DrugCheckbyDayView(APIView):
 
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 class RefGetView(APIView):
     permission_classes = [IsAuthenticated]

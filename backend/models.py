@@ -213,6 +213,15 @@ class Pet_Check_Drugs(models.Model):
     )
     created_at=models.DateField(auto_now_add=True)
 
+class Notification_drugs(models.Model):
+    # Specific time of day to take the drug
+    time = models.CharField(max_length=255)
+    drugs = models.ForeignKey(
+        "Drugs", on_delete=models.CASCADE, related_name="notifications_drugs"
+    )
+
+    def __str__(self):
+        return f"{self.drugs.name} at {self.time}"
 
 
 class Drugs(models.Model):
@@ -225,7 +234,7 @@ class Drugs(models.Model):
     day=models.IntegerField()
     intake=models.CharField(max_length=200)
     interval=models.DurationField(null=True,blank=True)
-    notification=models.JSONField()
+
     created_at=models.DateField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -236,16 +245,20 @@ class Drugs(models.Model):
 
 
 class Check_Drugs(models.Model):
-    profile = models.ForeignKey(
-        'Profile', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Профиль"
+
+    notification = models.ForeignKey(
+        Notification_drugs, on_delete=models.CASCADE, related_name='checks'
     )
-    drugs=models.ForeignKey(
-        'Drugs', on_delete=models.CASCADE, related_name='drugs_check', verbose_name="Drugs"
-    )
-    created_at=models.DateField(auto_now_add=True)
+
+    date = models.DateField(auto_now_add=True)
+    is_taken = models.BooleanField(default=True)
+
+    class Meta:
+
+        unique_together = ('notification', 'date')
 
     def __str__(self):
-        return self.profile.name
+        return f"{self.notification} taken on {self.date}"
 
 
 class Daily_check(models.Model):
