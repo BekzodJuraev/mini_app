@@ -68,7 +68,8 @@ from .serializers import (
     PublicNotifcationSer,
     PublicNotificationDrugSer,
     PublicNotificationPetDrugSer,
-    Notification_drugs_Ser
+    Notification_drugs_Ser,
+    DrugUpdateSer
 
 
 )
@@ -802,7 +803,7 @@ class GetTrackingCount(APIView):
     )
     def get(self,request):
         profile = request.user.profile
-        tracking = Habit.objects.filter(profile=profile).annotate(day=Count('habit_tracking',filter=Q(habit_tracking__check_is=False))).values('id','type','name_habit','day')
+        tracking = Habit.objects.filter(profile=profile).annotate(day=Count('habit_tracking',filter=Q(habit_tracking__check_is=False))).values('id','type','name_habit','day','lenght')
 
 
 
@@ -989,28 +990,81 @@ class Notification_Detail(APIView):
             {"message": f"Deleted {pk} "},
             status=status.HTTP_200_OK
         )
+# class DrugsAPIListView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     serializer_class = GetDrugSer
+#
+#     @swagger_auto_schema(
+#         responses={status.HTTP_200_OK: GetDrugSer()}
+#     )
+#
+#     def get(self,request):
+#         profile = request.user.profile
+#         today = localtime(now()).date()
+#         query = Drugs.objects.filter(profile=profile).annotate(end_day=ExpressionWrapper(F('created_at') + F('interval'), output_field=DateField()), status=Exists(
+#                 Check_Drugs.objects.filter(
+#                     profile=profile,
+#                     drugs=OuterRef('pk'),
+#                     created_at=today
+#                     # Matches each category with its related Quests
+#                 )
+#             ))
+#         serializer = self.serializer_class(query, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 class DrugsAPIListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GetDrugSer
 
     @swagger_auto_schema(
-        responses={status.HTTP_200_OK: GetDrugSer()}
-    )
+        responses={status.HTTP_200_OK: GetDrugSer()})
+    def get(self, request):
 
-    def get(self,request):
+
         profile = request.user.profile
         today = localtime(now()).date()
-        query = Drugs.objects.filter(profile=profile).annotate(end_day=ExpressionWrapper(F('created_at') + F('interval'), output_field=DateField()), status=Exists(
-                Check_Drugs.objects.filter(
-                    profile=profile,
-                    drugs=OuterRef('pk'),
-                    created_at=today
-                    # Matches each category with its related Quests
+        query = Drugs.objects.filter(profile=profile).prefetch_related(
+            Prefetch(
+                'notifications_drugs',  # Убедись, что в модели Drugs это имя в related_name
+                queryset=Notification_drugs.objects.prefetch_related(
+                    Prefetch('checks', queryset=Check_Drugs.objects.filter(date=today))
                 )
-            ))
+            )
+        )
         serializer = self.serializer_class(query, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class DrugEditView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(request_body=DrugUpdateSer)
+    def patch(self, request, drug_id):
+        profile = request.user.profile
+        # Ищем лекарство именно этого пользователя
+        drug = get_object_or_404(Drugs, id=drug_id, profile=profile)
+
+        # partial=True позволяет обновлять только часть полей
+        serializer = DrugUpdateSer(drug, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Данные лекарства обновлены",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Если нужен полный апдейт (PUT)
+    def put(self, request, drug_id):
+        profile = request.user.profile
+        drug = get_object_or_404(Drugs, id=drug_id, profile=profile)
+        serializer = DrugUpdateSer(drug, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class DeletePetDrugsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1046,30 +1100,31 @@ class PetDrugCheckbyDayView(APIView):
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 class DrugCheckbyDayView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = DrugById
-
-    @swagger_auto_schema(
-        responses={status.HTTP_200_OK: DrugById()}
-    )
-    def post(self,request):
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid():
-            today = localtime(now()).date()
-            profile = request.user.profile
-            try:
-                Check_Drugs.objects.get_or_create(
-                    profile=profile,
-                    drugs_id=serializer.validated_data['id'],
-                    created_at=today,
-                )
-                return Response({'message': 'Daily check saved'}, status=200)
-            except:
-
-                return Response({'message': 'Not Found'}, status=404)
 
 
+
+    def post(self,request,notification_id):
+        today = localtime(now()).date()
+        profile = request.user.profile
+        get_object_or_404(Notification_drugs,drugs__profile=profile)
+        try:
+            Check_Drugs.objects.get_or_create(
+                notification_id=notification_id,
+                date=today,
+            )
+            return Response({'message': 'Notification drug is checked'}, status=200)
+        except:
+
+            return Response({'message': 'Not Found'}, status=404)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
 
 
 
