@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,HealthSystem, Subsection, Test, Question, Choice
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,HealthSystem, Subsection, Test, Question, Choice,Notification_drugs
 import nested_admin
 class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
     model = Choice
@@ -86,11 +86,13 @@ class Daily_check(admin.ModelAdmin):
     list_display = ['profile']
 @admin.register(Check_Drugs)
 class Drugss(admin.ModelAdmin):
-    list_display = ['profile','created_at']
-
+   pass
+@admin.register(Notification_drugs)
+class Drugss(admin.ModelAdmin):
+   pass
 @admin.register(Drugs)
 class Drugss(admin.ModelAdmin):
-    list_display = ['profile']
+    pass
 # @admin.register(Relationship)
 # class Relationship(admin.ModelAdmin):
 #     list_display = ['profile']

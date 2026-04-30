@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -24,7 +24,7 @@ class PublicNotificationDrugSer(serializers.ModelSerializer):
 
     class Meta:
         model=Drugs
-        fields=['telegram_id','catigories','name','time_day','day','intake','notification','city']
+        fields=['telegram_id','catigories','name','time_day','day','intake','city']
 
 class PublicNotifcationSer(serializers.ModelSerializer):
     telegram_id=serializers.CharField(source='profile__username__username')
@@ -482,10 +482,21 @@ class GetRelationship(serializers.ModelSerializer):
 
 
 
+
+
 class DrugsSer(serializers.ModelSerializer):
+
+
     class Meta:
-        model=Drugs
-        fields=['catigories','name','time_day','day','intake','notification']
+        model = Drugs
+        fields = ['id', 'catigories', 'name', 'time_day', 'day', 'intake']
+
+
+class Notification_drugs_Ser(serializers.ModelSerializer):
+    class Meta:
+        model=Notification_drugs
+        fields=['time']
+
 
 class PetDrugSer(serializers.ModelSerializer):
     class Meta:
@@ -504,7 +515,7 @@ class GetDrugSer(serializers.ModelSerializer):
     status=serializers.BooleanField()
     class Meta:
         model=Drugs
-        fields=['id','name','time_day','day','intake','notification','created_at','end_day','status']
+        fields=['id','name','time_day','day','intake','created_at','end_day','status']
 
 class DrugById(serializers.Serializer):
     id=serializers.IntegerField()
