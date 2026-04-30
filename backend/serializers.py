@@ -298,17 +298,37 @@ class VerifyCodeSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=6, min_length=6)
 class ProfileSer(serializers.ModelSerializer):
     age=serializers.IntegerField()
+
+
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK']
+        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK','place_of_residence','date_birth']
 
 
 
 class ProfileUpdateSer(serializers.ModelSerializer):
+    email=serializers.EmailField(source="username.email")
 
     class Meta:
         model=Profile
         fields=['name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname']
+
+    def update(self, instance, validated_data):
+        # 1. Handle the nested user data
+        # 'username' is the key because of source="username.email"
+        user_data = validated_data.pop('username', None)
+
+        if user_data:
+            user_instance = instance.username
+            email = user_data.get('email')
+            if email:
+                user_instance.email = email
+                # If your username IS the email, update that too:
+                # user_instance.username = email
+                user_instance.save()
+
+        # 2. Update the Profile instance with the remaining data
+        return super().update(instance, validated_data)
 class ProfileMainSystemSer(serializers.ModelSerializer):
     # RespiratorySystem=RespiratorySystemSer(source='res')
     # CardiovascularSystem=CardiovascularSystemSer(source='cardi')

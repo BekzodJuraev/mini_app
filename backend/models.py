@@ -78,7 +78,6 @@ class Profile(models.Model):
     lastname = models.CharField(max_length=200, null=True, blank=True,default=None)
     middle_name=models.CharField(max_length=200, null=True, blank=True,default=None)
     nickname=models.CharField(max_length=200, null=True, blank=True,default=None)
-    email=models.EmailField(null=True, blank=True,default=None)
     gender=models.CharField(max_length=200, null=True, blank=True,default=None)
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
