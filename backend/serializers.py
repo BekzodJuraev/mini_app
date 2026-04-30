@@ -471,6 +471,7 @@ class CountHabitSer(serializers.Serializer):
     habit=serializers.CharField(source='name_habit')
     day=serializers.IntegerField()
     id=serializers.IntegerField()
+    lenght=serializers.CharField()
     type=serializers.CharField()
 
 
@@ -511,11 +512,34 @@ class GetPetDrugSer(serializers.ModelSerializer):
         model=Pet_Drugs
         fields=['id','name','time_day','day','intake','notification','created_at','end_day','status']
 class GetDrugSer(serializers.ModelSerializer):
-    end_day=serializers.DateField()
-    status=serializers.BooleanField()
+    #end_day=serializers.DateField()
+    #status=serializers.BooleanField()
+    notification=serializers.SerializerMethodField()
     class Meta:
         model=Drugs
-        fields=['id','name','time_day','day','intake','created_at','end_day','status']
+        fields=['id','name','time_day','day','intake','created_at','notification']
+
+    def get_notification(self, obj):
+        # Достаем все уведомления, которые мы получили через prefetch_related
+        # Используем .all(), чтобы Django не шел снова в базу
+        notifications = obj.notifications_drugs.all()
+
+        return [
+            {
+                "id": n.id,
+                "time": n.time,
+                # Проверяем, есть ли чек на сегодня (он уже в памяти благодаря Prefetch)
+                "is_taken": n.checks.exists()
+            }
+            for n in notifications
+        ]
+
+
+class DrugUpdateSer(serializers.ModelSerializer):
+    class Meta:
+        model = Drugs
+        # Перечисляем поля, которые можно менять
+        fields = ['catigories', 'name', 'time_day', 'day', 'intake']
 
 class DrugById(serializers.Serializer):
     id=serializers.IntegerField()
