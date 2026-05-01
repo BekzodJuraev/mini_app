@@ -69,7 +69,8 @@ from .serializers import (
     PublicNotificationDrugSer,
     PublicNotificationPetDrugSer,
     Notification_drugs_Ser,
-    DrugUpdateSer
+    DrugUpdateSer,
+    EditCaloriesSer
 
 
 )
@@ -1685,11 +1686,20 @@ class ChatPetAPIView(APIView):
 
 class CaloriesEdit(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = ChatSer
+    serializer_class = EditCaloriesSer
 
     @swagger_auto_schema(
-        responses={status.HTTP_200_OK: ChatSer()}
+        responses={status.HTTP_200_OK: EditCaloriesSer()}
     )
+
+
+    def get(self,request):
+        profile = request.user.profile
+        cal = Calories.objects.filter(profile=profile).last()
+        serializer = self.serializer_class(cal)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
     def post(self,request):
         profile=request.user.profile
@@ -1697,11 +1707,11 @@ class CaloriesEdit(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             test = calories_edit(serializer.validated_data['message'],cal.answer)
-            if test['message'] != "Пожалуйста, предоставьте корректное описание еды для расчёта калорийности.":
+            if test['detail']:
                 cal.detail = test.get('detail', [])
                 cal.total = test.get('total', [])
-                cal.answer = test['message']
-                cal.save(update_fields=['detail', 'total', 'answer'])
+
+                cal.save(update_fields=['detail', 'total'])
 
 
 
