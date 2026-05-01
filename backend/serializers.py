@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -348,7 +348,11 @@ class ProfileMainSystemSer(serializers.ModelSerializer):
         fields=['name','health_system']
 
 
+class NutritionGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NutritionGoal
 
+        fields = ['calories', 'proteins', 'fats', 'carbs', 'fiber']
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
 
