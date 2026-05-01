@@ -71,7 +71,8 @@ from .serializers import (
     Notification_drugs_Ser,
     DrugUpdateSer,
     EditCaloriesSer,
-    NutritionGoalSerializer
+    NutritionGoalSerializer,
+
 
 
 )
@@ -1529,31 +1530,71 @@ class CaroiesView(APIView):
     def get(self, request):
         profile = request.user.profile
         today = localtime(now()).date()
-        query = Calories.objects.filter(profile=profile,created_at=today,saved=True).values_list('total',flat=True)
+
+        # 1. Собираем данные о потребленных калориях (Факт)
+        # Получаем все JSON-поля 'total' за сегодня, которые были сохранены
+        query = Calories.objects.filter(
+            profile=profile,
+            created_at=today,
+            saved=True
+        ).values_list('total', flat=True)
+
+
         calories = belok = jir = uglevod = klechatka = 0
-        if query:
-            for item in query:
-                calories+=item.get('ккал',0)
-                belok+=item.get('белок',0)
-                jir += item.get('жир',0)
-                uglevod+=item.get('углеводы',0)
-                klechatka+=item.get('клетчатка',0)
 
+        for item in query:
+            if item:  # Проверка на случай, если JSON пустой
+                calories += item.get('ккал', 0)
+                belok += item.get('белок', 0)
+                jir += item.get('жир', 0)
+                uglevod += item.get('углеводы', 0)
+                klechatka += item.get('клетчатка', 0)
 
+        # 2. Получаем цели из NutritionGoal (Норма)
+        # Используем select_related('nutrition_goal') в идеале,
+        # но тут просто берем связанный объект
+        goal = getattr(profile, 'nutrition_goal', None)
 
+        # Если цель не установлена, везде будут нули
+        g_cal = goal.calories if goal else 0
+        g_belok = goal.proteins if goal else 0
+        g_jir = goal.fats if goal else 0
+        g_uglevod = goal.carbs if goal else 0
+        g_fiber = goal.fiber if goal else 0
 
-        dic={
-        "calories":calories,
-        "belok":belok,
-        "jir":jir,
-        "uglevod":uglevod,
-        "klechatka":klechatka
+        # 3. Считаем процент выполнения для круга (81% на макете)
+        percentage = 0
+        if g_cal > 0:
+            percentage = int((calories / g_cal) * 100)
+            # Ограничиваем 100%, если нужно для красоты диаграммы,
+            # либо оставляем как есть, если важен перебор
+            if percentage > 100:
+                percentage = 100
 
+                # 4. Формируем ответ вручную
+        response_data = {
+            "calories": calories,
+            "goal_calories": g_cal,
+
+            "belok": round(belok, 1),
+            "goal_belok": g_belok,
+
+            "jir": round(jir, 1),
+            "goal_jir": g_jir,
+
+            "uglevod": round(uglevod, 1),
+            "goal_uglevod": g_uglevod,
+
+            "klechatka": round(klechatka, 1),
+            "goal_klechatka": g_fiber,
+
+            "percentage": percentage,
+            "has_goal": goal is not None
         }
 
-        serializer = GetCaloriesSer(dic)
+        return Response(response_data, status=status.HTTP_200_OK)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
@@ -1601,7 +1642,7 @@ class CaroiesListView(APIView):
     )
     def get(self, request):
         profile = request.user.profile
-        query=Calories.objects.filter(profile=profile).exclude(detail=[]).order_by('-id')
+        query=Calories.objects.filter(profile=profile,saved=True).exclude(detail=[]).order_by('-id')
 
         dic = defaultdict(lambda: {
             'meals': [],
@@ -1719,6 +1760,8 @@ class CaloriesEdit(APIView):
             return Response({'message': test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 
 class NutritionGoalView(APIView):
