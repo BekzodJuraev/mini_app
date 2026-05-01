@@ -70,7 +70,8 @@ from .serializers import (
     PublicNotificationPetDrugSer,
     Notification_drugs_Ser,
     DrugUpdateSer,
-    EditCaloriesSer
+    EditCaloriesSer,
+    NutritionGoalSerializer
 
 
 )
@@ -88,7 +89,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal
 from django.db.models.functions import ExtractYear
 from django.utils.timezone import now
 import time
@@ -1720,6 +1721,54 @@ class CaloriesEdit(APIView):
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class NutritionGoalView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NutritionGoalSerializer
+
+    def get(self, request):
+        profile = request.user.profile
+        goal = NutritionGoal.objects.filter(profile=profile).first()
+        if not goal:
+            return Response({
+                "calories": 0, "proteins": 0, "fats": 0, "carbs": 0, "fiber": 0
+            }, status=status.HTTP_200_OK)
+
+        serializer = self.serializer_class(goal)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(request_body=NutritionGoalSerializer)
+    def post(self, request):
+        """
+        Создание или полное обновление целей питания.
+        Работает для кнопки 'Подтвердить цель'.
+        """
+        profile = request.user.profile
+
+        # update_or_create ищет запись по profile,
+        # если находит — обновляет поля из defaults, если нет — создает.
+        goal, created = NutritionGoal.objects.update_or_create(
+            profile=profile,
+            defaults={
+                'calories': request.data.get('calories', 0),
+                'proteins': request.data.get('proteins', 0),
+                'fats': request.data.get('fats', 0),
+                'carbs': request.data.get('carbs', 0),
+                'fiber': request.data.get('fiber', 0),
+            }
+        )
+
+        serializer = self.serializer_class(goal)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def patch(self, request):
+        """Для частичного обновления (например, только калории)"""
+        profile = request.user.profile
+        goal = get_object_or_404(NutritionGoal, profile=profile)
+        serializer = self.serializer_class(goal, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class CaloriesChatView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = CaloriesChatSer

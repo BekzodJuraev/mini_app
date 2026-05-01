@@ -334,6 +334,21 @@ class Pet(models.Model):
     def __str__(self):
         return self.profile.name
 
+
+class NutritionGoal(models.Model):
+    profile = models.OneToOneField(
+        'Profile', on_delete=models.CASCADE, related_name='nutrition_goal'
+    )
+    calories = models.PositiveIntegerField(default=0)
+    proteins = models.PositiveIntegerField(default=0)
+    fats = models.PositiveIntegerField(default=0)
+    carbs = models.PositiveIntegerField(default=0)
+    fiber = models.PositiveIntegerField(default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Цели для {self.profile.user.username}"
 class Calories(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='cal', verbose_name="Профиль"
