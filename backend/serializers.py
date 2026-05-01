@@ -353,6 +353,9 @@ class NutritionGoalSerializer(serializers.ModelSerializer):
         model = NutritionGoal
 
         fields = ['calories', 'proteins', 'fats', 'carbs', 'fiber']
+
+
+
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
 

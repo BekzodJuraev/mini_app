@@ -348,7 +348,7 @@ class NutritionGoal(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Цели для {self.profile.user.username}"
+        return f"Цели для {self.profile.name}"
 class Calories(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='cal', verbose_name="Профиль"
