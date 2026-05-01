@@ -36,7 +36,7 @@ class CaloriesChatSer(serializers.ModelSerializer):
 
     class Meta:
         model=Calories
-        fields=['images','answer','detail','total','created_at']
+        fields=['images','detail','total','created_at']
 
 class SetResetPasswordSer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True)

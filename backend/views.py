@@ -1527,7 +1527,7 @@ class CaroiesView(APIView):
     def get(self, request):
         profile = request.user.profile
         today = localtime(now()).date()
-        query = Calories.objects.filter(profile=profile,created_at=today).values_list('total',flat=True)
+        query = Calories.objects.filter(profile=profile,created_at=today,saved=True).values_list('total',flat=True)
         calories = belok = jir = uglevod = klechatka = 0
         if query:
             for item in query:
@@ -1561,16 +1561,33 @@ class CaroiesView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             test=calories(serializer.validated_data['photo'])
-            if test.get('message')!="Пожалуйста, отправьте фото еды для расчёта калорийности.":
-                Calories.objects.create(profile=profile, detail=test.get('detail', []), total=test.get('total', []),
-                                        images=serializer.validated_data['photo'], answer=test['message'])
+            if test.get('detail'):
+                cal=Calories.objects.create(profile=profile, detail=test.get('detail', []), total=test.get('total', []),
+                                        images=serializer.validated_data['photo'])
 
 
 
 
-            return Response({'message':test['message']}, status=status.HTTP_200_OK)
+            return Response(
+                {   'id':cal.id,
+                    'detail':test['detail'],
+                    'total':test['total']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, id):
+        """
+        Метод для активации флага saved=True.
+        Передай id в URL: /calories/<id>/
+        """
+        profile = request.user.profile
+        # Ищем запись именно этого пользователя
+        cal_record = get_object_or_404(Calories, id=id, profile=profile)
+
+        cal_record.saved = True
+        cal_record.save()
+
+        return Response({'message': 'Calories saved successfully'}, status=status.HTTP_200_OK)
 
 
 class CaroiesListView(APIView):
