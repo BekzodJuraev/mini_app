@@ -353,7 +353,11 @@ class ChatSer(serializers.Serializer):
     message=serializers.CharField()
 
 
+class EditCaloriesSer(serializers.ModelSerializer):
 
+    class Meta:
+        model=Calories
+        fields=['detail']
 
 
 
