@@ -36,7 +36,7 @@ class CaloriesChatSer(serializers.ModelSerializer):
 
     class Meta:
         model=Calories
-        fields=['images','detail','total','created_at']
+        fields=['id','images','detail','total','created_at']
 
 class SetResetPasswordSer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True)
@@ -359,13 +359,17 @@ class NutritionGoalSerializer(serializers.ModelSerializer):
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
 
-
 class EditCaloriesSer(serializers.ModelSerializer):
+    # Текстовая правка от пользователя (например: "добавь хлеб")
+    message = serializers.CharField(required=False, allow_blank=True)
+    # Текущий список блюд после ручных правок (удаление/изменение граммовки)
+    current_details = serializers.ListField(child=serializers.JSONField(), required=False)
 
     class Meta:
-        model=Calories
-        fields=['detail']
-
+        model = Calories
+        # Оставляем только те поля, которые мы реально принимаем и отдаем
+        fields = ['detail',  'message', 'current_details']
+        read_only_fields = ['detail'] # Эти
 
 
 class CrashTestSer(serializers.Serializer):

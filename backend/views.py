@@ -1839,29 +1839,43 @@ class CaloriesEdit(APIView):
 
     def get(self,request):
         profile = request.user.profile
-        cal = Calories.objects.filter(profile=profile).last()
+        cal = Calories.objects.filter(profile=profile,saved=True).last()
         serializer = self.serializer_class(cal)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def post(self, request):
+        profile = request.user.profile
+        # Берем последнюю запись (обычно ту, что сейчас на экране)
+        cal = Calories.objects.filter(profile=profile).last()
 
+        if not cal:
+            return Response({'message': 'Record not found'}, status=404)
 
-    def post(self,request):
-        profile=request.user.profile
-        cal=Calories.objects.filter(profile=profile).last()
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            test = calories_edit(serializer.validated_data['message'],cal.answer)
-            if test['detail']:
+            user_input = serializer.validated_data.get('message', '')
+
+            active_details = serializer.validated_data.get('current_details', cal.detail)
+
+            # Вызываем AI, передавая ему и текст, и текущую структуру
+            test = calories_edit(user_input, cal.detail,active_details)
+
+            if test.get('detail'):
                 cal.detail = test.get('detail', [])
-                cal.total = test.get('total', [])
+                cal.total = test.get('total', {})
+
 
                 cal.save(update_fields=['detail', 'total'])
 
+                return Response({
+                    'message': test['message'],
+                    'detail': cal.detail,
+                    'total': cal.total
+                }, status=status.HTTP_200_OK)
 
+            return Response({'message': test.get('message', 'Error analyzing data')}, status=200)
 
-            return Response({'message': test['message']}, status=status.HTTP_200_OK)
-
-        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
