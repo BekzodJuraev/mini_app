@@ -61,6 +61,7 @@ urlpatterns=[
  path('api/calories/<int:id>', views.CaroiesView.as_view()),
  path('api/calories/list',views.CaroiesListView.as_view(),name='calories_list'),
  path('api/calories/chat',views.CaloriesChatView.as_view(),name='calories_chat'),
+ path('api/calories/statistics/monthly', views.MonthlyStatisticsView.as_view(), name='monthly-stats'),
  path('api/pet/rentgen/<int:message_id>',views.PetRentgenView.as_view(),name='pet_rentgen'),
  path('api/pet/daily_check/<int:message_id>',views.PetDailyCheckView.as_view(),name='pet_daily'),
  path('api/pet/calories/<int:message_id>',views.PetCaroiesView.as_view(),name='calories_pet'),

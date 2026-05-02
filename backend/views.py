@@ -6,6 +6,7 @@ from collections import defaultdict
 from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+import calendar
 from config import EMAIL_HOST_USER
 import random
 from django.core.mail import send_mail
@@ -91,7 +92,7 @@ from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
 from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal
-from django.db.models.functions import ExtractYear
+from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
 from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit
@@ -975,8 +976,109 @@ class Notification_create(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class MonthlyStatisticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        today = localtime(now()).date()
+
+        # 1. Параметры месяца (можно передавать через ?month=12&year=2025)
+        year = int(request.query_params.get('year', today.year))
+        month = int(request.query_params.get('month', today.month))
+
+        start_of_month = today.replace(year=year, month=month, day=1)
+        last_day = calendar.monthrange(year, month)[1]
+        end_of_month = today.replace(year=year, month=month, day=last_day)
+
+        # 2. Цели пользователя
+        goal = getattr(profile, 'nutrition_goal', None)
+        if not goal or goal.calories == 0:
+            return Response({"error": "Цель не установлена"}, status=200)
+
+        # 3. Выборка данных
+        queryset = Calories.objects.filter(
+            profile=profile,
+            created_at__range=[start_of_month, end_of_month],
+            saved=True
+        ).values('created_at', 'total')
+
+        # 4. Группировка всех нутриентов по дням
+        # Используем лямбда-функцию, чтобы структура БЖУ создавалась для каждого нового дня
+        daily_data = defaultdict(lambda: {
+            "calories": 0.0, "belok": 0.0, "jir": 0.0, "uglevod": 0.0, "klechatka": 0.0
+        })
+
+        for entry in queryset:
+            day = entry['created_at']
+            t = entry['total'] or {}
+
+            daily_data[day]["calories"] += float(t.get('ккал', 0))
+            daily_data[day]["belok"] += float(t.get('белок', 0))
+            daily_data[day]["jir"] += float(t.get('жир', 0))
+            daily_data[day]["uglevod"] += float(t.get('углеводы', 0))
+            daily_data[day]["klechatka"] += float(t.get('клетчатка', 0))
+
+        # 5. Формируем детальный ответ по дням и считаем общий средний %
+        total_monthly_percent = 0
+        daily_details = {}
+
+        for day, stats in daily_data.items():
+            # Процент выполнения за конкретный день
+            raw_percent = (stats["calories"] / goal.calories) * 100
+            day_percent = min(round(raw_percent, 1), 100.0)
+
+            # Сохраняем детали дня (для нижней части изображение_5.png)
+            daily_details[day.strftime('%Y-%m-%d')] = {
+                "fact": stats,
+                "goal": {
+                    "calories": goal.calories,
+                    "belok": goal.proteins,
+                    "jir": goal.fats,
+                    "uglevod": goal.carbs,
+                    "klechatka": goal.fiber
+                },
+                "percentage": day_percent
+            }
+
+            # Для общего итога месяца суммируем, ограничивая 100% (как в ТЗ)
+            total_monthly_percent += min(day_percent, 100)
+
+        # Средний процент за месяц
+        days_tracked = len(daily_data)
+        average_monthly_percent = round(total_monthly_percent / days_tracked, 1) if days_tracked > 0 else 0
+
+        return Response({
+            "average_monthly_percent": average_monthly_percent,  # Для топ-бара
+            "monthly_label": start_of_month.strftime('%B %Y'),
+            "daily_details": daily_details,  # Объект, где ключи - даты
+            "marked_days": list(daily_details.keys())  # Список дат с данными
+        }, status=status.HTTP_200_OK)
 class Notification_Detail(APIView):
     permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=Notification_drugs_Ser()
+    )
+    def patch(self, request, pk):
+        """Изменение конкретного уведомления по его ID"""
+        profile = request.user.profile
+
+        # Ищем уведомление, проверяя через связь, что оно принадлежит лекарству этого юзера
+        notification = get_object_or_404(
+            Notification_drugs,
+            id=pk,
+            drugs__profile=profile
+        )
+
+        # Передаем объект в сериализатор для частичного обновления
+        serializer = Notification_drugs_Ser(notification, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         # Ищем уведомление по его ID
