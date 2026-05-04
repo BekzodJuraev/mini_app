@@ -3,8 +3,9 @@ import base64
 
 from config import KEY,MODEL
 openai.api_key = KEY
+import fitz
 import json
-def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke,smoke_what,smoke_day):
+def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke, smoke_what, smoke_day):
     user_input = f"""
     Рост: {height}
     Вес: {weight}
@@ -14,59 +15,16 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
     Курили ли вы раньше: {smoking_past}
     Стаж курения: {exp_smoke}
     Место проживания: {location}
-    Что курите:{smoke_what}
-    Количество сигарет в день:{smoke_day}
+    Что курите: {smoke_what}
+    Количество сигарет в день: {smoke_day}
 
-    Оцени состояние по шкале от 1 до 10 для следующих категорий, добавляя общий показатель для каждой группы:
+    Оцени состояние по шкале от 1 до 10 для категорий, указанных в примере JSON. 
+    Внутри каждой системы сохрани все подпункты для детального анализа.
 
-    - Общий тонус (Overall tone)
-    - Дыхательная система (Respiratory System)
-      - Общий показатель
-      - Легкие (Lungs)
-      - Трахея (Trachea)
-      - Носоглотка (Nasopharynx)
-      - Бронхи (Bronchi)
-      - Рёбра (Ribs)
-      - Диафрагма (Diaphragm)
-    - Сердечно-сосудистая система (Cardiovascular System)
-      - Общий показатель
-      - Пульс (Pulse)
-      - Систолическое давление (Systolic Pressure)
-      - Диастолическое давление (Diastolic Pressure)
-    - Опорно-двигательная система (Skeletal Muscle System)
-      - Общий показатель
-      - Скелет (Skeleton)
-      - Мышцы (Muscles)
-      - Защита (Protection)
-      - Гибкость суставов (Joint Flexibility)
-      - Амортизация (Shock Absorption)
-      - Позвоночник (Spine)
-    - Эндокринная система (Endocrine System)
-      - Общий показатель
-      - Щитовидная железа (Thyroid Gland)
-      - Шишковидная железа (Pineal Gland)
-      - Надпочечники (Adrenal Glands)
-      - Поджелудочная железа (Pancreas)
-      - Вилочковая железа (Thymus)
-      - Половые железы (Sex Glands)
-    - Иммунная система (Immune System) - Общий показатель
-    - Пищеварительная система (Digestive System)
-      - Общий показатель
-      - Пищевод (Esophagus)
-      - Печень (Liver)
-      - Желудок (Stomach)
-      - Толстый кишечник (Large Intestine)
-      - Тонкий кишечник (Small Intestine)
-      - Ротовая полость (Oral Cavity)
-    - Выделительная система (Excretory System) - Общий показатель
-    - Слух, зрение, вкус - Общий показатель
-    - Кроветворение и обмен (Hematopoietic Metabolic System) - Общий показатель
-    - Психика - Общий показатель
-
-    Ответ должен быть ТОЛЬКО в формате JSON, например:
+    Ответ должен быть ТОЛЬКО в формате JSON:
     {{
         "Общий тонус": 7,
-        "Система дыхания": {{
+        "Дыхательная система": {{
             "Общий показатель": 6,
             "Легкие": 5,
             "Трахея": 6,
@@ -75,13 +33,13 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
             "Рёбра": 7,
             "Диафрагма": 6
         }},
-        "Сердце и сосуды": {{
+        "Сердечно-сосудистая система": {{
             "Общий показатель": 7,
             "Пульс": 7,
             "Систолическое давление": 6,
             "Диастолическое давление": 7
         }},
-        "Скелет и мышцы": {{
+        "Опорно-двигательный аппарат": {{
             "Общий показатель": 8,
             "Скелет": 8,
             "Мышцы": 7,
@@ -99,8 +57,7 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
             "Вилочковая железа": 7,
             "Половые железы": 7
         }},
-        "Иммунная система": 7,
-        "Пищеварение": {{
+        "Пищеварительная система": {{
             "Общий показатель": 7,
             "Пищевод": 7,
             "Печень": 7,
@@ -109,17 +66,21 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
             "Тонкий кишечник": 7,
             "Ротовая полость": 6
         }},
+        "Половая система": 7,
+        "Нервная система": 7,
         "Выделительная система": 7,
-        "Слух, зрение, вкус": 7,
-        "Кроветворение органов": 7,
-        "Психика": 7
+        "Зубочелюстная система": 7,
+        "Органы чувств": 7,
+        "Органы кроветворения": 7,
+        "Иммунная система": 7,
+        "Психологическое состояние": 7
     }}
     """
 
     response = openai.ChatCompletion.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
+            {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10 на основе данных анкеты."},
             {"role": "user", "content": user_input}
         ],
         response_format={"type": "json_object"}
@@ -987,58 +948,77 @@ def petdaily_check(user_data, yesterday=None):
 
 
 def rentgen(photo_files, message):
-    media_contents = []
+    image_contents = []
+    text_from_docs = ""
 
-    # Обрабатываем все входящие файлы (и фото, и документы)
     for file in photo_files:
         try:
             file.seek(0)
-            encoded_content = base64.b64encode(file.read()).decode('utf-8')
+            filename = file.name.lower()
 
-            # Определяем MIME-тип (базово)
-            mime_type = "image/jpeg"
-            if file.name.lower().endswith('.pdf'):
-                mime_type = "application/pdf"
+            # 1. Если это ИЗОБРАЖЕНИЕ — кодируем в base64
+            if filename.endswith((".jpg", ".jpeg", ".png", ".webp")):
+                encoded = base64.b64encode(file.read()).decode("utf-8")
+                image_contents.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encoded}"
+                    }
+                })
 
-            # Добавляем в список как мультимодальный контент
-            media_contents.append({
-                "type": "document" if "pdf" in mime_type else "image_url",
-                "image_url" if "image" in mime_type else "document_url": {
-                    "url": f"data:{mime_type};base64,{encoded_content}"
-                }
-            })
-        except:
-            continue
+            # 2. Если это PDF — вытаскиваем текст
+            elif filename.endswith(".pdf"):
+                pdf_bytes = file.read()
+                with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+                    for page in doc:
+                        text_from_docs += page.get_text() + "\n"
 
-    # Текстовый запрос
+            # 3. Если это TXT — читаем как текст
+            elif filename.endswith(".txt"):
+                text_from_docs += file.read().decode("utf-8") + "\n"
+
+        except Exception as e:
+            print(f"FILE ERROR ({filename}):", e)
+
+    # Формируем финальный текстовый запрос
+    # Добавляем извлеченный текст прямо в промпт
     prompt = f"""
-    Твоя задача:
-    Проанализируй загруженные изображения или документы (рентгены, УЗИ, анализы).
+Ты медицинский помощник. Проанализируй данные.
 
-    {"Дополнительная информация от пользователя: " + message if message else ""}
+ТЕКСТ ИЗ ЗАГРУЖЕННЫХ ДОКУМЕНТОВ/АНАЛИЗОВ:
+{text_from_docs if text_from_docs else "Документы не содержат текста или не загружены."}
 
-    - Ответ должен быть ТОЛЬКО в формате JSON:
-    {{
-      "message": "Тут расширенный анализ и рекомендации"
-    }}
-    """
+ДОПОЛНИТЕЛЬНОЕ СООБЩЕНИЕ:
+{message if message else "Нет"}
 
-    # Собираем сообщение БЕЗ изменения логики формирования
+Твоя задача — изучить изображения (если есть) и текст выше.
+Ответ дай ТОЛЬКО в JSON:
+{{
+  "message": "Твой расширенный анализ и рекомендации"
+}}
+"""
+
+    # Собираем сообщения для ChatCompletion
+    # Важно: старый API принимает контент либо строкой, либо списком словарей (для vision моделей)
     messages = [
-        {"role": "system", "content": "Ты медицинский помощник, анализирующий снимки и документы пользователей."},
+        {"role": "system", "content": "Ты квалифицированный медицинский помощник."},
         {"role": "user", "content": [
                                         {"type": "text", "text": prompt}
-                                    ] + media_contents}
+                                    ] + image_contents}
     ]
 
-    response = openai.ChatCompletion.create(
-        model=MODEL,
-        messages=messages,
-        response_format={"type": "json_object"}
-    )
+    try:
+        response = openai.ChatCompletion.create(
+            model=MODEL,  # Убедись, что модель поддерживает Vision
+            messages=messages,
+            response_format={"type": "json_object"}
+        )
 
-    result_text = response["choices"][0]["message"]["content"]
-    return json.loads(result_text)
+        result_text = response["choices"][0]["message"]["content"]
+        return json.loads(result_text)
+    except Exception as e:
+        return {"message": f"Ошибка при запросе к API: {str(e)}"}
+
 def petrentgen(photo_files, message):
 
 
