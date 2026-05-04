@@ -987,43 +987,48 @@ def petdaily_check(user_data, yesterday=None):
 
 
 def rentgen(photo_files, message):
+    media_contents = []
 
+    # Обрабатываем все входящие файлы (и фото, и документы)
+    for file in photo_files:
+        try:
+            file.seek(0)
+            encoded_content = base64.b64encode(file.read()).decode('utf-8')
 
+            # Определяем MIME-тип (базово)
+            mime_type = "image/jpeg"
+            if file.name.lower().endswith('.pdf'):
+                mime_type = "application/pdf"
 
-
-    try:
-        image_contents = [
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64.b64encode(photo.read()).decode('utf-8')}"
+            # Добавляем в список как мультимодальный контент
+            media_contents.append({
+                "type": "document" if "pdf" in mime_type else "image_url",
+                "image_url" if "image" in mime_type else "document_url": {
+                    "url": f"data:{mime_type};base64,{encoded_content}"
                 }
-            }
-            for photo in photo_files
-        ]
-    except:
-        image_contents=[]
-
-
+            })
+        except:
+            continue
 
     # Текстовый запрос
     prompt = f"""
     Твоя задача:
-
-    Проанализируй загруженные изображения. Это могут быть рентгены, УЗИ или другие медицинские сканы.
+    Проанализируй загруженные изображения или документы (рентгены, УЗИ, анализы).
 
     {"Дополнительная информация от пользователя: " + message if message else ""}
 
     - Ответ должен быть ТОЛЬКО в формате JSON:
     {{
-      "message": "Тут можно более расширенно написать и дать какие-то рекомендации"
+      "message": "Тут расширенный анализ и рекомендации"
     }}
     """
 
-    # Собираем сообщение
+    # Собираем сообщение БЕЗ изменения логики формирования
     messages = [
-        {"role": "system", "content": "Ты медицинский помощник, который анализирует изображения, загруженные пользователями."},
-        {"role": "user", "content": [{"type": "text", "text": prompt}] + image_contents}
+        {"role": "system", "content": "Ты медицинский помощник, анализирующий снимки и документы пользователей."},
+        {"role": "user", "content": [
+                                        {"type": "text", "text": prompt}
+                                    ] + media_contents}
     ]
 
     response = openai.ChatCompletion.create(
@@ -1033,8 +1038,7 @@ def rentgen(photo_files, message):
     )
 
     result_text = response["choices"][0]["message"]["content"]
-    result_dict = json.loads(result_text)
-    return result_dict
+    return json.loads(result_text)
 def petrentgen(photo_files, message):
 
 

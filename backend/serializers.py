@@ -308,26 +308,35 @@ class ProfileSer(serializers.ModelSerializer):
 
 class ProfileUpdateSer(serializers.ModelSerializer):
     email=serializers.EmailField(source="username.email")
+    login=serializers.CharField(source="username.username")
 
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname']
 
     def update(self, instance, validated_data):
+
         # 1. Handle the nested user data
-        # 'username' is the key because of source="username.email"
+        # Use .pop() to separate user data from profile data
         user_data = validated_data.pop('username', None)
 
         if user_data:
-            user_instance = instance.username
-            email = user_data.get('email')
-            if email:
-                user_instance.email = email
-                # If your username IS the email, update that too:
-                # user_instance.username = email
-                user_instance.save()
+            user_instance = instance.username  # This is the User object
+
+            # Use getattr/setattr or dict.get() to avoid KeyErrors
+            email = user_data.get('email', user_instance.email)
+            login = user_data.get('username', user_instance.username)
+
+            user_instance.email = email
+            user_instance.username = login
+
+            # If your business logic dictates that email must match username:
+            # user_instance.username = email
+
+            user_instance.save()
 
         # 2. Update the Profile instance with the remaining data
+        # validated_data now only contains Profile fields (e.g., bio, avatar)
         return super().update(instance, validated_data)
 class ProfileMainSystemSer(serializers.ModelSerializer):
     # RespiratorySystem=RespiratorySystemSer(source='res')
@@ -573,8 +582,8 @@ class DailyCheckSer(serializers.Serializer):
     sleep=serializers.CharField()
 
 class RentgenSer(serializers.Serializer):
-    photo=serializers.ListField(
-        child=serializers.ImageField(),
+    file=serializers.ListField(
+        child=serializers.FileField(),
         required=False,
         default=[]
     )

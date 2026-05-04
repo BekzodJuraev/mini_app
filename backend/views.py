@@ -1335,7 +1335,7 @@ class RentgenView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
 
-            test=rentgen(serializer.validated_data.get('photo'),serializer.validated_data.get('message'))
+            test=rentgen(serializer.validated_data.get('file'),serializer.validated_data.get('message'))
             r=Rentgen.objects.create(profile=profile,message=serializer.validated_data.get('message'),answer=test['message'])
 
 
