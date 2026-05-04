@@ -315,7 +315,7 @@ class Rentgen_Image(models.Model):
     rentgen = models.ForeignKey(
         'Rentgen', on_delete=models.CASCADE, related_name='rentgen_image', verbose_name="Rentgen"
     )
-    images=models.ImageField(upload_to='rentgen/',default=None)
+    images=models.FileField(upload_to='rentgen/',default=None)
 
 
     def __str__(self):

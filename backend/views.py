@@ -1341,7 +1341,7 @@ class RentgenView(APIView):
 
             consumables = [
                 Rentgen_Image(rentgen=r, images=image)
-                for image in serializer.validated_data.get('photo')
+                for image in serializer.validated_data.get('file')
             ]
             Rentgen_Image.objects.bulk_create(consumables)
 
