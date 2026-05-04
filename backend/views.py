@@ -793,7 +793,7 @@ class GetTrackingView(APIView):
 
     def get(self,request):
         profile=request.user.profile
-        tracking=Tracking_Habit.objects.filter(habit__profile=profile)
+        tracking=Tracking_Habit.objects.filter(habit__profile=profile,check_is=True)
         serializer = self.serializer_class(tracking,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
