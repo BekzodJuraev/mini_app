@@ -237,14 +237,24 @@ class RelationshipSer(serializers.ModelSerializer):
 
         return user
 class RelationshipBabySer(serializers.ModelSerializer):
-    who_is=serializers.CharField()
+    who_is = serializers.CharField()
     name = serializers.CharField()
-    gender = serializers.CharField()
-    place_of_residence = serializers.CharField()
     date_birth = serializers.DateField()
-    photo = serializers.CharField(required=False)
-    height = serializers.IntegerField()
-    weight = serializers.IntegerField()
+    gender = serializers.CharField()
+    # Поля с изображения 7
+    blood_group = serializers.CharField(required=False, allow_blank=True)  # Группа крови
+    rh_factor = serializers.CharField(required=False, allow_blank=True)  # Резус-фактор
+    weight = serializers.FloatField()  # Укажите вес при рождении (кг)
+    height = serializers.IntegerField()  # Укажите рост при рождении (см)
+    gestation_period = serializers.IntegerField()  # Срок гестации (недели)
+    birth_features = serializers.CharField(required=False, allow_blank=True)  # Особенности родов
+    chronic_diseases = serializers.CharField(required=False, allow_blank=True)  # Хронические заболевания
+    allergies = serializers.CharField(required=False, allow_blank=True)  # Аллергии
+    operations = serializers.CharField(required=False, allow_blank=True)  # Перенесённые операции
+    hereditary_diseases = serializers.CharField(required=False, allow_blank=True)  # Наследственные заболевания
+
+    photo = serializers.ImageField(required=False)
+    place_of_residence = serializers.CharField(required=False)
 
 
 
@@ -253,7 +263,8 @@ class RelationshipBabySer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['who_is','name','gender','place_of_residence','date_birth','photo','height','weight']
+        fields=['who_is','name','gender','place_of_residence','date_birth','photo','height','weight','blood_group','rh_factor','gestation_period','birth_features'
+                ,'chronic_diseases','allergies','operations','hereditary_diseases']
 
 
 
@@ -266,11 +277,24 @@ class RelationshipBabySer(serializers.ModelSerializer):
         gender=validated_data.get('gender')
         date_birth=validated_data.get('date_birth')
 
+        gestation_period = validated_data.pop('gestation_period')# Срок гестации (недели)
+        birth_features = validated_data.pop('birth_features') # Особенности родов
+        chronic_diseases = validated_data.pop('chronic_diseases') # Хронические заболевания
+        allergies = validated_data.pop('allergies')  # Аллергии
+        operations = validated_data.pop('operations')  # Перенесённые операции
+        hereditary_diseases = validated_data.pop('hereditary_diseases')
+        blood_group = validated_data.pop('blood_group')
+        rh_factor = validated_data.pop('rh_factor')
+
+
 
 
         def fetch_and_save_health(rel):
             health_system = get_health_scale_baby(
-                height=height, weight=weight,location=place_of_residence, gender=gender, date_birth=date_birth)
+                height_birth=height, weight_birth=weight, gender=gender, date_birth=date_birth,
+
+            gestation_period=gestation_period,birth_features=birth_features,chronic_diseases=chronic_diseases,allergies=allergies,operations=operations,
+                hereditary_diseases=hereditary_diseases,blood_group=blood_group,rh_factor=rh_factor)
 
             if isinstance(health_system, str):
                 try:
