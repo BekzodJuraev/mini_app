@@ -7,40 +7,93 @@ import uuid
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
-class HealthSystem(models.Model):
-    name = models.CharField(max_length=255, verbose_name="Система организма")
-
-    class Meta:
-        verbose_name = "Система организма"
-        verbose_name_plural = "1. Системы организма"
-
-    def __str__(self):
-        return self.name
-
-# 2. Подраздел (например, Печень)
-class Subsection(models.Model):
-    system = models.ForeignKey(HealthSystem, on_delete=models.CASCADE, related_name='subsections', verbose_name="Подраздел (орган)")
-    name = models.CharField(max_length=255, verbose_name="Подраздел (орган)")
-
-    class Meta:
-        verbose_name = "Подраздел"
-        verbose_name_plural = "2. Подразделы (Органы)"
-    def __str__(self):
-        return f"{self.system.name} -> {self.name}"
-
-# 3. Тест (Название теста, описание)
 class Test(models.Model):
-    subsection = models.ForeignKey(Subsection, on_delete=models.CASCADE, related_name='tests',verbose_name="Подраздел (орган)")
-    title = models.CharField(max_length=255, verbose_name="Название теста")
-    description = models.TextField(blank=True, verbose_name="Описание для пользователя")
+    ROLE_CHOICES = [
+        ('human', 'Человек'),
+        ('baby', 'Ребенок'),
+        ('animal', 'Животное'),
+    ]
+
+    # Список систем (Верхний уровень)
+    SYSTEM_CHOICES = [
+        ('others', '📁 Другие'),
+        ('respiratory', 'Дыхательная система'),
+        ('cardio', 'Сердечно-сосудистая система'),
+        ('skeletal', 'Опорно-двигательный аппарат'),
+        ('endocrine', 'Эндокринная система'),
+        ('digestive', 'Пищеварительная система'),
+        ('reproductive', 'Половая система'),
+        ('nervous', 'Нервная система'),
+        ('excretory', 'Выделительная система'),
+        ('dental', 'Зубочелюстная система'),
+        ('sensory', 'Органы чувств'),
+        ('hematopoietic', 'Органы кроветворения'),
+        ('immune', 'Иммунная система'),
+        ('psychological', 'Психологическое состояние'),
+    ]
+    ANIMAL_CHOICES = [
+        ('cat', 'Кошка'),
+        ('dog', 'Собака'),
+        ('cow', 'Корова'),
+        ('horse', 'Лошадь'),
+        ('other', 'Другое'),
+    ]
+
+
+    # Список подразделов (Нижний уровень)
+    SUBSECTION_CHOICES = [
+        # Дыхательная
+        ('lungs', 'Легкие'), ('trachea', 'Трахея'), ('nasopharynx', 'Носоглотка'),
+        ('bronchi', 'Бронхи'), ('ribs', 'Рёбра'), ('diaphragm', 'Диафрагма'),
+        # Сердечно-сосудистая
+        ('pulse', 'Пульс'), ('systolic', 'Систолическое давление'), ('diastolic', 'Диастолическое давление'),
+        # Опорно-двигательный
+        ('skeleton', 'Скелет'), ('muscles', 'Мышцы'), ('spine', 'Позвоночник'),
+        # Половая
+        ('testicles', 'Тестикулы'), ('prostate', 'Простата'), ('hormonal', 'Гормональная система'),
+        ('function', 'Функциональность'),
+        # Пищеварительная
+        ('esophagus', 'Пищевод'), ('liver', 'Печень'), ('stomach', 'Желудок'),
+    ]
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='human', verbose_name="Роль")
+    which_animal = models.CharField(
+        max_length=20,
+        choices=ANIMAL_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="Какое животное"
+    )
+
+    system = models.CharField(
+        max_length=50,
+        choices=SYSTEM_CHOICES,
+        default='others',
+        verbose_name="Система"
+    )
+
+    subsection = models.CharField(
+        max_length=50,
+        choices=SUBSECTION_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="Подраздел (необязательно)"
+    )
+
+    title = models.CharField(max_length=255, verbose_name="Название")
+    description = models.TextField(blank=True, verbose_name="Описание")
+    example_answer = models.TextField(
+        blank=True,
+        verbose_name="Пример ответа"  # Правильный падеж
+    )
+
 
     class Meta:
         verbose_name = "Тест"
-        verbose_name_plural = "3. Тесты"
+        verbose_name_plural = "Тесты"
 
     def __str__(self):
-        return self.title
-
+        return f"{self.title} ({self.system})"
 # 4. Вопрос
 class Question(models.Model):
     # Типы вопросов как на картинке
@@ -55,10 +108,9 @@ class Question(models.Model):
     test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='questions')
     text = models.CharField(max_length=500, verbose_name="Текст вопроса")
     question_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='radio')
-    order = models.PositiveIntegerField(default=0, verbose_name="Порядок вопроса")
 
-    class Meta:
-        ordering = ['order']
+
+
 
     def __str__(self):
         return self.text
@@ -67,7 +119,7 @@ class Question(models.Model):
 class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
     text = models.CharField(max_length=255, verbose_name="Вариант ответа")
-    points = models.IntegerField(default=0, verbose_name="Баллы за этот ответ") # Для итогового отчета
+
 
     def __str__(self):
         return self.text

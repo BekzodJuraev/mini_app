@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,HealthSystem, Subsection, Test, Question, Choice,Notification_drugs,NutritionGoal
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal
 import nested_admin
 class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
     model = Choice
@@ -12,38 +12,43 @@ class QuestionInline(nested_admin.NestedStackedInline): # Вложенные в�
 
 @admin.register(Test)
 class TestAdmin(nested_admin.NestedModelAdmin):
-    list_display = ('title', 'subsection', 'get_system')
-    list_filter = ('subsection__system', 'subsection')
+    list_display = ('title', 'role', 'which_animal', 'subsection', 'get_system','example_answer')
+    list_filter = ('role', 'system', 'which_animal')
     search_fields = ('title',)
     inlines = [QuestionInline]
 
+    fieldsets = (
+        ("Основные настройки", {
+            'fields': ('role', 'which_animal', 'system', 'subsection','example_answer')
+        }),
+        ("Контент", {
+            'fields': ('title', 'description')
+        }),
+    )
+
     class Media:
         js = (
-            'admin/js/vendor/jquery/jquery.js', # Принудительно грузим jQuery первым
+            'admin/js/vendor/jquery/jquery.js',
             'admin/js/question_type_toggle.js',
         )
+
     def get_system(self, obj):
-        return obj.subsection.system.name
+        return obj.get_system_display() # Используем display для красивого имени из choices
     get_system.short_description = 'Система'
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('text', 'test', 'question_type', 'order')
+    list_display = ('text', 'test', 'question_type')
     list_filter = ('test', 'question_type')
     inlines = [ChoiceInline]
 
 # Простая регистрация для категорий
-@admin.register(HealthSystem)
-class HealthSystemAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+
 
 @admin.register(NutritionGoal)
 class NutritionGoaladmin(admin.ModelAdmin):
     pass
-@admin.register(Subsection)
-class SubsectionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'system')
-    list_filter = ('system',)
+
 
 @admin.register(PetRentgen_Image)
 class PetRentgen_Image(admin.ModelAdmin):

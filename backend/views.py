@@ -73,6 +73,7 @@ from .serializers import (
     DrugUpdateSer,
     EditCaloriesSer,
     NutritionGoalSerializer,
+    AdminTestsSer
 
 
 
@@ -91,7 +92,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -143,6 +144,19 @@ def pet_update_system(f):
 
         return message
     return wrapper
+
+class AdminTestsView(APIView):
+    serializer_class = AdminTestsSer
+
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=AdminTestsSer(many=True)
+    )
+    def get(self, request):
+        query=Test.objects.all()
+        serializer = self.serializer_class(query,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SetPasswordView(APIView):
