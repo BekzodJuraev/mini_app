@@ -73,7 +73,9 @@ from .serializers import (
     DrugUpdateSer,
     EditCaloriesSer,
     NutritionGoalSerializer,
-    AdminTestsSer
+    AdminTestsSer,
+    AdminTestByIDSer,
+    AIInputSer
 
 
 
@@ -96,7 +98,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -150,15 +152,72 @@ class AdminTestsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+
     @swagger_auto_schema(
-        request_body=AdminTestsSer(many=True)
+        responses={status.HTTP_200_OK: AdminTestsSer()}
     )
     def get(self, request):
         query=Test.objects.all()
         serializer = self.serializer_class(query,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class AdminTestDetailAPIView(APIView):
+    serializer_class = AdminTestByIDSer
 
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: AdminTestByIDSer()}
+    )
+    def get(self, request, pk):
+        # Используем prefetch_related, чтобы за 1 запрос вытащить
+        # сам тест, все вопросы к нему и все варианты ответов (choices)
+        test = Test.objects.prefetch_related(
+            'questions',           # Подгружаем вопросы (используй свой related_name)
+            'questions__choices'   # Подгружаем варианты ответов для этих вопросов
+        ).get(pk=pk) # Либо get_object_or_404(Test.objects.prefetch_related(...), pk=pk)
+
+        serializer = self.serializer_class(test)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: AIInputSer()}
+    )
+    def post(self, request, pk):
+        test = get_object_or_404(Test, pk=pk)
+
+        # Валидируем только наличие поля 'answers' как JSON
+        input_serializer = AIInputSer(data=request.data)
+
+        if input_serializer.is_valid():
+            # Собираем контекст из модели
+            # Добавляем which_animal только если роль — животное
+            role_info = test.get_role_display()
+            if test.role == 'animal' and hasattr(test, 'which_animal'):
+                role_info = f"{role_info} ({test.get_which_animal_display()})"
+
+            # 3. Формируем "Жирный" JSON для ИИ
+            full_context_for_ai = {
+                "metadata": {
+                    "title": test.title,
+                    "description": test.description,
+                    "role": role_info,
+                    "system": test.get_system_display(),
+                    "subsection": test.get_subsection_display(),
+                },
+                "instructions": {
+                    "expert_rule": test.example_answer  # Твой главный промпт-инструкция
+                },
+                "user_data": {
+                    "answers": input_serializer.validated_data['answers']  # Весь JSONField от фронта
+                }
+            }
+            test=testadmin(full_context_for_ai)
+
+            # Отправляем этот "компот" в ИИ или возвращаем для проверки
+            return Response(test, status=status.HTTP_200_OK)
+
+        return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class SetPasswordView(APIView):
     serializer_class = SetResetPasswordSer
     permission_classes = [IsAuthenticated]
@@ -2115,6 +2174,8 @@ class PublicNotifcationView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+
+
 class PublicNotificationDrugView(APIView):
 
     serializer_class = PublicNotificationDrugSer
@@ -2123,7 +2184,7 @@ class PublicNotificationDrugView(APIView):
         responses={status.HTTP_200_OK: PublicNotificationDrugSer(many=True)}
     )
     def get(self, request):
-        query=Drugs.objects.filter(profile__who_is=None).select_related('profile','profile__username')
+        query=Drugs.objects.filter(profile__who_is=None).select_related('profile','profile__username').prefetch_related('notifications_drugs')
 
         serializer = PublicNotificationDrugSer(query, many=True)
 
