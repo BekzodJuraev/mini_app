@@ -75,5 +75,6 @@ urlpatterns=[
  path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
  path('api/calories/edit',views.CaloriesEdit.as_view(),name='edit_caloires'),
  path('api/nutrition', views.NutritionGoalView.as_view(), name='nutrition-goal'),
- path('api/admin/test',views.AdminTestsView.as_view(),name="admin_test")
+ path('api/admin/list',views.AdminTestsView.as_view(),name="admin_test"),
+ path('api/admin/<int:pk>',views.AdminTestDetailAPIView.as_view(),name="admin_detail")
 ]

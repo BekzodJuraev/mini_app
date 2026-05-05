@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -12,8 +12,38 @@ import uuid
 
 from rest_framework.authtoken.models import Token
 
+class AIInputSer(serializers.Serializer):
+    answers = serializers.JSONField()
+class AdminTestByIDSer(serializers.ModelSerializer):
+    # Твои поля
+    question = serializers.SerializerMethodField()
+
+
+
+
+
+    class Meta:
+        model = Test
+        fields = ['id', 'title','question']
+
+    def get_question(self, obj):
+        # Получаем вопросы, которые уже подгружены через prefetch_related
+        return [
+            {
+                "text": q.text,
+                "type": q.question_type,
+                "type_display": q.get_question_type_display(),
+                # Вкладываем choices прямо сюда
+                "choices": [
+                    {
+                        "text": c.text,
+                    } for c in q.choices.all() # choices подгружены заранее, запроса в БД не будет
+                ]
+            } for q in obj.questions.all()
+        ]
+
 class AdminTestsSer(serializers.ModelSerializer):
-    # Создаем дополнительные поля для отображения текста
+
     role_display = serializers.ReadOnlyField(source='get_role_display')
     system_display = serializers.ReadOnlyField(source='get_system_display')
     subsection_display = serializers.ReadOnlyField(source='get_subsection_display')
@@ -39,10 +69,25 @@ class PublicNotificationPetDrugSer(serializers.ModelSerializer):
 class PublicNotificationDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='profile.username.username')
     city = serializers.CharField(source='profile.place_of_residence')
+    notification=serializers.SerializerMethodField()
 
     class Meta:
         model=Drugs
-        fields=['telegram_id','catigories','name','time_day','day','intake','city']
+        fields=['telegram_id','catigories','name','time_day','day','intake','city','notification']
+
+    def get_notification(self, obj):
+        # Достаем все уведомления, которые мы получили через prefetch_related
+        # Используем .all(), чтобы Django не шел снова в базу
+        notifications = obj.notifications_drugs.all()
+
+        return [
+            {
+
+                "time": n.time
+            }
+            for n in notifications
+        ]
+
 
 class PublicNotifcationSer(serializers.ModelSerializer):
     telegram_id=serializers.CharField(source='profile__username__username')

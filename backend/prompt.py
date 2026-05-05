@@ -5,6 +5,61 @@ from config import KEY,MODEL
 openai.api_key = KEY
 import fitz
 import json
+
+def testadmin(full_context_for_ai):
+    prompt = f"""
+    Ты эксперт в области: {full_context_for_ai['metadata']['role']}
+
+    Информация о тесте:
+    - Название: {full_context_for_ai['metadata']['title']}
+    - Описание: {full_context_for_ai['metadata']['description']}
+    - Система: {full_context_for_ai['metadata']['system']}
+    - Подраздел: {full_context_for_ai['metadata']['subsection']}
+
+    Главные инструкции (обязательно следовать):
+    {full_context_for_ai['instructions']['expert_rule']}
+
+    Ответы пользователя:
+    {full_context_for_ai['user_data']['answers']}
+
+    Твоя задача:
+    - Проанализировать ответы пользователя
+    - Дать экспертную оценку
+    - Определить состояние / уровень / тип (в зависимости от теста)
+    - Дать рекомендации (если уместно)
+    - Объяснить кратко, но по делу
+
+    ❗️ВАЖНО:
+    - Ответ должен быть ТОЛЬКО в формате JSON
+    - Без лишнего текста, без markdown
+    - Без объяснений вне JSON
+
+    Формат ответа:
+    {{
+        "message": "Основной анализ и рекомендации",
+        "level": "уровень / категория / тип",
+        "advice": ["рекомендация 1", "рекомендация 2"],
+        "summary": "краткий итог"
+    }}
+    """
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "Ты профессиональный аналитик и эксперт. Отвечай строго в JSON."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    return json.loads(result_text)
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke, smoke_what, smoke_day):
     user_input = f"""
     Рост: {height}
