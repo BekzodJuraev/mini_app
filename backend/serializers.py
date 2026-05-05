@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -11,6 +11,24 @@ from .prompt import get_health_scale,get_health_scale_baby
 import uuid
 
 from rest_framework.authtoken.models import Token
+
+class AdminTestsSer(serializers.ModelSerializer):
+    # Создаем дополнительные поля для отображения текста
+    role_display = serializers.ReadOnlyField(source='get_role_display')
+    system_display = serializers.ReadOnlyField(source='get_system_display')
+    subsection_display = serializers.ReadOnlyField(source='get_subsection_display')
+
+    class Meta:
+        model = Test
+        fields = [
+            'id',
+            'role', 'role_display',
+            'system', 'system_display',
+            'subsection', 'subsection_display',
+            'title', 'description'
+        ]
+
+
 
 class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='pet.profile.username.username')
@@ -310,6 +328,8 @@ class RelationshipBabySer(serializers.ModelSerializer):
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
         return user
+
+
 class LoginSer(serializers.Serializer):
     #telegram_id=serializers.CharField(required=True,write_only=True)
     login=serializers.CharField(required=True)
