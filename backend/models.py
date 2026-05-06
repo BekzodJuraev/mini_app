@@ -379,6 +379,7 @@ class Pet(models.Model):
     )
     klichka=models.CharField(max_length=200)
     pet=models.CharField(max_length=200)
+    photo = models.ImageField(blank=True, upload_to='pictures/')
     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
     health_system = models.JSONField(null=True, default=None)
 

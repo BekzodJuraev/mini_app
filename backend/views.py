@@ -1492,7 +1492,7 @@ class PetView(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
-            pet=Pet.objects.create(profile=profile,klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
+            pet=Pet.objects.create(profile=profile,photo=serializer.validated_data.get('photo'),klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
                                    gender=serializer.validated_data.get('gender'))
 
             health_system = get_health_scale_pet(serializer.validated_data)

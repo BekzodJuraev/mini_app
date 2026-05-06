@@ -698,6 +698,7 @@ class PetSerCreate(serializers.Serializer):
     disease=serializers.CharField()
     body=serializers.CharField()
     gender=serializers.CharField()
+    photo = serializers.ImageField(required=False)
 
 class PetSerGet(serializers.ModelSerializer):
     health = serializers.SerializerMethodField()
@@ -705,7 +706,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','health']
+        fields=['id','klichka','pet','gender','health','photo']
 
     def get_health(self, obj):
         return [obj.health_system]
