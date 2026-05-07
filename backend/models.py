@@ -100,8 +100,7 @@ class Question(models.Model):
     TYPE_CHOICES = [
         ('slider', 'Слайдер (Плохо - Хорошо)'),
         ('binary', 'Да/Нет'),
-        ('radio', 'Одиночный выбор'),
-        ('emoji', 'Смайлики'),
+        ('radio', 'Несколько вариантов'),
         ('text', 'Текстовый ответ (Поле ввода)'),
     ]
 
@@ -115,7 +114,9 @@ class Question(models.Model):
     def __str__(self):
         return self.text
 
-# 5. Варианты ответов (если это не слайдер)
+
+
+
 class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
     text = models.CharField(max_length=255, verbose_name="Вариант ответа")
