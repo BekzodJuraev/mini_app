@@ -19,10 +19,10 @@ class TestAdmin(nested_admin.NestedModelAdmin):
 
     fieldsets = (
         ("Основные настройки", {
-            'fields': ('role', 'which_animal', 'system', 'subsection','example_answer')
+            'fields': ('role', 'which_animal', 'system', 'subsection')
         }),
         ("Контент", {
-            'fields': ('title', 'description')
+            'fields': ('title', 'description','example_answer')
         }),
     )
 

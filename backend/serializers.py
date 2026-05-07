@@ -116,6 +116,8 @@ class SetResetPasswordSer(serializers.Serializer):
 
 
 
+
+
 class RegistrationFirstSer(serializers.ModelSerializer):
     login = serializers.CharField(source='username', required=True)
     password2 = serializers.CharField(write_only=True,required=True)
@@ -124,7 +126,16 @@ class RegistrationFirstSer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("This email address is already registered. Please use a different one.")
+            raise serializers.ValidationError(
+                "Этот адрес электронной почты уже зарегистрирован. Пожалуйста, используйте другой."
+            )
+        return value
+
+    def validate_login(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError(
+                "Это имя пользователя уже занято. Пожалуйста, выберите другое."
+            )
         return value
 
     def validate_password(self, value):
