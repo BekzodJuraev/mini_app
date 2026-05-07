@@ -1,6 +1,9 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification
 import nested_admin
+@admin.register(Notification)
+class Notification(admin.ModelAdmin):
+    pass
 class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
     model = Choice
     extra = 3

@@ -26,6 +26,7 @@ urlpatterns=[
  path('api/hearthtest/kuper', views.HeartKuperTestAPIView.as_view(), name='kuper'),
  path('api/notification',views.NotificationAPIView.as_view(),name='notification'),
  path('api/notification/message/<int:message_id>',views.MessageView.as_view(),name='message'),
+ path('api/notification/second',views.NotificationAPIViewSecond.as_view()),
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
  path('api/habit/add',views.HabitView.as_view(), name='habit_add'),
  path('api/habit/tracking',views.Tracking_checkView.as_view(),name='tracking'),
