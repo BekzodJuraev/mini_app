@@ -75,7 +75,8 @@ from .serializers import (
     NutritionGoalSerializer,
     AdminTestsSer,
     AdminTestByIDSer,
-    AIInputSer
+    AIInputSer,
+    NotificatonSer
 
 
 
@@ -94,7 +95,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -161,6 +162,34 @@ class AdminTestsView(APIView):
         serializer = self.serializer_class(query,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class NotificationAPIViewSecond(APIView):
+    serializer_class = NotificatonSer
+    permission_classes = [IsAuthenticated]
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: NotificatonSer()}
+    )
+
+    def get(self, request):
+
+        profile = request.user.profile
+        today = localtime(now()).date()
+        notifications = Notification.objects.filter(profile=profile,created_at=today)
+
+        serializer = self.serializer_class(notifications, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_201_CREATED: NotificatonSer()}
+    )
+    def post(self, request):
+        profile = request.user.profile
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            serializer.save(profile=profile)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class AdminTestDetailAPIView(APIView):
     serializer_class = AdminTestByIDSer
 

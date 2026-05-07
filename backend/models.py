@@ -115,8 +115,16 @@ class Question(models.Model):
         return self.text
 
 
+class Notification(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='notification', verbose_name="Профиль"
+    )
+    notification_name = models.CharField(max_length=255)
+    created_at = models.DateField(auto_now_add=True)
+    check_is = models.BooleanField(default=False)
 
-
+    def __str__(self):
+        return self.profile.name
 class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
     text = models.CharField(max_length=255, verbose_name="Вариант ответа")
