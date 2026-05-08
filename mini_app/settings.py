@@ -21,7 +21,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://testapi.medavatar.xyz",
     "https://medavatar-dev.vercel.app",
     "https://092b-5-133-120-92.ngrok-free.app",
-    "https://medavatar-wk2a.vercel.app"
+    "https://medavatar-wk2a.vercel.app",
+    "https://medavatar-brt8.vercel.app"
 ]
 
 
