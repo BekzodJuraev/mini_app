@@ -1,15 +1,13 @@
 (function() {
     'use strict';
 
+    // Сразу проверяем работоспособность
+    alert("JS Loaded!");
+
     function initToggle() {
         var $ = django.jQuery;
 
-        // --- 1. СКРЫТИЕ ПОЛЯ ЖИВОТНЫХ ПРИ ЗАГРУЗКЕ ---
-        // Добавляем стиль в head документа, чтобы скрыть поле мгновенно
-        var style = document.createElement('style');
-        style.innerHTML = '.field-which_animal { display: none; }';
-        document.head.appendChild(style);
-
+        // --- 1. ЛОГИКА СКРЫТИЯ ЖИВОТНЫХ ---
         function toggleAnimalField() {
             var $roleSelect = $('select[name="role"]');
             var $animalRow = $('.field-which_animal');
@@ -21,33 +19,31 @@
             }
         }
 
-        // Слушаем изменение роли
-        $(document).on('change', 'select[name="role"]', function() {
-            toggleAnimalField();
-        });
-
-        // Сразу проверяем состояние (если страница открыта на редактирование животного)
+        $(document).on('change', 'select[name="role"]', toggleAnimalField);
         toggleAnimalField();
 
-        // --- 2. ЛОГИКА ТИПОВ ВОПРОСОВ (Твой код) ---
+        // --- 2. ЛОГИКА ТИПОВ ВОПРОСОВ ---
         function fillChoices(selectedValue, $choicesGroup) {
-            var $rows = $choicesGroup.find('.djn-inline-form');
+            // Твое условие: если radio, ничего не заполняем автоматически
+            if (selectedValue === 'radio') {
+                return;
+            }
 
+            var $rows = $choicesGroup.find('.djn-inline-form');
             function setRow(index, text, points) {
                 var $row = $rows.eq(index);
                 if ($row.length) {
-                    var $textInput = $row.find('input[name*="-text"]');
-                    var $pointsInput = $row.find('input[name*="-points"]');
-
-                    $textInput.val(text);
-                    $pointsInput.val(points);
-
-                    $textInput.css('background-color', '#fff9c4');
-                    setTimeout(function() { $textInput.css('background-color', ''); }, 500);
+                    $row.find('input[name*="-text"]').val(text);
+                    $row.find('input[name*="-points"]').val(points);
                 }
             }
 
-
+            // Пример для других типов (если нужно)
+            if (selectedValue === 'boolean') {
+                setRow(0, "Да", 10);
+                setRow(1, "Нет", 0);
+            }
+        }
 
         function toggleChoices(selectElement, isManualChange) {
             var $el = $(selectElement);
@@ -56,8 +52,6 @@
             var $choicesGroup = $questionContainer.find('.djn-group').filter(function() {
                 return $(this).attr('id') && $(this).attr('id').includes('choices');
             });
-
-            if (!$choicesGroup.length) return;
 
             if (selectedValue === 'text') {
                 $choicesGroup.hide();
@@ -74,23 +68,15 @@
             toggleChoices(this, true);
         });
 
-        setTimeout(function() {
-            $('select[name*="question_type"]').each(function() {
-                toggleChoices(this, false);
-            });
-        }, 300);
-
-        $(document).on('djnesting:init', function(e, $inline) {
-            if ($inline && $inline.length) {
-                $inline.find('select[name*="question_type"]').each(function() {
-                    toggleChoices(this, true);
-                });
-            }
+        // Инициализация существующих полей
+        $('select[name*="question_type"]').each(function() {
+            toggleChoices(this, false);
         });
     }
 
+    // Ждем загрузку jQuery от Django
     var checkInterval = setInterval(function() {
-        if (typeof django !== 'undefined' && django.jQuery) {
+        if (window.django && django.jQuery) {
             clearInterval(checkInterval);
             initToggle();
         }
