@@ -1,4 +1,5 @@
 /*global URLify*/
+
 'use strict';
 {
     const $ = django.jQuery;
