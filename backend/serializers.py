@@ -332,7 +332,7 @@ class RelationshipBabySer(serializers.ModelSerializer):
     hereditary_diseases = serializers.CharField(required=False, allow_blank=True)  # Наследственные заболевания
 
     photo = serializers.ImageField(required=False)
-    place_of_residence = serializers.CharField(required=False)
+
 
 
 
@@ -341,7 +341,7 @@ class RelationshipBabySer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['who_is','name','gender','place_of_residence','date_birth','photo','height','weight','blood_group','rh_factor','gestation_period','birth_features'
+        fields=['who_is','name','gender','date_birth','photo','height','weight','blood_group','rh_factor','gestation_period','birth_features'
                 ,'chronic_diseases','allergies','operations','hereditary_diseases']
 
 
@@ -383,7 +383,7 @@ class RelationshipBabySer(serializers.ModelSerializer):
             user.profile.save(update_fields=['health_system'])
 
         user = User.objects.create_user(username=str(uuid.uuid4()))
-        profile = Profile.objects.create(username=user, family=profile, **validated_data)
+        profile = Profile.objects.create(username=user, family=profile,place_of_residence=profile.place_of_residence, **validated_data)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
