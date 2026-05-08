@@ -15,7 +15,7 @@ class QuestionInline(nested_admin.NestedStackedInline): # Вложенные в�
 
 @admin.register(Test)
 class TestAdmin(nested_admin.NestedModelAdmin):
-    list_display = ('title', 'role', 'which_animal', 'subsection', 'get_system','example_answer')
+    list_display = ('title', 'role', 'which_animal', 'get_system', 'subsection','example_answer')
     list_filter = ('role', 'system', 'which_animal')
     search_fields = ('title',)
     inlines = [QuestionInline]

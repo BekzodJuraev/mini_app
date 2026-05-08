@@ -62,7 +62,7 @@ class Test(models.Model):
         choices=ANIMAL_CHOICES,
         blank=True,
         null=True,
-        verbose_name="Какое животное"
+        verbose_name="Вид животного"
     )
 
     system = models.CharField(
@@ -77,7 +77,7 @@ class Test(models.Model):
         choices=SUBSECTION_CHOICES,
         blank=True,
         null=True,
-        verbose_name="Подраздел (необязательно)"
+        verbose_name="Подсистема"
     )
 
     title = models.CharField(max_length=255, verbose_name="Название")

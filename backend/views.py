@@ -1945,6 +1945,13 @@ class CaloriesEdit(APIView):
         serializer = self.serializer_class(cal)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        # request_body определяет, что мы ЖДЕМ от пользователя (detail тут исчезнет)
+        request_body=EditCaloriesSer(),
+        # responses определяет, что мы ОТДАДИМ (тут detail будет виден)
+        responses={status.HTTP_200_OK: EditCaloriesSer()}
+    )
+
     def post(self, request):
         profile = request.user.profile
         # Берем последнюю запись (обычно ту, что сейчас на экране)
