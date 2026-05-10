@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -65,7 +65,7 @@ class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     city = serializers.CharField(source='pet.profile.place_of_residence')
     class Meta:
         model=Pet_Drugs
-        fields=['telegram_id','catigories','name','time_day','day','intake','notification','city']
+        fields=['telegram_id','catigories','name','time_day','day','intake','city']
 class PublicNotificationDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='profile.username.username')
     city = serializers.CharField(source='profile.place_of_residence')
@@ -641,19 +641,39 @@ class Notification_drugs_Ser(serializers.ModelSerializer):
         model=Notification_drugs
         fields=['time']
 
+class Notification_drugs_pet_Ser(serializers.ModelSerializer):
+    class Meta:
+        model=Notification_Pet_drugs
+        fields=['time']
 
 class PetDrugSer(serializers.ModelSerializer):
     class Meta:
         model=Pet_Drugs
-        fields=['catigories','name','time_day','day','intake','notification']
+        fields=['catigories','name','time_day','day','intake']
 
 
 class GetPetDrugSer(serializers.ModelSerializer):
-    end_day=serializers.DateField()
-    status=serializers.BooleanField()
+    #end_day=serializers.DateField()
+    #status=serializers.BooleanField()
+    notification = serializers.SerializerMethodField()
     class Meta:
         model=Pet_Drugs
-        fields=['id','name','time_day','day','intake','notification','created_at','end_day','status']
+        fields=['id','name','time_day','day','intake','created_at','notification']
+
+    def get_notification(self, obj):
+        # Достаем все уведомления, которые мы получили через prefetch_related
+        # Используем .all(), чтобы Django не шел снова в базу
+        notifications = obj.notifications_pet_drugs.all()
+
+        return [
+            {
+                "id": n.id,
+                "time": n.time,
+                # Проверяем, есть ли чек на сегодня (он уже в памяти благодаря Prefetch)
+                "is_taken": n.checks.exists()
+            }
+            for n in notifications
+        ]
 class GetDrugSer(serializers.ModelSerializer):
     #end_day=serializers.DateField()
     #status=serializers.BooleanField()
@@ -661,6 +681,8 @@ class GetDrugSer(serializers.ModelSerializer):
     class Meta:
         model=Drugs
         fields=['id','name','time_day','day','intake','created_at','notification']
+
+
 
     def get_notification(self, obj):
         # Достаем все уведомления, которые мы получили через prefetch_related
@@ -681,6 +703,12 @@ class GetDrugSer(serializers.ModelSerializer):
 class DrugUpdateSer(serializers.ModelSerializer):
     class Meta:
         model = Drugs
+        # Перечисляем поля, которые можно менять
+        fields = ['catigories', 'name', 'time_day', 'day', 'intake']
+
+class DrugUpdatePetSer(serializers.ModelSerializer):
+    class Meta:
+        model = Pet_Drugs
         # Перечисляем поля, которые можно менять
         fields = ['catigories', 'name', 'time_day', 'day', 'intake']
 

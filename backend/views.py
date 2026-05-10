@@ -78,7 +78,9 @@ from .serializers import (
     AIInputSer,
     NotificatonSer,
     NutritionGoalPetSerializer,
-    EditCaloriesPetSer
+    EditCaloriesPetSer,
+    Notification_drugs_pet_Ser,
+    DrugUpdatePetSer
 
 
 
@@ -97,7 +99,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -996,9 +998,12 @@ class PetDrugsAPiView(APIView):
         serializer = self.serializer_class(data=request.data)
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         if serializer.is_valid():
-            serializer.save(pet_id=message_id)
+            drug_instance=serializer.save(pet_id=message_id)
 
-            return Response({'message':'Saved drug'}, status=status.HTTP_200_OK)
+            return Response({
+                'message': 'Saved drug',
+                'id': drug_instance.id  # Фронтенд возьмет этот ID для создания уведомлений
+            }, status=status.HTTP_201_CREATED)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1052,15 +1057,17 @@ class PetDrugsAPIListView(APIView):
     def get(self,request,message_id):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         today = localtime(now()).date()
-        query = Pet_Drugs.objects.filter(pet_id=message_id).annotate(end_day=ExpressionWrapper(F('created_at') + F('interval'), output_field=DateField()), status=Exists(
-                Pet_Check_Drugs.objects.filter(
-                    drugs=OuterRef('pk'),
-                    created_at=today
-                    # Matches each category with its related Quests
+        query = Pet_Drugs.objects.filter(pet=pet).prefetch_related(
+            Prefetch(
+                'notifications_pet_drugs',  # Убедись, что в модели Drugs это имя в related_name
+                queryset=Notification_Pet_drugs.objects.prefetch_related(
+                    Prefetch('checks', queryset=Pet_Check_Drugs.objects.filter(date=today))
                 )
-            ))
+            )
+        )
         serializer = self.serializer_class(query, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 class Notification_create(APIView):
@@ -1086,7 +1093,30 @@ class Notification_create(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class Notification_Pet_create(APIView):
+    permission_classes = [IsAuthenticated]
 
+    # Используем many=True в схеме, так как ожидаем список времен
+    @swagger_auto_schema(
+        request_body=Notification_drugs_Ser(many=True),
+        responses={status.HTTP_201_CREATED: Notification_drugs_Ser(many=True)}
+    )
+    def post(self, request, message_id,drug_id):  # переименовал message_id в drug_id для ясности
+        profile = request.user.profile
+        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+
+        # Проверяем, что лекарство принадлежит именно этому профилю
+        drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
+
+        # Передаем данные в сериализатор. many=True позволяет принять список [{}, {}]
+        serializer = Notification_drugs_pet_Ser(data=request.data, many=True)
+
+        if serializer.is_valid():
+            # При сохранении передаем drug, чтобы связать уведомления с объектом
+            serializer.save(drugs=drug)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MonthlyStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1292,6 +1322,48 @@ class Notification_Detail(APIView):
             {"message": f"Deleted {pk} "},
             status=status.HTTP_200_OK
         )
+    
+class Notification_Pet_Detail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        request_body=Notification_drugs_pet_Ser()
+    )
+    def patch(self, request, message_id, pk):
+        """Изменение конкретного уведомления по его ID"""
+        profile = request.user.profile
+        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+
+        notification = get_object_or_404(
+            Notification_Pet_drugs,
+            id=pk,
+            drugs__pet=pet
+        )
+
+        # Передаем объект в сериализатор для частичного обновления
+        serializer = Notification_drugs_pet_Ser(notification, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, message_id, pk):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, profile=profile, id=message_id)
+        notification = get_object_or_404(
+            Notification_Pet_drugs,
+            id=pk,
+            drugs__pet=pet
+        )
+
+        notification.delete()
+
+        return Response(
+            {"message": f"Deleted {pk} "},
+            status=status.HTTP_200_OK
+        )
 # class DrugsAPIListView(APIView):
 #     permission_classes = [IsAuthenticated]
 #     serializer_class = GetDrugSer
@@ -1367,6 +1439,39 @@ class DrugEditView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DrugEditPetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(request_body=DrugUpdatePetSer)
+    def patch(self, request, message_id, drug_id):
+        profile = request.user.profile
+        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        # Ищем лекарство именно этого пользователя
+        drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
+
+        # partial=True позволяет обновлять только часть полей
+        serializer = DrugUpdatePetSer(drug, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Данные лекарства обновлены",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Если нужен полный апдейт (PUT)
+    def put(self, request, message_id, drug_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, profile=profile, id=message_id)
+        drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
+        serializer = DrugUpdateSer(drug, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class DeletePetDrugsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1374,32 +1479,34 @@ class DeletePetDrugsView(APIView):
         item = get_object_or_404(Pet_Drugs, pk=pk,pet__profile=request.user.profile)
         item.delete()
         return Response({'message':'Drug deleted'}, status=status.HTTP_200_OK)
+
+
+
+
+
 class PetDrugCheckbyDayView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = DrugById
 
-    @swagger_auto_schema(
-        responses={status.HTTP_200_OK: DrugById()}
-    )
-    def post(self,request,message_id):
+
+
+    def post(self,request,message_id,notification_id):
+        today = localtime(now()).date()
+        profile = request.user.profile
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid():
-            today = localtime(now()).date()
-            profile = request.user.profile
-            try:
-                Pet_Check_Drugs.objects.get_or_create(
-                    drugs_id=serializer.validated_data['id'],
-                    created_at=today,
-                )
-                return Response({'message': 'Daily check saved'}, status=200)
-            except:
+        get_object_or_404(Notification_Pet_drugs,drugs__pet=pet)
+        try:
+            Pet_Check_Drugs.objects.get_or_create(
+                notification_id=notification_id,
+                date=today,
+            )
+            return Response({'message': 'Notification drug is checked'}, status=200)
+        except:
 
-                return Response({'message': 'Not Found'}, status=404)
-
-
+            return Response({'message': 'Not Found'}, status=404)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class DrugCheckbyDayView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1420,6 +1527,9 @@ class DrugCheckbyDayView(APIView):
             return Response({'message': 'Not Found'}, status=404)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 
 
 
