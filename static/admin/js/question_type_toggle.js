@@ -2,7 +2,6 @@
     'use strict';
 
     // Сразу проверяем работоспособность
-    alert("JS Loaded!");
 
     function initToggle() {
         var $ = django.jQuery;

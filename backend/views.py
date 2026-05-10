@@ -76,7 +76,8 @@ from .serializers import (
     AdminTestsSer,
     AdminTestByIDSer,
     AIInputSer,
-    NotificatonSer
+    NotificatonSer,
+    NutritionGoalPetSerializer
 
 
 
@@ -95,7 +96,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -862,28 +863,36 @@ class HabitView(APIView):
 class Tracking_checkView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = TrackingSer
+
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: TrackingSer()}
     )
-    def post(self,request):
+    def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            today = localtime(now()).date()
+            target_date = serializer.validated_data.get('date')
+
 
             profile = request.user.profile
             habit = Habit.objects.filter(name_habit=serializer.validated_data['habit']).first()
+
             if habit:
-                Tracking_Habit.objects.get_or_create(
+                # Добавляем дату в фильтр создания
+                obj, created = Tracking_Habit.objects.get_or_create(
                     profile=profile,
                     habit=habit,
-                    created_at=today,
+                    created_at=target_date,
                     defaults={'check_is': serializer.validated_data['check_is']}
                 )
-                return Response({'message': 'Tracking habit created or already exists'}, status=200)
-            else:
-                return Response({'message': 'Habit not found'}, status=404)
-        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+                if created:
+                    return Response({'message': 'Tracking habit created'}, status=201)
+                else:
+                    return Response({'message': 'Already marked for this date'}, status=200)
+
+            return Response({'message': 'Habit not found'}, status=404)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GetTrackingView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2032,6 +2041,64 @@ class NutritionGoalView(APIView):
         """Для частичного обновления (например, только калории)"""
         profile = request.user.profile
         goal = get_object_or_404(NutritionGoal, profile=profile)
+        serializer = self.serializer_class(goal, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class NutritionGoalPETView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NutritionGoalPetSerializer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: NutritionGoalPetSerializer()}
+    )
+
+    def get(self, request,message_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        goal = NutritionGoalPet.objects.filter(pet=pet).first()
+        if not goal:
+            return Response({
+                "calories": 0, "proteins": 0, "fats": 0, "carbs": 0, "fiber": 0,"vitamin":0,"mineral":0
+            }, status=status.HTTP_200_OK)
+
+        serializer = self.serializer_class(goal)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(request_body=NutritionGoalPetSerializer)
+    def post(self, request,message_id):
+        """
+        Создание или полное обновление целей питания.
+        Работает для кнопки 'Подтвердить цель'.
+        """
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+
+        # update_or_create ищет запись по profile,
+        # если находит — обновляет поля из defaults, если нет — создает.
+        goal, created = NutritionGoalPet.objects.update_or_create(
+            pet=pet,
+            defaults={
+                'calories': request.data.get('calories', 0),
+                'proteins': request.data.get('proteins', 0),
+                'fats': request.data.get('fats', 0),
+                'carbs': request.data.get('carbs', 0),
+                'fiber': request.data.get('fiber', 0),
+                'vitamin': request.data.get('vitamin', 0),
+                'mineral': request.data.get('mineral', 0),
+            }
+        )
+
+        serializer = self.serializer_class(goal)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def patch(self, request,message_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+
+        goal = get_object_or_404(NutritionGoalPet, pet=pet)
         serializer = self.serializer_class(goal, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()

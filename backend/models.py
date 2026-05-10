@@ -34,9 +34,11 @@ class Test(models.Model):
     ANIMAL_CHOICES = [
         ('cat', 'Кошка'),
         ('dog', 'Собака'),
-        ('cow', 'Корова'),
-        ('horse', 'Лошадь'),
-        ('other', 'Другое'),
+        ('rat', 'Крыса'),
+        ('mouse', 'Мышь'),
+        ('svinka', 'Морск.свинка'),
+        ('xomyak', 'Хомяк'),
+        ('shinshila', 'Шиншилла'),
     ]
 
 
@@ -202,7 +204,7 @@ class Tracking_Habit(models.Model):
         'Profile', on_delete=models.CASCADE, related_name='tracking', verbose_name="Профиль"
     )
     habit=models.ForeignKey('Habit',on_delete=models.CASCADE, related_name='habit_tracking')
-    created_at=models.DateField(auto_now_add=True)
+    created_at=models.DateField()
     check_is=models.BooleanField(null=True, default=None)
 
 
@@ -397,6 +399,22 @@ class Pet(models.Model):
         return self.profile.name
 
 
+class NutritionGoalPet(models.Model):
+    pet = models.OneToOneField(
+        'Pet', on_delete=models.CASCADE, related_name='nutrition_goal_pet'
+    )
+    calories = models.PositiveIntegerField(default=0)
+    proteins = models.PositiveIntegerField(default=0)
+    fats = models.PositiveIntegerField(default=0)
+    carbs = models.PositiveIntegerField(default=0)
+    fiber = models.PositiveIntegerField(default=0)
+    vitamin=models.PositiveIntegerField(default=0)
+    mineral=models.PositiveIntegerField(default=0)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Цели для {self.pet}"
 class NutritionGoal(models.Model):
     profile = models.OneToOneField(
         'Profile', on_delete=models.CASCADE, related_name='nutrition_goal'
