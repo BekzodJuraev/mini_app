@@ -11,11 +11,7 @@
             var $roleSelect = $('select[name="role"]');
             var $animalRow = $('.field-which_animal');
 
-            if ($roleSelect.val() === 'animal') {
-                $animalRow.show();
-            } else {
-                $animalRow.hide();
-            }
+
         }
 
         $(document).on('change', 'select[name="role"]', toggleAnimalField);
