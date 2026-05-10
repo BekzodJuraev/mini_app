@@ -28,19 +28,33 @@ urlpatterns=[
  path('api/notification/message/<int:message_id>',views.MessageView.as_view(),name='message'),
  path('api/notification/second',views.NotificationAPIViewSecond.as_view()),
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
+
  path('api/habit/add',views.HabitView.as_view(), name='habit_add'),
  path('api/habit/tracking',views.Tracking_checkView.as_view(),name='tracking'),
  path('api/habit/list',views.GetTrackingView.as_view(),name='habit_get'),
  path('api/habit/get',views.GetTrackingCount.as_view(),name='habit_count'),
+ path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
+
+
+
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
+
  path('api/drugs/create',views.DrugsAPiView.as_view(),name='drugs_create'),
  path('api/drugs/list',views.DrugsAPIListView.as_view(),name='drugs_list'),
  path('api/drugs/edit/<int:drug_id>', views.DrugEditView.as_view()),
  path('api/drugs/check/<int:notification_id>',views.DrugCheckbyDayView.as_view(),name='drugs_check'),
  path('api/drugs/notification_create/<int:drug_id>',views.Notification_create.as_view(),name='drugs_notificaton_create'),
  path('api/drugs/notifications/<int:pk>', views.Notification_Detail.as_view()),
+
+ path('api/pet/drugs/create/<int:message_id>', views.PetDrugsAPiView.as_view(), name='create_drugs'), #done
+ path('api/pet/drugs/list/<int:message_id>', views.PetDrugsAPIListView.as_view(), name='list_drugs'), #done
+ path('api/pet/drugs/edit/<int:message_id>/<int:drug_id>', views.DrugEditPetView.as_view()),#done
+ path('api/pet/drugs/check/<int:message_id>/<int:notification_id>', views.PetDrugCheckbyDayView.as_view(), name='check'), #done
+ path('api/pet/drugs/notification_create/<int:message_id>/<int:drug_id>', views.Notification_Pet_create.as_view(),
+      name='drugs_notificaton_create'), #done
+ path('api/pet/drugs/notifications/<int:message_id>/<int:pk>', views.Notification_Pet_Detail.as_view()),
  path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
  path('api/rentgen',views.RentgenView.as_view(),name='rentgen'),
@@ -55,9 +69,9 @@ urlpatterns=[
  path('api/pet/grizun/forma/<int:message_id>',views.PetGrizunFormaView.as_view(),name='forma'),
  path('api/pet/grizun/apetit/<int:message_id>',views.PetGrizunApetitView.as_view(),name='apetit'),
  path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
- path('api/pet/drugs/create/<int:message_id>',views.PetDrugsAPiView.as_view(),name='create_drugs'),
- path('api/pet/drugs/list/<int:message_id>',views.PetDrugsAPIListView.as_view(),name='list_drugs'),
- path('api/pet/drugs/check/<int:message_id>',views.PetDrugCheckbyDayView.as_view(),name='check'),
+
+
+
  path('api/calories',views.CaroiesView.as_view(),name='calories'),
  path('api/calories/<int:id>', views.CaroiesView.as_view()),
  path('api/calories/list',views.CaroiesListView.as_view(),name='calories_list'),
@@ -70,13 +84,13 @@ urlpatterns=[
  path('api/pet/calories/list/<int:message_id>',views.PetCaroiesListView.as_view(),name='calories_list_pet'),
  path('api/pet/calories/chat/<int:message_id>',views.PetCaloriesChatView.as_view(),name='calories_chat_pet'),
  path('api/public/',views.PublicNotifcationView.as_view(),name='public_notification'),
+
  path('api/public/drugs',views.PublicNotificationDrugView.as_view(),name='drug_notication'),
  path('api/public/pet/drugs',views.PublicNotificationPetDrugView.as_view(),name='drug_notication'),
 
  path('api/drugs/delete/<int:pk>',views.DeleteDrugsView.as_view(),name='delete_drugs'),
  path('api/pet/drugs/delete/<int:pk>', views.DeletePetDrugsView.as_view(), name='delete_pet_drugs'),
 
- path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
  path('api/calories/edit',views.CaloriesEdit.as_view(),name='edit_caloires'),
  path('api/nutrition', views.NutritionGoalView.as_view(), name='nutrition-goal'),
  path('api/admin/list',views.AdminTestsView.as_view(),name="admin_test"),

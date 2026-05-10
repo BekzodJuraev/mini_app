@@ -279,10 +279,19 @@ class Pet_Drugs(models.Model):
 
 
 class Pet_Check_Drugs(models.Model):
-    drugs=models.ForeignKey(
-        'Pet_Drugs', on_delete=models.CASCADE, related_name='pet_drugs_check', verbose_name="Drugs"
-    )
     created_at=models.DateField(auto_now_add=True)
+    notification = models.ForeignKey(
+        Notification_Pet_drugs, on_delete=models.CASCADE, related_name='checks'
+    )
+
+    date = models.DateField(auto_now_add=True,null=True)
+    is_taken = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('notification', 'date')
+
+    def __str__(self):
+        return f"{self.notification} taken on {self.date}"
 
 class Notification_drugs(models.Model):
     # Specific time of day to take the drug
