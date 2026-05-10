@@ -252,6 +252,15 @@ class Chat(models.Model):
     def __str__(self):
         return self.profile.name
 
+class Notification_Pet_drugs(models.Model):
+    # Specific time of day to take the drug
+    time = models.CharField(max_length=255)
+    drugs = models.ForeignKey(
+        "Pet_Drugs", on_delete=models.CASCADE, related_name="notifications_pet_drugs"
+    )
+
+    def __str__(self):
+        return f"{self.drugs.name} at {self.time}"
 class Pet_Drugs(models.Model):
     pet = models.ForeignKey(
         "Pet", on_delete=models.CASCADE, related_name='pet_drugs', verbose_name="Питомец"
@@ -262,7 +271,6 @@ class Pet_Drugs(models.Model):
     day = models.IntegerField()
     intake = models.CharField(max_length=200)
     interval = models.DurationField(null=True, blank=True)
-    notification = models.JSONField()
     created_at = models.DateField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -452,7 +460,8 @@ class PetCalories(models.Model):
     detail=models.JSONField(null=True, default=None)
     total=models.JSONField(null=True, default=None)
     images = models.ImageField(upload_to='calories/', default=None,null=True)
-    answer = models.TextField(null=True, default=None)
+    saved = models.BooleanField(default=False)
+
 
 
     def __str__(self):
