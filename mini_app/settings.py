@@ -164,7 +164,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://medavatar.vercel.app",
     "https://medavatar-dev.vercel.app",
     "https://medavatar-v2-dev.vercel.app",
-    "https://medavatar-wk2a.vercel.app"
+    "https://medavatar-wk2a.vercel.app",
+    "https://medavatar-brt8.vercel.app"
 
 ]
 

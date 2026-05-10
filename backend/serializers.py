@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -467,7 +467,11 @@ class NutritionGoalSerializer(serializers.ModelSerializer):
 
         fields = ['calories', 'proteins', 'fats', 'carbs', 'fiber']
 
+class NutritionGoalPetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NutritionGoalPet
 
+        fields = ['calories', 'proteins', 'fats', 'carbs', 'fiber','vitamin','mineral']
 
 class ChatSer(serializers.Serializer):
     message=serializers.CharField()
@@ -584,6 +588,7 @@ class HabitSer(serializers.ModelSerializer):
 class TrackingSer(serializers.Serializer):
     habit=serializers.CharField()
     check_is=serializers.BooleanField()
+    date = serializers.DateField()
 
 
 class GetHabitSer(serializers.ModelSerializer):

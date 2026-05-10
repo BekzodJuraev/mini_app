@@ -1,17 +1,23 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet
 import nested_admin
+
+@admin.register(NutritionGoalPet)
+class NutritionGoalPetadmin(admin.ModelAdmin):
+    pass
 @admin.register(Notification)
 class Notification(admin.ModelAdmin):
     pass
-class ChoiceInline(nested_admin.NestedTabularInline): # Вложенные ответы
+class ChoiceInline(nested_admin.NestedTabularInline):
     model = Choice
-    extra = 3
+    extra = 0  # Было 3, теперь пустых полей по умолчанию не будет
+    # Если нужно, чтобы хотя бы один ответ был всегда:
+    min_num = 1
 
-class QuestionInline(nested_admin.NestedStackedInline): # Вложенные вопросы
+class QuestionInline(nested_admin.NestedStackedInline):
     model = Question
-    extra = 1
-    inlines = [ChoiceInline] #
+    extra = 0  # Было 1
+    inlines = [ChoiceInline]
 
 @admin.register(Test)
 class TestAdmin(nested_admin.NestedModelAdmin):
