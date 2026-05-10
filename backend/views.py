@@ -77,7 +77,8 @@ from .serializers import (
     AdminTestByIDSer,
     AIInputSer,
     NotificatonSer,
-    NutritionGoalPetSerializer
+    NutritionGoalPetSerializer,
+    EditCaloriesPetSer
 
 
 
@@ -100,7 +101,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -1165,6 +1166,91 @@ class MonthlyStatisticsView(APIView):
             "daily_details": daily_details,  # Объект, где ключи - даты
             "marked_days": list(daily_details.keys())  # Список дат с данными
         }, status=status.HTTP_200_OK)
+class MonthlyStatisticsPetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request,message_id):
+        profile = request.user.profile
+        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        today = localtime(now()).date()
+
+
+        # 1. Параметры месяца (можно передавать через ?month=12&year=2025)
+        year = int(request.query_params.get('year', today.year))
+        month = int(request.query_params.get('month', today.month))
+
+        start_of_month = today.replace(year=year, month=month, day=1)
+        last_day = calendar.monthrange(year, month)[1]
+        end_of_month = today.replace(year=year, month=month, day=last_day)
+
+        # 2. Цели пользователя
+        goal = getattr(pet, 'nutrition_goal_pet', None)
+        if not goal or goal.calories == 0:
+            return Response({"error": "Цель не установлена"}, status=200)
+
+        # 3. Выборка данных
+        queryset = PetCalories.objects.filter(
+            pet=pet,
+            created_at__range=[start_of_month, end_of_month],
+            saved=True
+        ).values('created_at', 'total')
+
+        # 4. Группировка всех нутриентов по дням
+        # Используем лямбда-функцию, чтобы структура БЖУ создавалась для каждого нового дня
+        daily_data = defaultdict(lambda: {
+            "calories": 0.0, "belok": 0.0, "jir": 0.0, "uglevod": 0.0, "klechatka": 0.0,"vitamin":0.0,"mineral":0.0
+        })
+
+        for entry in queryset:
+            day = entry['created_at']
+            t = entry['total'] or {}
+
+            daily_data[day]["calories"] += float(t.get('ккал', 0))
+            daily_data[day]["belok"] += float(t.get('белок', 0))
+            daily_data[day]["jir"] += float(t.get('жир', 0))
+            daily_data[day]["uglevod"] += float(t.get('углеводы', 0))
+            daily_data[day]["klechatka"] += float(t.get('клетчатка', 0))
+            daily_data[day]["vitamin"] += float(t.get('витамины', 0))
+            daily_data[day]["mineral"] += float(t.get('минералы', 0))
+
+        # 5. Формируем детальный ответ по дням и считаем общий средний %
+        total_monthly_percent = 0
+        daily_details = {}
+
+        for day, stats in daily_data.items():
+            # Процент выполнения за конкретный день
+            raw_percent = (stats["calories"] / goal.calories) * 100
+            day_percent = min(round(raw_percent, 1), 100.0)
+
+            # Сохраняем детали дня (для нижней части изображение_5.png)
+            daily_details[day.strftime('%Y-%m-%d')] = {
+                "fact": stats,
+                "goal": {
+                    "calories": goal.calories,
+                    "belok": goal.proteins,
+                    "jir": goal.fats,
+                    "uglevod": goal.carbs,
+                    "klechatka": goal.fiber,
+                    "vitamin":goal.vitamin,
+                    "mineral":goal.mineral
+
+                },
+                "percentage": day_percent
+            }
+
+            # Для общего итога месяца суммируем, ограничивая 100% (как в ТЗ)
+            total_monthly_percent += min(day_percent, 100)
+
+        # Средний процент за месяц
+        days_tracked = len(daily_data)
+        average_monthly_percent = round(total_monthly_percent / days_tracked, 1) if days_tracked > 0 else 0
+
+        return Response({
+            "average_monthly_percent": average_monthly_percent,  # Для топ-бара
+            "monthly_label": start_of_month.strftime('%B %Y'),
+            "daily_details": daily_details,  # Объект, где ключи - даты
+            "marked_days": list(daily_details.keys())  # Список дат с данными
+        }, status=status.HTTP_200_OK)
 class Notification_Detail(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1995,7 +2081,64 @@ class CaloriesEdit(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class CaloriesPetEdit(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EditCaloriesPetSer
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: EditCaloriesPetSer()}
+    )
+
+
+    def get(self,request,message_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        cal = PetCalories.objects.filter(pet=pet,saved=True).last()
+        serializer = self.serializer_class(cal)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        # request_body определяет, что мы ЖДЕМ от пользователя (detail тут исчезнет)
+        request_body=EditCaloriesPetSer(),
+        # responses определяет, что мы ОТДАДИМ (тут detail будет виден)
+        responses={status.HTTP_200_OK: EditCaloriesPetSer()}
+    )
+
+    def post(self, request,message_id):
+        profile = request.user.profile
+        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        # Берем последнюю запись (обычно ту, что сейчас на экране)
+        cal = PetCalories.objects.filter(pet=pet).last()
+
+        if not cal:
+            return Response({'message': 'Record not found'}, status=404)
+
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            user_input = serializer.validated_data.get('message', '')
+
+            active_details = serializer.validated_data.get('current_details', cal.detail)
+
+
+            # Вызываем AI, передавая ему и текст, и текущую структуру
+            test = calories_pet_edit(user_input, cal.detail,active_details)
+
+            if test.get('detail'):
+                cal.detail = test.get('detail', [])
+                cal.total = test.get('total', {})
+
+
+                cal.save(update_fields=['detail', 'total'])
+
+                return Response({
+                    'message': test['message'],
+                    'detail': cal.detail,
+                    'total': cal.total
+                }, status=status.HTTP_200_OK)
+
+            return Response({'message': test.get('message', 'Error analyzing data')}, status=200)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class NutritionGoalView(APIView):
@@ -2129,39 +2272,75 @@ class PetCaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetGetCaloriesSer()}
     )
-    def get(self, request,message_id):
+    def get(self, request, message_id):
         profile = request.user.profile
+        # Проверяем, что питомец принадлежит именно этому пользователю
         pet = get_object_or_404(Pet, id=message_id, profile=profile)
         today = localtime(now()).date()
-        query = PetCalories.objects.filter(pet_id=message_id,created_at=today).values_list('total',flat=True)
-        calories = belok = jir = uglevod = klechatka = vitamin = mineral=0
-        if query:
-            for item in query:
-                calories+=item.get('ккал',0)
-                belok+=item.get('белок')
-                jir += item.get('жир',0)
-                uglevod+=item.get('углеводы',0)
-                klechatka+=item.get('клетчатка',0)
-                vitamin+=item.get('витамины',0)
-                mineral+=item.get('минералы',0)
 
+        # 1. Собираем данные о потребленных нутриентах
+        query = PetCalories.objects.filter(
+            pet_id=message_id,
+            created_at=today,
+            saved=True
+        ).values_list('total', flat=True)
 
+        calories = belok = jir = uglevod = klechatka = vitamin = mineral = 0
 
+        for item in query:
+            if item:
+                calories += item.get('ккал', 0)
+                belok += item.get('белок', 0)
+                jir += item.get('жир', 0)
+                uglevod += item.get('углеводы', 0)
+                klechatka += item.get('клетчатка', 0)
+                vitamin += item.get('витамины', 0)
+                mineral += item.get('минералы', 0)
 
-        dic={
-        "calories":calories,
-        "belok":belok,
-        "jir":jir,
-        "uglevod":uglevod,
-        "klechatka":klechatka,
-        "vitamin":vitamin,
-        "mineral":mineral
+        # 2. Получаем цели (нормы) для питомца
+        # Предположим, у модели Pet есть связь с NutritionGoal или поля внутри модели
+        # Если цели хранятся в связанной модели, например pet.nutrition_goal:
+        goal = getattr(pet, 'nutrition_goal_pet', None)
 
+        g_cal = goal.calories if goal else 0
+        g_belok = goal.proteins if goal else 0
+        g_jir = goal.fats if goal else 0
+        g_uglevod = goal.carbs if goal else 0
+        g_fiber = goal.fiber if goal else 0
+
+        # 3. Считаем общий процент выполнения по калориям
+        percentage = 0
+        if g_cal > 0:
+            percentage = min(int((calories / g_cal) * 100), 100)
+
+        # 4. Формируем словарь для сериализатора
+        data = {
+            "calories": round(calories, 1),
+            "goal_calories": g_cal,
+
+            "belok": round(belok, 1),
+            "goal_belok": g_belok,
+
+            "jir": round(jir, 1),
+            "goal_jir": g_jir,
+
+            "uglevod": round(uglevod, 1),
+            "goal_uglevod": g_uglevod,
+
+            "klechatka": round(klechatka, 1),
+            "goal_klechatka": g_fiber,
+
+            "vitamin": round(vitamin, 1),
+            "mineral": round(mineral, 1),
+
+            "percentage": percentage,
+            "has_goal": goal is not None
         }
 
-        serializer = PetGetCaloriesSer(dic)
+        # Если вы используете сериализатор, передайте данные в него
+        # Убедитесь, что в PetGetCaloriesSer описаны все эти поля
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(data, status=status.HTTP_200_OK)
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
@@ -2172,17 +2351,33 @@ class PetCaroiesView(APIView):
         if serializer.is_valid():
 
             test=pet_calories(serializer.validated_data['photo'])
-            if test.get('message')!="Пожалуйста, отправьте фото еды для расчёта калорийности.":
-                PetCalories.objects.create(pet_id=message_id, detail=test.get('detail', []), total=test.get('total', []),
-                                        images=serializer.validated_data['photo'], answer=test['message'])
+
+            if test.get('detail'):
+
+                pet_cal=PetCalories.objects.create(pet_id=message_id, detail=test.get('detail', []), total=test.get('total', []),
+                                        images=serializer.validated_data['photo'])
+                return Response(
+                    {'id': pet_cal.id,
+                     'detail': test['detail'],
+                     'total': test['total']}, status=status.HTTP_200_OK)
 
 
-
-            return Response({'message':test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+    def patch(self, request, message_id,id):
+        """
+        Метод для активации флага saved=True.
+        Передай id в URL: <id>/
+        """
+        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        # Ищем запись именно этого пользователя
+        cal_record = get_object_or_404(PetCalories, id=id, pet=pet)
 
+        cal_record.saved = True
+        cal_record.save()
+
+        return Response({'message': 'Calories saved successfully'}, status=status.HTTP_200_OK)
 class PetCaroiesListView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class=CaloriesListSer

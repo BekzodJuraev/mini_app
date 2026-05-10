@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -488,7 +488,17 @@ class EditCaloriesSer(serializers.ModelSerializer):
         fields = ['detail',  'message', 'current_details']
         read_only_fields = ['detail'] # Эти
 
+class EditCaloriesPetSer(serializers.ModelSerializer):
+    # Текстовая правка от пользователя (например: "добавь хлеб")
+    message = serializers.CharField(required=False, allow_blank=True)
+    # Текущий список блюд после ручных правок (удаление/изменение граммовки)
+    current_details = serializers.ListField(child=serializers.JSONField(), required=False)
 
+    class Meta:
+        model = PetCalories
+        # Оставляем только те поля, которые мы реально принимаем и отдаем
+        fields = ['detail',  'message', 'current_details']
+        read_only_fields = ['detail'] # Эти
 class CrashTestSer(serializers.Serializer):
     smoke_day=serializers.IntegerField()
     exp_smoke=serializers.IntegerField()

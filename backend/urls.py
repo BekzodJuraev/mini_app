@@ -66,17 +66,22 @@ urlpatterns=[
  path('api/pet/rentgen/<int:message_id>',views.PetRentgenView.as_view(),name='pet_rentgen'),
  path('api/pet/daily_check/<int:message_id>',views.PetDailyCheckView.as_view(),name='pet_daily'),
  path('api/pet/calories/<int:message_id>',views.PetCaroiesView.as_view(),name='calories_pet'),
+ path('api/pet/calories/<int:message_id>/<int:id>',views.PetCaroiesView.as_view(),name='calories_pet'),
  path('api/pet/calories/list/<int:message_id>',views.PetCaroiesListView.as_view(),name='calories_list_pet'),
  path('api/pet/calories/chat/<int:message_id>',views.PetCaloriesChatView.as_view(),name='calories_chat_pet'),
  path('api/public/',views.PublicNotifcationView.as_view(),name='public_notification'),
  path('api/public/drugs',views.PublicNotificationDrugView.as_view(),name='drug_notication'),
  path('api/public/pet/drugs',views.PublicNotificationPetDrugView.as_view(),name='drug_notication'),
+
  path('api/drugs/delete/<int:pk>',views.DeleteDrugsView.as_view(),name='delete_drugs'),
  path('api/pet/drugs/delete/<int:pk>', views.DeletePetDrugsView.as_view(), name='delete_pet_drugs'),
+
  path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
  path('api/calories/edit',views.CaloriesEdit.as_view(),name='edit_caloires'),
  path('api/nutrition', views.NutritionGoalView.as_view(), name='nutrition-goal'),
  path('api/admin/list',views.AdminTestsView.as_view(),name="admin_test"),
  path('api/admin/<int:pk>',views.AdminTestDetailAPIView.as_view(),name="admin_detail"),
- path('api/pet/nutrition/<int:message_id>', views.NutritionGoalPETView.as_view())
+ path('api/pet/nutrition/<int:message_id>', views.NutritionGoalPETView.as_view()),
+ path('api/pet/calories/edit/<int:message_id>',views.CaloriesPetEdit.as_view()),
+ path('api/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view())
 ]
