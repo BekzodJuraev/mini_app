@@ -24,8 +24,14 @@ urlpatterns=[
  path('api/hearthtest/kotova', views.HeartKotovaTestAPIView.as_view(), name='kotova'),
  path('api/hearthtest/martine', views.HeartMartineTestAPIView.as_view(), name='martine'),
  path('api/hearthtest/kuper', views.HeartKuperTestAPIView.as_view(), name='kuper'),
+
+
  path('api/notification',views.NotificationAPIView.as_view(),name='notification'),
  path('api/notification/message/<int:message_id>',views.MessageView.as_view(),name='message'),
+
+ path('api/pet/notification/<int:message_id>', views.NotificationPetAPIView.as_view(), name='notification'),
+ path('api/pet/notification/message/<int:message_id>/<int:test_id>', views.MessagePetView.as_view(), name='message'),
+
  path('api/notification/second',views.NotificationAPIViewSecond.as_view()),
  path('api/tests',views.QuestAPIView.as_view(),name='list'),
 
@@ -95,7 +101,8 @@ urlpatterns=[
  path('api/nutrition', views.NutritionGoalView.as_view(), name='nutrition-goal'),
  path('api/admin/list',views.AdminTestsView.as_view(),name="admin_test"),
  path('api/admin/<int:pk>',views.AdminTestDetailAPIView.as_view(),name="admin_detail"),
+ path('api/pet/admin/<int:pk>/<int:pet_id>',views.AdminTestDetailAPIView.as_view(),name="admin_detail"),
  path('api/pet/nutrition/<int:message_id>', views.NutritionGoalPETView.as_view()),
  path('api/pet/calories/edit/<int:message_id>',views.CaloriesPetEdit.as_view()),
- path('api/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view())
+ path('api/pet/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view())
 ]

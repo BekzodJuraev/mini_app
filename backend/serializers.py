@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -574,7 +574,10 @@ class NotificationSer(serializers.ModelSerializer):
     class Meta:
         model=Tests
         fields=['id','name','created_at','read',]
-
+class NotificationPEtSer(serializers.ModelSerializer):
+    class Meta:
+        model=Tests_Pet
+        fields=['id','name','created_at','read',]
 class QuestSer(serializers.ModelSerializer):
     status=serializers.BooleanField(default=0)
 
@@ -752,7 +755,7 @@ class PetSerCreate(serializers.Serializer):
     klichka=serializers.CharField()
     pet=serializers.CharField()
     poroda=serializers.CharField()
-    age=serializers.CharField()
+    age=serializers.DateField()
     disease=serializers.CharField()
     body=serializers.CharField()
     gender=serializers.CharField()
@@ -764,7 +767,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','health','photo']
+        fields=['id','klichka','pet','gender','age','health','photo']
 
     def get_health(self, obj):
         return [obj.health_system]

@@ -80,7 +80,8 @@ from .serializers import (
     NutritionGoalPetSerializer,
     EditCaloriesPetSer,
     Notification_drugs_pet_Ser,
-    DrugUpdatePetSer
+    DrugUpdatePetSer,
+    NotificationPEtSer
 
 
 
@@ -99,7 +100,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -216,11 +217,13 @@ class AdminTestDetailAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AIInputSer()}
     )
-    def post(self, request, pk):
+    def post(self, request, pk, pet_id=None):
         test = get_object_or_404(Test, pk=pk)
+
 
         # Валидируем только наличие поля 'answers' как JSON
         input_serializer = AIInputSer(data=request.data)
+
 
         if input_serializer.is_valid():
             # Собираем контекст из модели
@@ -245,10 +248,17 @@ class AdminTestDetailAPIView(APIView):
                     "answers": input_serializer.validated_data['answers']  # Весь JSONField от фронта
                 }
             }
-            test=testadmin(full_context_for_ai)
+            test_ai=testadmin(full_context_for_ai)
+            if test.role == "animal":
+                pet=get_object_or_404(Pet,id=pet_id,profile=request.user.profile)
+                Tests_Pet.objects.create(pet=pet, name=test.title, message=test_ai['summary'])
+            else:
+                Tests.objects.create(profile=request.user.profile, name=test.title, message=test_ai['summary'])
+
+
 
             # Отправляем этот "компот" в ИИ или возвращаем для проверки
-            return Response(test, status=status.HTTP_200_OK)
+            return Response(test_ai, status=status.HTTP_200_OK)
 
         return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class SetPasswordView(APIView):
@@ -810,6 +820,44 @@ class QuestAPIView(APIView):
         serializer = self.serializer_class(categories,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+
+
+
+
+class NotificationPetAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPEtSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: NotificationPEtSer(many=True)}
+    )
+    def get(self,request,message_id):
+        profile = request.user.profile
+        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        cat = Tests_Pet.objects.filter(pet=pet).order_by('-id')
+        filter = request.query_params.get('filter')
+
+        if filter:
+            cat=Tests_Pet.objects.filter(pet=pet,name__icontains=filter).order_by('-id')
+
+
+
+
+        serializer = self.serializer_class(cat,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class MessagePetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, message_id,test_id):
+        profile=request.user.profile
+        pet = get_object_or_404(Pet, profile=profile, id=message_id)
+        message = get_object_or_404(Tests_Pet, id=test_id, pet=pet)
+        if message.read == False:
+            message.read=True
+            message.save(update_fields=['read'])
+        return Response({'message': message.message},status=status.HTTP_200_OK)
 class NotificationAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = NotificationSer
@@ -907,7 +955,7 @@ class GetTrackingView(APIView):
 
     def get(self,request):
         profile=request.user.profile
-        tracking=Tracking_Habit.objects.filter(habit__profile=profile,check_is=True)
+        tracking=Tracking_Habit.objects.filter(habit__profile=profile)
         serializer = self.serializer_class(tracking,many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1727,7 +1775,7 @@ class PetView(APIView):
         if serializer.is_valid():
             profile = request.user.profile
             pet=Pet.objects.create(profile=profile,photo=serializer.validated_data.get('photo'),klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
-                                   gender=serializer.validated_data.get('gender'))
+                                   gender=serializer.validated_data.get('gender'),age=serializer.validated_data.get('age'))
 
             health_system = get_health_scale_pet(serializer.validated_data)
             pet.health_system = health_system

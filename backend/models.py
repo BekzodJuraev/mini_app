@@ -233,6 +233,15 @@ class Quest(models.Model):
         super().save(*args, **kwargs)
 
 
+
+class Tests_Pet(models.Model):
+    pet = models.ForeignKey(
+        'Pet', on_delete=models.CASCADE, related_name='tests_pet', verbose_name="Профиль"
+    )
+    name = models.CharField(max_length=200, db_index=True)
+    read = models.BooleanField(default=False)
+    message = models.TextField(null=True, default=None)
+    created_at = models.DateField(auto_now_add=True)
 class Tests(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
@@ -241,6 +250,7 @@ class Tests(models.Model):
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
     created_at = models.DateField(auto_now_add=True)
+
 class Chat(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='chat', verbose_name="Профиль"
@@ -407,6 +417,7 @@ class Pet(models.Model):
     )
     klichka=models.CharField(max_length=200)
     pet=models.CharField(max_length=200)
+    age = models.DateField(null=True, blank=True)
     photo = models.ImageField(blank=True, upload_to='pictures/')
     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
     health_system = models.JSONField(null=True, default=None)
