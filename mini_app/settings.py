@@ -53,9 +53,19 @@ INSTALLED_APPS = [
     'pytest_django',
     'drf_yasg',
     'corsheaders',
-    'nested_admin'
+    'nested_admin',
+    'django_q'
 
 ]
+
+Q_CLUSTER = {
+    'name': 'medavatar',
+    'workers': 4,          # Количество процессов (для SQLite лучше 1-2)
+    'timeout': 90,         # Сколько секунд ждать выполнения задачи
+    'retry': 120,          # Через сколько секунд переповторить, если задача зависла
+    'save_limit': 100,     # Сколько завершенных задач хранить в истории БД
+    'orm': 'default',      # Используем основную базу данных проекта
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
