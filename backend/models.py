@@ -9,7 +9,7 @@ from django.db import models
 # 1. Система здоровья (например, Пищеварительная)
 class Test(models.Model):
     ROLE_CHOICES = [
-        ('human', 'Человек'),
+        ('human', 'Взрослый'),
         ('baby', 'Ребенок'),
         ('animal', 'Животное'),
     ]
@@ -93,6 +93,12 @@ class Test(models.Model):
     class Meta:
         verbose_name = "Тест"
         verbose_name_plural = "Тесты"
+
+    def save(self, *args, **kwargs):
+        # Если роль не животное, сбрасываем вид животного в None
+        if self.role in ['human', 'baby']:
+            self.which_animal = None
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.title} ({self.system})"
