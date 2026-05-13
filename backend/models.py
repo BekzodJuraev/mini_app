@@ -168,6 +168,7 @@ class Profile(models.Model):
 
     who_is = models.CharField(max_length=150,null=True, blank=True, default=None)
     IK = models.FloatField(null=True,blank=True)
+    timezone = models.CharField(max_length=50, null=True,blank=True)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -467,7 +468,7 @@ class Calories(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='cal', verbose_name="Профиль"
     )
-    created_at=models.DateField(auto_now_add=True)
+    created_at=models.DateTimeField(auto_now_add=True)
     detail=models.JSONField(null=True, default=None)
     total=models.JSONField(null=True, default=None)
     images = models.ImageField(upload_to='calories/', default=None,null=True)

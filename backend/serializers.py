@@ -96,10 +96,11 @@ class PublicNotifcationSer(serializers.ModelSerializer):
         model=Habit
         fields=['telegram_id','city']
 class CaloriesChatSer(serializers.ModelSerializer):
+    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S")
 
     class Meta:
         model=Calories
-        fields=['id','images','detail','total','created_at']
+        fields=['id','images','detail','total','created_at','saved']
 
 class SetResetPasswordSer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True)
@@ -416,7 +417,7 @@ class ProfileUpdateSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone']
 
     def update(self, instance, validated_data):
 
