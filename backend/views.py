@@ -1992,10 +1992,9 @@ class CaroiesView(APIView):
         # Получаем все JSON-поля 'total' за сегодня, которые были сохранены
         query = Calories.objects.filter(
             profile=profile,
-            created_at=today,
+            created_at__date=today,
             saved=True
         ).values_list('total', flat=True)
-
 
         calories = belok = jir = uglevod = klechatka = 0
 

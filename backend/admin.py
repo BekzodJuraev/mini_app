@@ -96,7 +96,7 @@ class PetChat(admin.ModelAdmin):
 
 @admin.register(Calories)
 class Calories(admin.ModelAdmin):
-    list_display = ['profile']
+    list_display = ['profile','created_at']
 @admin.register(Pet)
 class Pet(admin.ModelAdmin):
     list_display = ['profile']
