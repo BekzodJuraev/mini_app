@@ -3,6 +3,9 @@ from django.contrib.auth.models import User
 from django.db.models import F
 from datetime import date,timedelta
 import uuid
+from django_q.tasks import async_task
+from django.db.models import Sum
+from django.utils import timezone
 
 from django.db import models
 
@@ -475,6 +478,42 @@ class Calories(models.Model):
 
     saved=models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        # 1. Сохраняем текущую запись
+        super().save(*args, **kwargs)
+
+        # 2. Проверяем только если запись подтверждена
+        if self.saved:
+            try:
+                goal = self.profile.nutrition_goal
+                today = timezone.now().date()
+
+                # Считаем сумму калорий за СЕГОДНЯ
+                # Предполагаем, что в JSONField 'total' калории лежат как {"calories": 500}
+                # Мы пройдем по всем записям пользователя за сегодня
+                todays_records = Calories.objects.filter(
+                    profile=self.profile,
+                    created_at__date=today,
+                    saved=True
+                )
+
+                total_calories_today = 0
+                for record in todays_records:
+                    if record.total and isinstance(record.total, dict):
+                        total_calories_today += record.total.get('ккал', 0)
+
+                # 3. Сравниваем дневную сумму с целью
+                if total_calories_today > goal.calories:
+                    # Отправляем уведомление
+                    async_task(
+                        'backend.tasks.send_calorie_limit_warning',
+                        self.profile.telegram_id
+                    )
+
+            except Exception as e:
+                # Логируем ошибку, если что-то пошло не так (например, нет NutritionGoal)
+                print(f"Error checking calories: {e}")
+
 
     def __str__(self):
         return self.profile.name
@@ -488,6 +527,8 @@ class PetCalories(models.Model):
     total=models.JSONField(null=True, default=None)
     images = models.ImageField(upload_to='calories/', default=None,null=True)
     saved = models.BooleanField(default=False)
+
+
 
 
 

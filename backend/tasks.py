@@ -1,7 +1,8 @@
 from django.conf import settings
 import telegram
 from config import API_TOKEN
-
+from .models import Check_Drugs, Notification_drugs
+from datetime import date
 # Инициализация бота
 bot = telegram.Bot(API_TOKEN)
 
@@ -47,19 +48,25 @@ def send_habit_not_finished_warning(user_id):
 
 # --- КАТЕГОРИЯ: ЛЕКАРСТВА ---
 
-def send_medication_reminder(user_id, category, name, course, method):
+def send_medication_reminder(user_id, category, name, day,time_day, method,**kwargs):
     text = (
         f"💊 *Напоминание о приёме лекарства:*\n\n"
         f"*Категория:* {category}\n"
         f"*Название:* {name}\n"
-        f"*Курс:* {course}\n"
+        f"*Курс:* {day} дней,{time_day} раза в день\n"
         f"*Способ приёма:* {method}"
     )
     send_user_notification(user_id, text)
 
-def send_missed_medication_warning(user_id, medication_name):
-    text = (
-        f"⚠️ *Вы пропустили приём лекарства*\n\n"
-        f"Сегодня лекарство *{medication_name}* не было отмечено как принято."
-    )
-    send_user_notification(user_id, text)
+def send_missed_medication_warning(user_id, notif_id, **kwargs):
+    check = Check_Drugs.objects.filter(
+        notification_id=notif_id,
+        date=date.today()
+    ).first()
+
+    if check is None:
+        text = (
+            f"⚠️ *Вы пропустили приём лекарства*\n\n"
+            f"Сегодня лекарство  не было отмечено как принято."
+        )
+        send_user_notification(user_id, text)
