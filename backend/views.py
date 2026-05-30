@@ -2062,7 +2062,7 @@ class CaroiesView(APIView):
             test=calories(serializer.validated_data['photo'])
             if test.get('detail'):
                 cal=Calories.objects.create(profile=profile, detail=test.get('detail', []), total=test.get('total', []),
-                                        images=serializer.validated_data['photo'])
+                                        images=serializer.validated_data['photo'],water_intake=test.get('water_intake'))
 
 
 

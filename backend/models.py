@@ -172,6 +172,7 @@ class Profile(models.Model):
     who_is = models.CharField(max_length=150,null=True, blank=True, default=None)
     IK = models.FloatField(null=True,blank=True)
     timezone = models.CharField(max_length=50, null=True,blank=True)
+    water_goal=models.FloatField(default=0)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -475,6 +476,8 @@ class Calories(models.Model):
     detail=models.JSONField(null=True, default=None)
     total=models.JSONField(null=True, default=None)
     images = models.ImageField(upload_to='calories/', default=None,null=True)
+    water_intake = models.FloatField(default=0, verbose_name="Выпито воды")
+
 
     saved=models.BooleanField(default=False)
 
