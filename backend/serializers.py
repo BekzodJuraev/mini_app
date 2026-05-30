@@ -211,6 +211,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         ref_family=validated_data.pop('ref_family',None)
 
         ik=0
+        water_goal=(weight * 30)/1000
         if now_smoke and exp_smoke and smoke_day:
             ik=(smoke_day * exp_smoke / 20)
 
@@ -235,12 +236,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
        # user = User.objects.create_user(username=username)
         if ref:
             ref=Profile.objects.filter(ref=ref).first()
-            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data,IK=ik)
+            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data,IK=ik,water_goal=water_goal)
         elif ref_family:
             ref_family = Profile.objects.filter(family_ref=ref_family).first()
-            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data,IK=ik)
+            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data,IK=ik,water_goal=water_goal)
         else:
-            profile = Profile.objects.create(username=user, **validated_data,IK=ik)
+            profile = Profile.objects.create(username=user, **validated_data,IK=ik,water_goal=water_goal)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 

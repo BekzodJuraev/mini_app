@@ -1,3 +1,20 @@
+Register second
+{
+    "name": "Бекзод",
+    "lastname": "Алимов",
+    "middle_name": "Рустамович",
+    "gender": "male",
+    "place_of_residence": "Ташкент, Мирабадский р-н",
+    "date_birth": "1998-05-15",
+    "height": 180,
+    "weight": 85,
+    "recent_smoke": "no",
+    "now_smoke": "no",
+    "exp_smoke": 0,
+    "smoke_day": 0,
+    "telegram_id": 123456789
+}
+
 Crash_test
 {
     "smoke_day": 10,
