@@ -104,5 +104,9 @@ urlpatterns=[
  path('api/pet/admin/<int:pk>/<int:pet_id>',views.AdminTestDetailAPIView.as_view(),name="admin_detail"),
  path('api/pet/nutrition/<int:message_id>', views.NutritionGoalPETView.as_view()),
  path('api/pet/calories/edit/<int:message_id>',views.CaloriesPetEdit.as_view()),
- path('api/pet/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view())
+ path('api/pet/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view()),
+
+
+
+ path('api/water_intake',views.Water_view.as_view())
 ]

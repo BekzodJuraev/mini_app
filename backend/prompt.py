@@ -438,7 +438,7 @@ def chat_update(data, message):
 #
 #     return response["choices"][0]["message"]["content"]
 
-def chat_system(message):
+def chat_system(message,history=None):
     SYSTEM_PROMPT = """
     Вы — медицинский ассистент. Вы отвечаете только на вопросы, связанные с человеком, его телом и здоровьем (например: рост, вес, возраст, питание, волосы, кожа, органы, симптомы, заболевания, лечение).
     Если пользователь спрашивает о других темах, не связанных с телом человека или его здоровьем, ответьте:
@@ -446,14 +446,21 @@ def chat_system(message):
     Ответ должен быть в одной строке или в коротких, понятных предложениях. Без форматирования.
     """
 
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT}
+    ]
+
+    if history:
+        messages.extend(history)
+
+    messages.append({
+        "role": "user",
+        "content": message
+    })
+
     response = openai.ChatCompletion.create(
         model=MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": message}
-        ],
-
-
+        messages=messages
     )
 
     return response["choices"][0]["message"]["content"]
