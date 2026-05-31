@@ -541,19 +541,47 @@ class ChatAPIView(APIView):
     def post(self,request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            profile=request.user.profile
+            profile = request.user.profile
             message = serializer.validated_data.get('message')
 
+            chats = (
+                Chat.objects
+                .filter(profile=profile)
+                .order_by('created_at')[:20]
+            )
 
+            history = []
 
+            for chat in chats:
+                history.append({
+                    "role": "user",
+                    "content": chat.question
+                })
+                history.append({
+                    "role": "assistant",
+                    "content": chat.answer
+                })
 
-            response_data = chat_system(message)
+            response_data = chat_system(
+                message=message,
+                history=history
+            )
 
-            Chat.objects.create(profile=profile,question=message,answer=response_data)
+            Chat.objects.create(
+                profile=profile,
+                question=message,
+                answer=response_data
+            )
 
-            return Response({'message': response_data}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK
+            )
 
-        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"message": "Invalid form data"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class CrashTestAPIView(APIView):
@@ -1329,6 +1357,39 @@ class MonthlyStatisticsPetView(APIView):
             "daily_details": daily_details,  # Объект, где ключи - даты
             "marked_days": list(daily_details.keys())  # Список дат с данными
         }, status=status.HTTP_200_OK)
+
+
+class Water_view(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        # Общая цель берется один раз из профиля
+        goal = getattr(profile, 'water_goal', 2.0)
+
+        # Агрегируем выпитое по дням
+        stats = Calories.objects.filter(profile=profile, saved=True) \
+            .annotate(date=TruncDate('created_at')) \
+            .values('date') \
+            .annotate(total_intake=Sum('water_intake')) \
+            .order_by('-date')
+
+        # Формируем список дней
+        days_history = []
+        for entry in stats:
+            current = entry['total_intake'] or 0.0
+            days_history.append({
+                "date": entry['date'],
+                "current_liters": round(current, 2),
+                # Процент для конкретного дня
+                "percentage": round((current / goal * 100), 1) if goal > 0 else 0
+            })
+
+        # Итоговая структура: цель отдельно, история отдельно
+        return Response({
+            "goal_liters": round(goal, 2),
+            "history": days_history
+        })
 class Notification_Detail(APIView):
     permission_classes = [IsAuthenticated]
 
