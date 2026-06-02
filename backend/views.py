@@ -7,6 +7,8 @@ from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 import calendar
+from django.db.models import Avg
+from drf_yasg import openapi
 from config import EMAIL_HOST_USER
 import random
 from django.core.mail import send_mail
@@ -81,7 +83,8 @@ from .serializers import (
     EditCaloriesPetSer,
     Notification_drugs_pet_Ser,
     DrugUpdatePetSer,
-    NotificationPEtSer
+    NotificationPEtSer,
+    HearthTestSer
 
 
 
@@ -104,7 +107,8 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test
+
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -629,6 +633,94 @@ class SymptomsTestAPIView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+class BloodPressureTestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = HearthTestSer
+
+
+    def get(self, request):
+        profile = request.user.profile
+
+        # 1. Получаем средние значения по дням
+        daily_stats = (
+            Tests.objects.filter(
+                profile=profile,
+                name="Артериальное давление",
+                pressure_top__isnull=False,
+                pressure_bottom__isnull=False
+            )
+            .values("created_at")
+            .annotate(
+                avg_top=Avg("pressure_top"),
+                avg_bottom=Avg("pressure_bottom")
+            )
+            .order_by("-created_at")
+        )
+
+        # 2. Группируем данные по месяцам в Python
+        structured_data = defaultdict(list)
+        for entry in daily_stats:
+            # Ключ - год и месяц (например, "2026-06")
+            month_key = entry["created_at"].strftime("%Y-%m")
+            structured_data[month_key].append({
+                "date": entry["created_at"],
+                "pressure_top": round(entry["avg_top"]),
+                "pressure_bottom": round(entry["avg_bottom"])
+            })
+
+        # 3. Формируем итоговый список с расчетом среднего за месяц
+        result = []
+        for month, days in structured_data.items():
+            # Считаем среднее по всем дням этого месяца
+            month_avg_top = sum(d["pressure_top"] for d in days) / len(days)
+            month_avg_bottom = sum(d["pressure_bottom"] for d in days) / len(days)
+
+            result.append({
+                "month": month,
+                "month_average": {
+                    "pressure_top": round(month_avg_top),
+                    "pressure_bottom": round(month_avg_bottom)
+                },
+                "days": days  # Список дней внутри этого месяца
+            })
+
+        return Response(result)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: HearthTestSer()}
+    )
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+
+        if serializer.is_valid():
+            profile = request.user.profile
+            today = localtime(now()).date()
+            pressure_top=serializer.validated_data["pressure_top"]
+            pressure_bottom=serializer.validated_data["pressure_bottom"]
+            #test = blood_pressure_test(serializer.validated_data)
+
+            Tests.objects.create(
+                profile=profile,
+                name="Артериальное давление",
+                created_at=today,
+                pressure_top=serializer.validated_data["pressure_top"],
+                pressure_bottom=serializer.validated_data["pressure_bottom"]
+            )
+
+            return Response(
+                {
+                    "message": "Измерение сохранено",
+                    "pressure_top": pressure_top,
+                    "pressure_bottom": pressure_bottom
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {"message": "Invalid form data"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 class LifeStyleTestAPIView(APIView):
     permission_classes = [IsAuthenticated]

@@ -260,6 +260,14 @@ class Tests(models.Model):
     name = models.CharField(max_length=200, db_index=True)
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
+    pressure_top = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+    pressure_bottom = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
     created_at = models.DateField(auto_now_add=True)
 
 class Chat(models.Model):

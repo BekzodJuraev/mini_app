@@ -555,6 +555,11 @@ class HeartRufeTestSer(serializers.Serializer):
     pulse_first=serializers.IntegerField()
     pulse_second=serializers.IntegerField()
 
+
+class HearthTestSer(serializers.Serializer):
+    pressure_top = serializers.IntegerField()
+    pressure_bottom = serializers.IntegerField()
+
 class HeartKotovaTestSer(serializers.Serializer):
     pulse_main=serializers.IntegerField()
     pressure_top=serializers.CharField()
