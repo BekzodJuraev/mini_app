@@ -16,6 +16,7 @@ urlpatterns=[
  path('api/tests/crashtest',views.CrashTestAPIView.as_view(),name='crashtest'),
  path('api/tests/symptomstest',views.SymptomsTestAPIView.as_view(),name='symptomstests'),
  path('api/tests/lifestyletest',views.LifeStyleTestAPIView.as_view(),name='lifestyletest'),
+ path('api/tests/bloodpressure',views.BloodPressureTestAPIView.as_view(),name='bloodpressure'),
  path('api/hearthtest/relax', views.HeartRelaxTestAPIView.as_view(), name='heartrelaxtest'),
  path('api/hearthtest/lest',views.HeartLestTestAPIView.as_view(),name='hearttest'),
  path('api/hearthtest/breath', views.HeartBreathTestAPIView.as_view(),name='breathtest'),
@@ -105,6 +106,7 @@ urlpatterns=[
  path('api/pet/nutrition/<int:message_id>', views.NutritionGoalPETView.as_view()),
  path('api/pet/calories/edit/<int:message_id>',views.CaloriesPetEdit.as_view()),
  path('api/pet/calories/statistics/monthly/<int:message_id>', views.MonthlyStatisticsPetView.as_view()),
+
 
 
 
