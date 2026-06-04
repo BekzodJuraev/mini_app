@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-from .update import update_life_expectancy_decorator
+from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -143,8 +143,8 @@ class Choice(models.Model):
 
     def __str__(self):
         return self.text
-
-
+@environmental_risk_decorator
+@update_life_expectancy_decorator
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     telegram_id=models.IntegerField(default=0)
@@ -177,6 +177,8 @@ class Profile(models.Model):
     water_goal=models.FloatField(default=0)
     life_expectancy_json=models.TextField(null=True,default=None)
     pressure_test=models.TextField(null=True,default=None)
+    health_recommendations=models.TextField(null=True,default=None)
+    risk_test=models.TextField(null=True,default=None)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -200,7 +202,7 @@ class Profile(models.Model):
 #     date_birth = models.DateField(null=True, blank=True, default=None)
 #     health_system = models.JSONField(null=True, default=None)
 
-
+@update_life_expectancy_decorator
 class Habit(models.Model):
     profile=models.ForeignKey(
             'Profile', on_delete=models.CASCADE, related_name='habit', verbose_name="Профиль"
@@ -257,6 +259,9 @@ class Tests_Pet(models.Model):
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
     created_at = models.DateField(auto_now_add=True)
+
+@health_recommendations_decorator
+@update_life_expectancy_decorator
 class Tests(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
@@ -266,6 +271,7 @@ class Tests(models.Model):
     message = models.TextField(null=True, default=None)
 
     created_at = models.DateField(auto_now_add=True)
+@update_life_expectancy_decorator
 class BloodPressure(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='pressure_history', verbose_name="Профиль"
@@ -418,7 +424,7 @@ class PetRentgen_Image(models.Model):
 
 
 
-
+@health_recommendations_decorator
 class Rentgen(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='rentgen', verbose_name="Профиль"
@@ -486,6 +492,7 @@ class NutritionGoal(models.Model):
 
     def __str__(self):
         return f"Цели для {self.profile.name}"
+@health_recommendations_decorator
 class Calories(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='cal', verbose_name="Профиль"
