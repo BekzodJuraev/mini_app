@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-
+from .update import update_life_expectancy_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -143,6 +143,8 @@ class Choice(models.Model):
 
     def __str__(self):
         return self.text
+
+
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     telegram_id=models.IntegerField(default=0)
@@ -173,6 +175,8 @@ class Profile(models.Model):
     IK = models.FloatField(null=True,blank=True)
     timezone = models.CharField(max_length=50, null=True,blank=True)
     water_goal=models.FloatField(default=0)
+    life_expectancy_json=models.TextField(null=True,default=None)
+    pressure_test=models.TextField(null=True,default=None)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -260,16 +264,22 @@ class Tests(models.Model):
     name = models.CharField(max_length=200, db_index=True)
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
-    pressure_top = models.PositiveIntegerField(
-        null=True,
-        blank=True
+
+    created_at = models.DateField(auto_now_add=True)
+class BloodPressure(models.Model):
+    profile = models.ForeignKey(
+        'Profile', on_delete=models.CASCADE, related_name='pressure_history', verbose_name="Профиль"
     )
-    pressure_bottom = models.PositiveIntegerField(
-        null=True,
-        blank=True
-    )
+    pressure_top = models.PositiveIntegerField(verbose_name="Систолическое (верхнее)")
+    pressure_bottom = models.PositiveIntegerField(verbose_name="Диастолическое (нижнее)")
     created_at = models.DateField(auto_now_add=True)
 
+    def __str__(self):
+        return f"{self.profile.name}: {self.systolic}/{self.diastolic}"
+
+    class Meta:
+        verbose_name = "Давление"
+        verbose_name_plural = "История давления"
 class Chat(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='chat', verbose_name="Профиль"

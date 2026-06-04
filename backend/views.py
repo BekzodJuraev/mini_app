@@ -103,17 +103,45 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy
 
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
-
+# def update_life_expectancy(f):
+#
+#     def wrapper(self, request, *args, **kwargs):
+#         response = f(self, request, *args, **kwargs)
+#
+#         if response.status_code == 200:
+#             profile = request.user.profile
+#
+#             def update():
+#                 user_data = {
+#                     "age": profile.age,
+#                     "gender": profile.gender,
+#                     "region": profile.region,
+#                     "height": profile.height,
+#                     "weight": profile.weight,
+#                     "blood_pressure": profile.blood_pressure,
+#                     "pulse": profile.pulse,
+#                 }
+#
+#                 result = life_expectancy(user_data)
+#
+#                 profile.life_expectancy_json = result["message"]
+#                 profile.save(update_fields=["life_expectancy"])
+#
+#             Thread(target=update, daemon=True).start()
+#
+#         return response
+#
+#     return wrapper
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
         message = f(self, request, *args, **kwargs)
@@ -633,23 +661,20 @@ class SymptomsTestAPIView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class BloodPressureTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = HearthTestSer
-
+    serializer_class = HearthTestSer  # Убедитесь, что в нем есть pressure_top и pressure_bottom
 
     def get(self, request):
         profile = request.user.profile
 
-        # 1. Получаем средние значения по дням
+        # 1. Получаем средние значения по дням из модели BloodPressure
+        # Используем trunc_date, чтобы группировать именно по календарным дням
         daily_stats = (
-            Tests.objects.filter(
-                profile=profile,
-                name="Артериальное давление",
-                pressure_top__isnull=False,
-                pressure_bottom__isnull=False
-            )
-            .values("created_at")
+            BloodPressure.objects.filter(profile=profile)
+            .values("created_at")  # Группировка по дате без учета времени
             .annotate(
                 avg_top=Avg("pressure_top"),
                 avg_bottom=Avg("pressure_bottom")
@@ -657,21 +682,21 @@ class BloodPressureTestAPIView(APIView):
             .order_by("-created_at")
         )
 
-        # 2. Группируем данные по месяцам в Python
+        # 2. Группируем данные по месяцам
         structured_data = defaultdict(list)
         for entry in daily_stats:
-            # Ключ - год и месяц (например, "2026-06")
-            month_key = entry["created_at"].strftime("%Y-%m")
+            day_date = entry["created_at"]
+            month_key = day_date.strftime("%Y-%m")
+
             structured_data[month_key].append({
-                "date": entry["created_at"],
+                "date": day_date,
                 "pressure_top": round(entry["avg_top"]),
                 "pressure_bottom": round(entry["avg_bottom"])
             })
 
-        # 3. Формируем итоговый список с расчетом среднего за месяц
+        # 3. Формируем итоговый список
         result = []
         for month, days in structured_data.items():
-            # Считаем среднее по всем дням этого месяца
             month_avg_top = sum(d["pressure_top"] for d in days) / len(days)
             month_avg_bottom = sum(d["pressure_bottom"] for d in days) / len(days)
 
@@ -681,46 +706,53 @@ class BloodPressureTestAPIView(APIView):
                     "pressure_top": round(month_avg_top),
                     "pressure_bottom": round(month_avg_bottom)
                 },
-                "days": days  # Список дней внутри этого месяца
+                "days": days
             })
 
         return Response(result)
 
     @swagger_auto_schema(
-        responses={status.HTTP_200_OK: HearthTestSer()}
+        responses={status.HTTP_201_CREATED: HearthTestSer()}
     )
-
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
 
         if serializer.is_valid():
             profile = request.user.profile
-            today = localtime(now()).date()
-            pressure_top=serializer.validated_data["pressure_top"]
-            pressure_bottom=serializer.validated_data["pressure_bottom"]
-            #test = blood_pressure_test(serializer.validated_data)
+            p_top = serializer.validated_data["pressure_top"]
+            p_bottom = serializer.validated_data["pressure_bottom"]
 
-            Tests.objects.create(
+            # 1. Сохраняем новое измерение
+            BloodPressure.objects.create(
                 profile=profile,
-                name="Артериальное давление",
-                created_at=today,
-                pressure_top=serializer.validated_data["pressure_top"],
-                pressure_bottom=serializer.validated_data["pressure_bottom"]
+                pressure_top=p_top,
+                pressure_bottom=p_bottom
             )
+
+            # 2. Получаем начало ТЕКУЩЕГО месяца
+            # Например, если сегодня 15 июня, возьмет 1 июня 00:00
+            start_of_month = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            # 3. Берем все записи только за этот календарный месяц
+            month_history = BloodPressure.objects.filter(
+                profile=profile,
+                created_at__gte=start_of_month
+            )
+
+            # 4. Отправляем список записей в функцию ИИ
+            ai_analysis = blood_pressure_test(month_history)
+
+            # 5. Логируем результат анализа в модель Tests
+            profile.pressure_test=ai_analysis.get("message")
+            profile.save(update_fields=['pressure_test'])
 
             return Response(
                 {
-                    "message": "Измерение сохранено",
-                    "pressure_top": pressure_top,
-                    "pressure_bottom": pressure_bottom
+                    "message": "Измерение сохранено, анализ за месяц обновлен",
+                    "current": {"top": p_top, "bottom": p_bottom}
                 },
                 status=status.HTTP_201_CREATED
             )
-
-        return Response(
-            {"message": "Invalid form data"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
 
 class LifeStyleTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
