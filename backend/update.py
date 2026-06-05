@@ -1,10 +1,97 @@
 from threading import Thread
-from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis
+from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis,monthly_pressure_analysis,pulse_diary_analysis
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from datetime import date
+from datetime import timedelta
+from django.utils import timezone
 
+def pulse_diary_decorator(model_class):
+    original_save = model_class.save
 
+    def new_save(self, *args, **kwargs):
+        # 1. Сначала стандартно сохраняем текущий тест/запись дневника в базу
+        original_save(self, *args, **kwargs)
+
+        # 2. Уходим в фоновый поток для работы с ИИ
+        def run_pulse_analysis():
+            try:
+                p = self.profile
+                if p:
+                    # Вычисляем точку отсчета — 30 дней назад
+                    start_date = timezone.now() - timedelta(days=30)
+
+                    # Вытаскиваем максимум 7 последних непустых сообщений за месяц
+                    test_answers = list(
+                        p.tests.filter(
+                            message__isnull=False,
+                            created_at__gte=start_date
+                        )
+                        .exclude(message="")
+                        .order_by('-created_at')
+                        .values_list('message', flat=True)[:20]
+                    )
+
+                    # Если история за этот месяц есть, скармливаем её ИИ
+                    if test_answers:
+                        # Запускаем новый промпт для дневника пульса
+                        result = pulse_diary_analysis(test_answers)
+                        ai_message = result.get("message", "")
+
+                        if ai_message:
+                            # Обновляем именно поле diary_plus в профиле напрямую через SQL
+                            p.__class__.objects.filter(pk=p.pk).update(
+                                diary_plus=ai_message
+                            )
+            except Exception as e:
+                print(f"Ошибка при работе ИИ в декораторе дневника пульса: {e}")
+
+        # Запускаем асинхронно, чтобы не тормозить фронтенд при сохранении
+        Thread(target=run_pulse_analysis, daemon=True).start()
+
+    model_class.save = new_save
+    return model_class
+def monthly_report_only_tests_decorator(model_class):
+    original_save = model_class.save
+
+    def new_save(self, *args, **kwargs):
+        # 1. Сначала стандартно сохраняем текущий тест в базу
+        original_save(self, *args, **kwargs)
+
+        # 2. Уходим в фон собирать историю за последние 30 дней и отправлять в ИИ
+        def run_analysis():
+            try:
+                p = self.profile
+                if p:
+                    # Вычисляем точку отсчета — 30 дней назад
+                    start_date = timezone.now() - timedelta(days=30)
+
+                    # Вытаскиваем максимум 7 ответов ИИ строго за последние 30 дней
+                    test_answers = list(
+                        p.tests.filter(
+                            message__isnull=False,
+                            created_at__gte=start_date  # Фильтр за последние 30 дней
+                        )
+                        .exclude(message="")
+                        .order_by('-created_at')
+                        .values_list('message', flat=True)[:20]
+                    )
+
+                    if test_answers:
+                        result = monthly_pressure_analysis(test_answers)
+                        ai_message = result.get("message", "")
+
+                        if ai_message:
+                            p.__class__.objects.filter(pk=p.pk).update(
+                                pressure_plus=ai_message
+                            )
+            except Exception as e:
+                print(f"Ошибка при работе ИИ в декораторе тестов: {e}")
+
+        Thread(target=run_analysis, daemon=True).start()
+
+    model_class.save = new_save
+    return model_class
 def environmental_risk_decorator(model_class):
     original_save = model_class.save
 

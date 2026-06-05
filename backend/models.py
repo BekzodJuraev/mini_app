@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator
+from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -179,6 +179,8 @@ class Profile(models.Model):
     pressure_test=models.TextField(null=True,default=None)
     health_recommendations=models.TextField(null=True,default=None)
     risk_test=models.TextField(null=True,default=None)
+    pressure_plus=models.TextField(null=True,default=None)
+    diary_plus=models.TextField(null=True,default=None)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -261,7 +263,10 @@ class Tests_Pet(models.Model):
     created_at = models.DateField(auto_now_add=True)
 
 @health_recommendations_decorator
+@pulse_diary_decorator
 @update_life_expectancy_decorator
+@monthly_report_only_tests_decorator
+
 class Tests(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
