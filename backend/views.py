@@ -107,7 +107,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis
 
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -721,6 +721,7 @@ class BloodPressureTestAPIView(APIView):
             profile = request.user.profile
             p_top = serializer.validated_data["pressure_top"]
             p_bottom = serializer.validated_data["pressure_bottom"]
+            test=single_pressure_analysis(p_top,p_bottom)
 
             # 1. Сохраняем новое измерение
             BloodPressure.objects.create(
@@ -749,7 +750,8 @@ class BloodPressureTestAPIView(APIView):
             return Response(
                 {
                     "message": "Измерение сохранено, анализ за месяц обновлен",
-                    "current": {"top": p_top, "bottom": p_bottom}
+                    "current": {"top": p_top, "bottom": p_bottom},
+                    "result":test.get('message')
                 },
                 status=status.HTTP_201_CREATED
             )
