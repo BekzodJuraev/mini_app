@@ -1173,21 +1173,15 @@ class GetRelationshipListView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: GetRelationship(many=True)}
     )
-    def get(self,request):
-        profile=request.user.profile
-        profiles = Profile.objects.filter(family=profile).order_by('-id').only('name', 'who_is', 'username')
+    def get(self, request):
+        profile = request.user.profile
+        # Получаем QuerySet
+        query = Profile.objects.filter(family=profile).annotate(tests_count=Count('tests')
+        ).order_by('-id')
 
-        response_data = []
+        # Передаем QuerySet в сериализатор (убедись, что self.serializer_class равен ProfileWithTokenSerializer)
+        serializer = self.serializer_class(query, many=True)
 
-        for prof in profiles:
-            token, _ = Token.objects.get_or_create(user=prof.username)
-
-            response_data.append({
-                "name": prof.name,
-                "who_is": prof.who_is,
-                "token": token.key,
-            })
-        serializer = self.serializer_class(response_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
