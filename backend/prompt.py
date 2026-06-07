@@ -6,6 +6,62 @@ openai.api_key = KEY
 import fitz
 import json
 
+import openai
+
+
+def translate_text_on_the_fly(payload, target_lang: str):
+    """
+    Принимает строку ИЛИ словарь. Переводит весь текст/ключи на нужный язык,
+    строго сохраняя структуру JSON, цифры и переносы строк \n.
+    """
+    if not payload or target_lang == 'ru':
+        return payload
+
+    # Проверяем, что к нам пришло: строка или словарь
+    is_dict = isinstance(payload, dict)
+
+    # Формируем текст для отправки в ИИ
+    content_to_translate = json.dumps(payload, ensure_ascii=False) if is_dict else str(payload)
+
+    prompt = f"""
+    Translate the following content into language code: '{target_lang}'.
+
+    STRICT RULES:
+    1. If the content is a JSON object, translate ONLY the keys and string values. Do NOT change any numbers, booleans, or structural punctuation.
+    2. If the content is plain text, keep all line breaks (\\n) and bullet points exactly in the same places.
+    3. Return ONLY the translated content without any commentary or code blocks blocks like ```json.
+
+    CONTENT TO TRANSLATE:
+    {content_to_translate}
+    """
+
+    try:
+        # Если переводим словарь, заставляем ИИ строго вернуть валидный JSON
+        api_kwargs = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system",
+                 "content": f"You are a precise medical translator. You translate text or JSON keys/values into '{target_lang}' while keeping formatting, numbers, and layout perfectly intact."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0
+        }
+
+        if is_dict:
+            api_kwargs["response_format"] = {"type": "json_object"}
+
+        response = openai.ChatCompletion.create(**api_kwargs)
+        result_text = response["choices"][0]["message"]["content"].strip()
+
+        # Если на входе был словарь, парсим его обратно в Python-dict
+        if is_dict:
+            return json.loads(result_text)
+        return result_text
+
+    except Exception as e:
+        print(f"Ошибка ИИ при переводе: {e}")
+        return payload  # В случае сбоя возвращаем оригинал
+
 def testadmin(full_context_for_ai):
     prompt = f"""
     Ты эксперт в области: {full_context_for_ai['metadata']['role']}

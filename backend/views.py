@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 import calendar
+from .tranlater import translate_api_response,translate_health_keys_api
 from django.db.models import Avg
 from drf_yasg import openapi
 from config import EMAIL_HOST_USER
@@ -506,6 +507,7 @@ class ProfileMainSystemAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ProfileMainSystemSer()}
     )
+    @translate_health_keys_api
     def get(self, request):
         profile = request.user.profile
         serializer = self.serializer_class(profile)
@@ -623,7 +625,7 @@ class CrashTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CrashTestSer()}
     )
-
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1019,6 +1021,7 @@ class NotificationAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: NotificationSer(many=True)}
     )
+
     def get(self,request):
         profile = request.user.profile
         cat = Tests.objects.filter(profile=profile).order_by('-id')
@@ -1038,6 +1041,7 @@ class NotificationAPIView(APIView):
 class MessageView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @translate_api_response(fields=['message'])
     def get(self, request, message_id):
         profile=request.user.profile
         message = get_object_or_404(Tests, id=message_id, profile=profile)
