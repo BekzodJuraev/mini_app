@@ -92,6 +92,7 @@ from .serializers import (
 )
 from threading import Thread
 from datetime import date
+from django.utils import timezone
 
 
 from rest_framework.views import APIView
@@ -143,6 +144,152 @@ from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
 #         return response
 #
 #     return wrapper
+
+
+def get_chat_history(profile):
+    """
+    Вытаскивает последние 20 сообщений диалога и форматирует их для OpenAI.
+    """
+    chats = list(
+        Chat.objects.filter(profile=profile).order_by('-created_at')[:20]
+    )
+    chats.reverse()  # Разворачиваем в хронологический порядок
+
+    history = []
+    for chat in chats:
+        if chat.question:
+            history.append({"role": "user", "content": chat.question})
+        if chat.answer:
+            history.append({"role": "assistant", "content": chat.answer})
+    return history
+
+
+def get_user_and_pet_context(profile):
+    # Временной отрезок за последние 30 дней
+    start_date = timezone.now().date() - timedelta(days=30)
+
+    # 1. Последние 10 медицинских тестов человека
+    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:10])
+    human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
+
+    # 2. ПОСЛЕДНИЕ 5 ЗАКЛЮЧЕНИЙ РЕНТГЕНА / МРТ (Rentgen)
+    rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:5])
+    rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
+
+    # 3. Последние 10 записей давления человека
+    pressure_records = list(profile.pressure_history.order_by('-created_at')[:10])
+    pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
+
+    # 4. Привычки человека
+    habits_list = [f"{h.name_habit} ({h.lenght})" for h in profile.habit.all()]
+
+    # 5. Последние 15 ежедневных чекапов человека (Daily_check)
+    daily_checks = list(
+        profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:15]
+    )
+    daily_checks.reverse()
+    daily_checks_history = [
+        {"date": check.created_at.strftime('%Y-%m-%d') if check.created_at else "Неизвестно", "report": check.message}
+        for check in daily_checks
+    ]
+
+    # 6. История питания человека за 30 дней (detail)
+    calories_30_days = Calories.objects.filter(
+        profile=profile,
+        created_at__date__gte=start_date,
+        saved=True
+    ).order_by('-created_at')
+
+    human_food_history = []
+    total_water_30_days = 0.0
+
+    for c in calories_30_days:
+        if c.detail:
+            human_food_history.append({
+                "date": c.created_at.strftime('%Y-%m-%d'),
+                "detail": c.detail
+            })
+        if c.water_intake:
+            total_water_30_days += c.water_intake
+
+    # 7. Цели пользователя (КБЖУ + Вода из Profile)
+    user_nutrition_goals = {}
+    if hasattr(profile, 'nutrition_goal') and profile.nutrition_goal:
+        goal = profile.nutrition_goal
+        user_nutrition_goals = {
+            "target_calories": goal.calories,
+            "target_proteins": goal.proteins,
+            "target_fats": goal.fats,
+            "target_carbs": goal.carbs,
+            "target_fiber": goal.fiber,
+        }
+    user_nutrition_goals["target_water_liters"] = getattr(profile, 'water_goal', None)
+
+    # 8. Данные обо всех питомцах хозяина
+    pets_data = []
+    for pet in profile.pet.all():
+        pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:5])
+
+        pet_calories_30_days = pet.pet_calories.filter(
+            created_at__gte=start_date,
+            saved=True
+        ).order_by('-created_at')
+
+        pet_food_history = []
+        for pc in pet_calories_30_days:
+            if pc.detail:
+                pet_food_history.append({
+                    "date": pc.created_at.strftime('%Y-%m-%d'),
+                    "detail": pc.detail
+                })
+
+        pet_nutrition_goals = {}
+        if hasattr(pet, 'nutrition_goal_pet') and pet.nutrition_goal_pet:
+            p_goal = pet.nutrition_goal_pet
+            pet_nutrition_goals = {
+                "target_calories": p_goal.calories,
+                "target_proteins": p_goal.proteins,
+                "target_fats": p_goal.fats,
+                "target_carbs": p_goal.carbs,
+                "target_fiber": p_goal.fiber
+            }
+
+        pets_data.append({
+            "name": pet.klichka,
+            "type": pet.pet,
+            "gender": pet.gender,
+            "birth_date": pet.age.strftime('%Y-%m-%d') if pet.age else None,
+            "health_system_metrics": pet.health_system or {},
+            "environmental_risks_report": pet.risk_test,
+            "last_medical_tests": [pt.message for pt in pet_tests if pt.message],
+            "nutrition_history_30_days": pet_food_history,
+            "nutrition_goals": pet_nutrition_goals
+        })
+
+    # Итоговый JSON для OpenAI
+    return {
+        "user_info": {
+            "name": profile.name,
+            "gender": profile.gender,
+            "birth_date": profile.date_birth.strftime('%Y-%m-%d') if profile.date_birth else None,
+            "place_of_residence": profile.place_of_residence,
+            "health_indicators_score": profile.health_system or {},
+            "calculated_life_expectancy": profile.life_expectancy,
+            "environmental_risks": profile.risk_test,
+            "health_recommendations_summary": profile.health_recommendations
+        },
+        "user_nutrition_and_water_goals": user_nutrition_goals,
+        "user_daily_checkups_last_15_days": daily_checks_history,
+        "user_medical_tests": human_tests_history,
+        "user_rentgen_and_mri_reports": rentgen_history,  # ТУТ ТВОЙ РЕНТГЕН!
+        "user_blood_pressure_history": pressure_history,
+        "user_habits": habits_list,
+        "user_nutrition_history_30_days": {
+            "food_records": human_food_history,
+            "total_water_intake_liters_last_30_days": total_water_30_days
+        },
+        "user_pets": pets_data
+    }
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
         message = f(self, request, *args, **kwargs)
@@ -250,6 +397,7 @@ class AdminTestDetailAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AIInputSer()}
     )
+    @translate_api_response(fields=['summary'])
     def post(self, request, pk, pet_id=None):
         test = get_object_or_404(Test, pk=pk)
 
@@ -572,35 +720,24 @@ class ChatAPIView(APIView):
         responses={status.HTTP_200_OK: ChatSer()}
     )
     @update_system
-    def post(self,request):
+    def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
             message = serializer.validated_data.get('message')
 
-            chats = (
-                Chat.objects
-                .filter(profile=profile)
-                .order_by('created_at')[:20]
-            )
+            # 1. Быстро собираем историю диалога и медицинский контекст через функции
+            history = get_chat_history(profile)
+            context_data = get_user_and_pet_context(profile)
 
-            history = []
-
-            for chat in chats:
-                history.append({
-                    "role": "user",
-                    "content": chat.question
-                })
-                history.append({
-                    "role": "assistant",
-                    "content": chat.answer
-                })
-
+            # 2. Получаем ответ от ИИ
             response_data = chat_system(
                 message=message,
+                context_data=context_data,
                 history=history
             )
 
+            # 3. Сохраняем в базу
             Chat.objects.create(
                 profile=profile,
                 question=message,
@@ -616,7 +753,6 @@ class ChatAPIView(APIView):
             {"message": "Invalid form data"},
             status=status.HTTP_400_BAD_REQUEST
         )
-
 
 class CrashTestAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -652,6 +788,7 @@ class SymptomsTestAPIView(APIView):
         responses={status.HTTP_200_OK: SymptomsTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -716,6 +853,7 @@ class BloodPressureTestAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_201_CREATED: HearthTestSer()}
     )
+    @translate_api_response(fields=['result'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
 
@@ -766,6 +904,7 @@ class LifeStyleTestAPIView(APIView):
         responses={status.HTTP_200_OK: LifeStyleTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -786,6 +925,7 @@ class HeartLestTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartLestTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -805,6 +945,7 @@ class HeartRelaxTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartLestTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -825,6 +966,7 @@ class HeartBreathTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartBreathTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -845,6 +987,7 @@ class HeartGenchiTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartGenchiTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -864,6 +1007,7 @@ class HeartRufeTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartRufeTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -885,6 +1029,7 @@ class HeartKotovaTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartKotovaTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -908,6 +1053,7 @@ class HeartMartineTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartMartineTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -928,6 +1074,7 @@ class HeartKuperTestAPIView(APIView):
         responses={status.HTTP_200_OK: HeartKuperTestSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1808,6 +1955,7 @@ class DailyCheckView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: DailyCheckSer()}
     )
+    @translate_api_response(fields=['message'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -1833,6 +1981,7 @@ class PetDailyCheckView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: DailyCheckSer()}
     )
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         serializer = self.serializer_class(data=request.data)
@@ -1869,6 +2018,7 @@ class RentgenView(APIView):
         responses={status.HTTP_200_OK: RentgenSer()}
     )
     @update_system
+    @translate_api_response(fields=['message'])
     def post(self, request):
 
         serializer = self.serializer_class(data=request.data)
@@ -1993,6 +2143,7 @@ class PetstyleView(APIView):
     )
 
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2014,6 +2165,7 @@ class PetEmotionView(APIView):
         responses={status.HTTP_200_OK: PetEmotionSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2032,6 +2184,7 @@ class PetHabitView(APIView):
         responses={status.HTTP_200_OK: PetHabitSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2052,6 +2205,7 @@ class PetCatEmotView(APIView):
         responses={status.HTTP_200_OK: PetCatEmotSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2072,6 +2226,7 @@ class PetCatSleepView(APIView):
         responses={status.HTTP_200_OK: PetCatSleepSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2093,6 +2248,7 @@ class PetCatApetitView(APIView):
         responses={status.HTTP_200_OK: PetCatApetitSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2113,6 +2269,7 @@ class PetGrizunPovidenieView(APIView):
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,messsage_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2132,6 +2289,7 @@ class PetGrizunFormaView(APIView):
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2150,6 +2308,7 @@ class PetGrizunApetitView(APIView):
         responses={status.HTTP_200_OK: PetGrizunSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2239,7 +2398,7 @@ class CaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
-
+    @translate_api_response(fields=['detail'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2348,6 +2507,7 @@ class ChatPetAPIView(APIView):
         responses={status.HTTP_200_OK: ChatSer()}
     )
     @pet_update_system
+    @translate_api_response(fields=['message'])
     def post(self,request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2596,6 +2756,7 @@ class CaloriesChatView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
     )
+    @translate_api_response(fields=['detail'])
     def get(self,request):
         profile=request.user.profile
         today = localtime(now()).date()

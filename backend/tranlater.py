@@ -15,7 +15,7 @@ def translate_api_response(fields=None, key_fields=None):
     """
     Полностью универсальный декоратор для любых методов APIView (GET, POST и др.).
 
-    :param fields: список полей для ПОЛНОГО перевода строк.
+    :param fields: список полей для перевода строк ИЛИ целых JSON-структур (как detail).
     :param key_fields: список полей, где переводятся ТОЛЬКО КЛЮЧИ/НАЗВАНИЯ (цифры остаются из БД).
     """
     target_fields = set(fields) if fields else set()
@@ -34,18 +34,27 @@ def translate_api_response(fields=None, key_fields=None):
             if lang == 'ru' or not isinstance(response, Response) or response.status_code not in [200, 201]:
                 return response
 
-            def get_cached_translation(text, target_lang):
-                """Хелпер точечного кэширования строк и названий через MD5"""
-                if not text or not isinstance(text, str) or text.isdigit() or text.startswith(('http://', 'https://')):
-                    return text
+            def get_cached_translation(value, target_lang):
+                """Хелпер точечного кэширования строк и объектов через MD5"""
+                if not value:
+                    return value
 
-                text_hash = hashlib.md5(f"{text}_{target_lang}".encode('utf-8')).hexdigest()
+                # Если это обычная строка
+                if isinstance(value, str):
+                    if value.isdigit() or value.startswith(('http://', 'https://')):
+                        return value
+                    serialize_value = value
+                else:
+                    # Если это словарь или список (JSONField), сериализуем в строку с сортировкой ключей для стабильного хэша
+                    serialize_value = json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+                text_hash = hashlib.md5(f"{serialize_value}_{target_lang}".encode('utf-8')).hexdigest()
                 cache_key = f"ai_trans_{text_hash}"
 
                 translated = cache.get(cache_key)
                 if not translated:
-                    # Вызов твоей базовой функции gpt-4o-mini
-                    translated = translate_text_on_the_fly(text, target_lang)
+                    # Вызов твоей базовой функции (теперь сюда может прилететь и dict/list)
+                    translated = translate_text_on_the_fly(value, target_lang)
                     cache.set(cache_key, translated, timeout=60 * 60 * 24 * 30)  # Кэш на 30 дней
                 return translated
 
@@ -65,8 +74,9 @@ def translate_api_response(fields=None, key_fields=None):
 
                     new_dict = {}
                     for key, value in data.items():
-                        # РЕЖИМ 1: Полный перевод строк (сообщения, текстовые отчеты)
-                        if key in target_fields and isinstance(value, str) and value:
+                        # РЕЖИМ 1: Изменено здесь! Убрали жесткую проверку isinstance(value, str)
+                        # Теперь если ключ совпал (например, 'detail'), мы отдаем его на перевод целиком
+                        if key in target_fields and value:
                             new_dict[key] = get_cached_translation(value, lang)
 
                         # РЕЖИМ 2: Перевод только ключей словаря, если сам ключ совпал с key_fields
