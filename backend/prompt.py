@@ -494,32 +494,33 @@ def chat_update(data, message):
 #
 #     return response["choices"][0]["message"]["content"]
 
-def chat_system(message,history=None):
-    SYSTEM_PROMPT = """
-    Вы — медицинский ассистент. Вы отвечаете только на вопросы, связанные с человеком, его телом и здоровьем (например: рост, вес, возраст, питание, волосы, кожа, органы, симптомы, заболевания, лечение).
-    Если пользователь спрашивает о других темах, не связанных с телом человека или его здоровьем, ответьте:
-    Отвечайте простым текстом. Не используйте Markdown. Не используйте переносы строк, символы \\n или специальные символы форматирования.
-    Ответ должен быть в одной строке или в коротких, понятных предложениях. Без форматирования.
+def chat_system(message, context_data, history=None):
+    context_str = json.dumps(context_data, ensure_ascii=False)
+
+    SYSTEM_PROMPT = f"""Вы — продвинутый медицинский ИИ-ассистент. Вы знаете абсолютно всё о здоровье пользователя и его питомцах на основе следующих данных из базы:
+    {context_str}
+
+    ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ОТВЕТА:
+    1. Отвечайте ТОЛЬКО на вопросы, связанные со здоровьем человека, его телом, анализами, симптомами или здоровьем его питомцев.
+    2. Если пользователь спрашивает о других темах (кино, игры, политика), вежливо откажите.
+    3. Отвечайте СТРОГО простым текстом. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать Markdown (никаких **, #, точек списков).
+    4. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать переносы строк, символы \\n, \\r или специальные символы форматирования. Весь ответ должен идти строго в одну строку или в виде коротких понятных предложений подряд.
     """
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     if history:
         messages.extend(history)
 
-    messages.append({
-        "role": "user",
-        "content": message
-    })
+    messages.append({"role": "user", "content": message})
 
     response = openai.ChatCompletion.create(
         model=MODEL,
         messages=messages
     )
 
-    return response["choices"][0]["message"]["content"]
+    clean_content = response["choices"][0]["message"]["content"].replace("\n", " ").replace("\r", " ")
+    return clean_content
 
 def chat_system_pet(message):
     SYSTEM_PROMPT = """Вы — медицинский ассистент. Вы предоставляете только информацию, связанную со здоровьем питомца.  

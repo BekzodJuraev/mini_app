@@ -8,6 +8,8 @@ from django.utils import timezone
 from django.db import models
 
 
+
+
 def pet_risk_analysis_decorator(fields_to_track=None):
     """
     Универсальный декоратор для моделей Pet, Tests_Pet и PetChat.
