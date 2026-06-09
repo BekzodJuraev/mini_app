@@ -810,7 +810,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','age','health','photo','percentage']
+        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test']
 
     def get_health(self, obj):
         return [obj.health_system]

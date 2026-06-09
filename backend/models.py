@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator
+from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator,pet_risk_analysis_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -251,8 +251,7 @@ class Quest(models.Model):
         Profile.objects.filter(id=self.profile.pk).update(balance=F('balance') + 150)  # ✅ Fast
         super().save(*args, **kwargs)
 
-
-
+@pet_risk_analysis_decorator(fields_to_track=['message'])
 class Tests_Pet(models.Model):
     pet = models.ForeignKey(
         'Pet', on_delete=models.CASCADE, related_name='tests_pet', verbose_name="Профиль"
@@ -450,7 +449,7 @@ class Rentgen_Image(models.Model):
 
     def __str__(self):
         return self.rentgen.profile.name
-
+@pet_risk_analysis_decorator(fields_to_track=['gender', 'health_system','age','pet'])
 class Pet(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='pet', verbose_name="Профиль"
@@ -461,6 +460,7 @@ class Pet(models.Model):
     photo = models.ImageField(blank=True, upload_to='pictures/')
     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
     health_system = models.JSONField(null=True, default=None)
+    risk_test=models.TextField(null=True,default=None)
 
 
     def __str__(self):
@@ -568,7 +568,7 @@ class PetCalories(models.Model):
     def __str__(self):
         return self.pet.klichka
 
-
+@pet_risk_analysis_decorator(fields_to_track=['question'])
 class PetChat(models.Model):
     pet = models.ForeignKey(
         'Pet', on_delete=models.CASCADE, related_name='chat', verbose_name="Питомец"
