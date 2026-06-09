@@ -1,11 +1,112 @@
 from threading import Thread
-from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis,monthly_pressure_analysis,pulse_diary_analysis
+from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis,monthly_pressure_analysis,pulse_diary_analysis,environmental_and_data_risk_analysis_pet
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from datetime import date
 from datetime import timedelta
 from django.utils import timezone
+from django.db import models
 
+
+def pet_risk_analysis_decorator(fields_to_track=None):
+    """
+    Универсальный декоратор для моделей Pet, Tests_Pet и PetChat.
+    Следит за изменениями полей и запускает ИИ-анализ рисков в фоне.
+    """
+    if isinstance(fields_to_track, type) and issubclass(fields_to_track, models.Model):
+        model_class = fields_to_track
+        return make_decorated_model(model_class, fields_to_track=None)
+
+    def decorator(model_class):
+        return make_decorated_model(model_class, fields_to_track)
+
+    return decorator
+
+
+def make_decorated_model(model_class, fields_to_track):
+    original_save = model_class.save
+
+    def new_save(self, *args, **kwargs):
+        trigger_analysis = False
+
+        # 1. Проверяем, изменились ли отслеживаемые поля
+        if fields_to_track and self.pk:
+            try:
+                old_instance = model_class.objects.get(pk=self.pk)
+                for field in fields_to_track:
+                    if getattr(old_instance, field) != getattr(self, field):
+                        trigger_analysis = True
+                        break
+            except model_class.DoesNotExist:
+                trigger_analysis = True
+        else:
+            # Если поля не переданы или запись новая — триггерим железно
+            trigger_analysis = True
+
+        # 2. Сохраняем объект (база присваивает pk)
+        original_save(self, *args, **kwargs)
+
+        # 3. Если нужно делать анализ — вычисляем, кто вызвал save() и ищем инстанс Pet
+        if trigger_analysis:
+            pet_instance = None
+
+            # Если декоратор висит на самой модели Pet
+            if hasattr(self, 'tests_pet') and hasattr(self, 'chat'):
+                pet_instance = self
+
+            # Если декоратор висит на Tests_Pet или PetChat — прыгаем в связанного питомца через ForeignKey
+            elif hasattr(self, 'pet') and isinstance(self.pet, models.Model):
+                pet_instance = self.pet
+
+            # Если нашли питомца — погнали в фон
+            if pet_instance and pet_instance.pk:
+
+                def run_pet_analysis():
+                    try:
+                        # А) Вытаскиваем последние 30 сообщений из Tests_Pet
+                        recent_tests = list(
+                            pet_instance.tests_pet.exclude(message=None).order_by('-created_at', '-id')[:30]
+                        )
+                        recent_tests.reverse()
+                        messages_history = [t.message for t in recent_tests if t.message]
+
+                        # Б) ВЫТАСКИВАЕМ ПОСЛЕДНИЕ 10 ВОПРОСОВ ИЗ ЧАТА (PetChat)
+                        # Исключаем пустые вопросы, если юзер отправил только картинку
+                        recent_chats = list(
+                            pet_instance.chat.exclude(question=None).order_by('-created_at', '-id')[:20]
+                        )
+                        recent_chats.reverse()  # В хронологическом порядке
+                        chat_questions_history = [c.question for c in recent_chats if c.question]
+
+                        # Собираем полный фарш данных для ИИ
+                        pet_payload = {
+                            "user_timezone": pet_instance.profile.timezone if (
+                                        pet_instance.profile and hasattr(pet_instance.profile, 'timezone')) else None,
+                            "pet_name": pet_instance.klichka,
+                            "pet_type": pet_instance.pet,
+                            "pet_birth_date": pet_instance.age.strftime('%Y-%m-%d') if pet_instance.age else None,
+                            "pet_gender": pet_instance.gender,
+                            "health_metrics": pet_instance.health_system or {},
+                            "messages_history_last_30": messages_history,  # История анализов/сообщений
+                            "recent_user_questions_from_chat": chat_questions_history,  # Твои вопросы из чата!
+                            "current_symptoms": pet_instance.risk_test  # Что ввели вручную в профиле
+                        }
+
+                        # Стучимся в твою функцию OpenAI
+                        ai_result = environmental_and_data_risk_analysis_pet(pet_payload)
+
+                        # Обновляем поле risk_test у питомца чистым текстом отчета
+                        pet_instance.__class__.objects.filter(pk=pet_instance.pk).update(
+                            risk_test=ai_result.get("message", "Ошибка генерации отчета.")
+                        )
+
+                    except Exception as e:
+                        print(f"Ошибка фонового анализа (универсальный декоратор + чат): {e}")
+
+                Thread(target=run_pet_analysis, daemon=True).start()
+
+    model_class.save = new_save
+    return model_class
 def pulse_diary_decorator(model_class):
     original_save = model_class.save
 
