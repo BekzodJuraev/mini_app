@@ -555,7 +555,7 @@ class PetCalories(models.Model):
     pet = models.ForeignKey(
         'Pet', on_delete=models.CASCADE, related_name='pet_calories', verbose_name="Питомец"
     )
-    created_at=models.DateField(auto_now_add=True)
+    created_at=models.DateTimeField(auto_now_add=True)
     detail=models.JSONField(null=True, default=None)
     total=models.JSONField(null=True, default=None)
     images = models.ImageField(upload_to='calories/', default=None,null=True)

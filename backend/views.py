@@ -342,6 +342,7 @@ class AdminTestsView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AdminTestsSer()}
     )
+    @translate_api_response(fields=['title','description'])
     def get(self, request):
         query=Test.objects.all()
         serializer = self.serializer_class(query,many=True)
@@ -383,6 +384,7 @@ class AdminTestDetailAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AdminTestByIDSer()}
     )
+    @translate_api_response(fields=['question.text', 'question.choices.text'])
     def get(self, request, pk):
         # Используем prefetch_related, чтобы за 1 запрос вытащить
         # сам тест, все вопросы к нему и все варианты ответов (choices)
@@ -608,6 +610,7 @@ class ProfileAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ProfileSer()}
     )
+    @translate_api_response(fields=['pressure_test','life_expectancy_json','health_recommendations','risk_test','pressure_plus','diary_plus'])
     def get(self,request):
         def calculate_age(birth_date):
             today = date.today()
@@ -655,7 +658,7 @@ class ProfileMainSystemAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ProfileMainSystemSer()}
     )
-    @translate_health_keys_api
+
     def get(self, request):
         profile = request.user.profile
         serializer = self.serializer_class(profile)
@@ -2007,6 +2010,7 @@ class RentgenView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSerGet(many=True)}
     )
+    @translate_api_response(fields=['message','answer'])
     def get(self, request):
         profile = request.user.profile
         query = Rentgen.objects.filter(profile=profile).prefetch_related('rentgen_image').order_by('created_at')
@@ -2052,6 +2056,7 @@ class PetRentgenView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSerGet(many=True)}
     )
+    @translate_api_response(fields=['message','answer'])
     def get(self, request,message_id):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         query = PetRentgen.objects.filter(pet_id=message_id).prefetch_related('rentgen_image').order_by('created_at')
@@ -2062,19 +2067,21 @@ class PetRentgenView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: RentgenSer()}
     )
+    @translate_api_response(fields=['message'])
     @pet_update_system
     def post(self,request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
 
 
-            test=petrentgen(serializer.validated_data.get('photo'),serializer.validated_data.get('message'))
+            test=petrentgen(serializer.validated_data.get('file'),serializer.validated_data.get('message'))
             r=PetRentgen.objects.create(pet_id=message_id,message=serializer.validated_data.get('message'),answer=test['message'])
+
 
 
             consumables = [
                 PetRentgen_Image(rentgen=r, images=image)
-                for image in serializer.validated_data.get('photo')
+                for image in serializer.validated_data.get('file')
             ]
             PetRentgen_Image.objects.bulk_create(consumables)
 
@@ -2093,6 +2100,7 @@ class PetView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: PetSerGet(many=True)}
     )
+    @translate_api_response(fields=['risk_test'])
     def get(self, request):
         profile = request.user.profile
         query = Pet.objects.filter(profile=profile)
@@ -2398,7 +2406,7 @@ class CaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
-    @translate_api_response(fields=['detail'])
+    @translate_api_response(fields=['detail.еда'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -2440,6 +2448,7 @@ class CaroiesListView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesListSer(many=True)}
     )
+    @translate_api_response(fields=['foods.meals.detail.еда'])
     def get(self, request):
         profile = request.user.profile
         query=Calories.objects.filter(profile=profile,saved=True).exclude(detail=[]).order_by('-id')
@@ -2756,7 +2765,7 @@ class CaloriesChatView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
     )
-    @translate_api_response(fields=['detail'])
+    @translate_api_response(fields=['detail.еда'])
     def get(self,request):
         profile=request.user.profile
         today = localtime(now()).date()
@@ -2847,7 +2856,7 @@ class PetCaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
-
+    @translate_api_response(fields=['detail.еда'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
@@ -2888,6 +2897,7 @@ class PetCaroiesListView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesListSer(many=True)}
     )
+    @translate_api_response(fields=['foods.meals.detail.еда'])
     def get(self, request,message_id):
 
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
@@ -2949,13 +2959,13 @@ class PetCaloriesChatView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesChatSer(many=True)}
     )
+    @translate_api_response(fields=['detail.еда'])
     def get(self, request,message_id):
-        today = localtime(now()).date()
-        three_days_ago = today - timedelta(days=2)
+        #today = localtime(now()).date()
+        #three_days_ago = today - timedelta(days=2)
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
         query = PetCalories.objects.filter(
-            pet_id=message_id,
-            created_at__gte=three_days_ago
+            pet_id=message_id
         ).order_by('created_at')
         serializer = CaloriesChatSer(query, many=True)
 

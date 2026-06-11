@@ -13,10 +13,8 @@ from rest_framework.response import Response
 
 def translate_api_response(fields=None, key_fields=None):
     """
-    Полностью универсальный декоратор для любых методов APIView (GET, POST и др.).
-
-    :param fields: список полей для перевода строк ИЛИ целых JSON-структур (как detail).
-    :param key_fields: список полей, где переводятся ТОЛЬКО КЛЮЧИ/НАЗВАНИЯ (цифры остаются из БД).
+    Полностью универсальный декоратор для любых методов APIView.
+    Поддерживает синтаксис точек для вложенных JSON-структур (например: 'question.text', 'question.choices.text').
     """
     target_fields = set(fields) if fields else set()
     target_keys = set(key_fields) if key_fields else set()
@@ -24,66 +22,96 @@ def translate_api_response(fields=None, key_fields=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(self, request, *args, **kwargs):
-            # 1. Читаем язык строго из заголовка Accept-Language
+            # 1. Читаем язык из заголовка
             lang = request.headers.get('Accept-Language', 'ru')[:2].lower()
 
-            # 2. Выполняем саму вьюху (работает для GET, POST, PUT)
+            # 2. Выполняем вьюху
             response = view_func(self, request, *args, **kwargs)
 
-            # Если язык русский или ответ не успешный (не 200/201) — сразу отдаем оригинал
+            # Если язык русский или ответ некорректный — отдаем оригинал
             if lang == 'ru' or not isinstance(response, Response) or response.status_code not in [200, 201]:
                 return response
 
-            def get_cached_translation(value, target_lang):
-                """Хелпер точечного кэширования строк и объектов через MD5"""
-                if not value:
-                    return value
+            def get_cached_translation(text, target_lang):
+                """Хелпер точечного кэширования строк через MD5"""
+                if not text or not isinstance(text, str) or text.isdigit() or text.startswith(('http://', 'https://')):
+                    return text
 
-                # Если это обычная строка
-                if isinstance(value, str):
-                    if value.isdigit() or value.startswith(('http://', 'https://')):
-                        return value
-                    serialize_value = value
-                else:
-                    # Если это словарь или список (JSONField), сериализуем в строку с сортировкой ключей для стабильного хэша
-                    serialize_value = json.dumps(value, sort_keys=True, ensure_ascii=False)
-
-                text_hash = hashlib.md5(f"{serialize_value}_{target_lang}".encode('utf-8')).hexdigest()
+                text_hash = hashlib.md5(f"{text}_{target_lang}".encode('utf-8')).hexdigest()
                 cache_key = f"ai_trans_{text_hash}"
 
                 translated = cache.get(cache_key)
                 if not translated:
-                    # Вызов твоей базовой функции (теперь сюда может прилететь и dict/list)
-                    translated = translate_text_on_the_fly(value, target_lang)
-                    cache.set(cache_key, translated, timeout=60 * 60 * 24 * 30)  # Кэш на 30 дней
+                    # Вызов твоей базовой функции
+                    translated = translate_text_on_the_fly(text, lang)
+                    cache.set(cache_key, translated, timeout=60 * 60 * 24 * 30)
                 return translated
 
-            def transform_data(data):
-                """Рекурсивный обход и мутация чистого Python JSON-а"""
+            def process_nested_field(data, path_parts):
+                """
+                Рекурсивно спускается по указанному пути (например, ['question', 'text'])
+                и переводит только конечную целевую строку. Автоматически обрабатывает списки.
+                """
+                if not path_parts:
+                    # Если мы дошли до конца пути и это строка — переводим
+                    if isinstance(data, str):
+                        return get_cached_translation(data, lang)
+                    return data
+
+                current_part = path_parts[0]
+                remaining_parts = path_parts[1:]
+
+                # Если текущие данные — это список (как твои вопросы или choices)
+                if isinstance(data, list):
+                    return [process_nested_field(item, path_parts) for item in data]
+
+                # Если текущие данные — словарь
                 if isinstance(data, dict):
-                    # Если мы обрабатываем элемент структуры, чьё имя (или ключ) числится в key_fields
+                    if current_part in data:
+                        data[current_part] = process_nested_field(data[current_part], remaining_parts)
+                    return data
+
+                return data
+
+            def transform_data(data):
+                """Рекурсивный обход корневой структуры ответа DRF"""
+                if isinstance(data, dict):
+                    # Обработка key_fields
                     if 'name' in data and data['name'] in target_keys:
                         translated_name = get_cached_translation(data['name'], lang)
                         if isinstance(data.get('value'), dict):
-                            # Переводим только ключи внутреннего словаря, цифры не трогаем
                             return {
                                 "name": translated_name,
                                 "value": {get_cached_translation(k, lang): v for k, v in data['value'].items()}
                             }
                         return {"name": translated_name, "value": data.get('value')}
 
+                    # Основной проход по ключам первого уровня
                     new_dict = {}
                     for key, value in data.items():
-                        # РЕЖИМ 1: Изменено здесь! Убрали жесткую проверку isinstance(value, str)
-                        # Теперь если ключ совпал (например, 'detail'), мы отдаем его на перевод целиком
-                        if key in target_fields and value:
-                            new_dict[key] = get_cached_translation(value, lang)
+                        # Проверяем, есть ли этот ключ среди обычных или точечных полей
+                        # Ищем совпадения вроде 'question' или 'question.text'
+                        matching_paths = [f for f in target_fields if f == key or f.startswith(f"{key}.")]
 
-                        # РЕЖИМ 2: Перевод только ключей словаря, если сам ключ совпал с key_fields
+                        if matching_paths and value:
+                            current_value = value
+                            for path in matching_paths:
+                                if '.' in path:
+                                    # Если это путь через точку (например, 'question.text')
+                                    # Отсекаем первый ключ и берем остаток: ['text']
+                                    parts = path.split('.')[1:]
+                                    current_value = process_nested_field(current_value, parts)
+                                else:
+                                    # Если это просто плоское поле первого уровня
+                                    if isinstance(current_value, str):
+                                        current_value = get_cached_translation(current_value, lang)
+                            new_dict[key] = current_value
+
+                        # Режим перевода ключей словаря (key_fields)
                         elif key in target_keys and isinstance(value, dict):
                             new_dict[key] = {get_cached_translation(k, lang): v for k, v in value.items()}
 
-                        # Стандартный рекурсивный проход вглубь структуры
+                        # Обычный рекурсивный спуск, если поле не на перевод
                         elif isinstance(value, (dict, list)):
                             new_dict[key] = transform_data(value)
                         else:
@@ -95,7 +123,7 @@ def translate_api_response(fields=None, key_fields=None):
 
                 return data
 
-            # 3. Сброс DRF-типов и запуск трансформации
+            # 3. Сброс типов DRF и запуск
             if response.data:
                 pure_python_data = json.loads(json.dumps(response.data))
                 response.data = transform_data(pure_python_data)
@@ -103,7 +131,6 @@ def translate_api_response(fields=None, key_fields=None):
             return response
 
         return _wrapped_view
-
     return decorator
 
 
