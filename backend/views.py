@@ -1323,6 +1323,7 @@ class GetRelationshipListView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: GetRelationship(many=True)}
     )
+
     def get(self, request):
         profile = request.user.profile
         # Получаем QuerySet
