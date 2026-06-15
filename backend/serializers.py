@@ -108,12 +108,12 @@ class SetResetPasswordSer(serializers.Serializer):
     password2 = serializers.CharField(write_only=True, required=True)
     def validate_password(self, value):
         if len(value) < 6:
-            raise serializers.ValidationError("Password must be at least 6 characters long.")
+            raise serializers.ValidationError("Пароль должен содержать не менее 6 символов.")
         return value
 
     def validate(self, data):
         if data['password'] != data['password2']:
-            raise serializers.ValidationError("The two password fields didn't match.")
+            raise serializers.ValidationError("Пароли не совпадают.")
         return data
 
 
