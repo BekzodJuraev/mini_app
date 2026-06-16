@@ -766,7 +766,8 @@ class RefGet(serializers.Serializer):
     ref = serializers.UUIDField()
     family_ref = serializers.UUIDField()
 
-
+class Add_familyrefSer(serializers.Serializer):
+    family_ref = serializers.UUIDField()
 class DailyCheckSer(serializers.Serializer):
     feel_today=serializers.CharField()
     mood=serializers.CharField()

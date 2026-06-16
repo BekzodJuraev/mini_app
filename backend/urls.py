@@ -4,6 +4,8 @@ urlpatterns=[
  path('api/register/first',views.RegisterFirstAPIView.as_view(),name='register1'),
  path('api/register/second',views.RegisterAPIView.as_view(),name='register'),
 
+
+
  path('api/login',views.LoginAPIView.as_view(),name='login'),
  path('api/reset/email',views.RequestPasswordReset.as_view(),name='reset_email'),
  path('api/reset/set_password',views.SetPasswordView.as_view(),name='set_passowrd'),
@@ -47,6 +49,7 @@ urlpatterns=[
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
+ path('api/relationship/add_by_ref',views.AddRefamilyvView.as_view()),
 
  path('api/drugs/create',views.DrugsAPiView.as_view(),name='drugs_create'),
  path('api/drugs/list',views.DrugsAPIListView.as_view(),name='drugs_list'),
