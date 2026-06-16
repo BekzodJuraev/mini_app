@@ -85,7 +85,8 @@ from .serializers import (
     Notification_drugs_pet_Ser,
     DrugUpdatePetSer,
     NotificationPEtSer,
-    HearthTestSer
+    HearthTestSer,
+    Add_familyrefSer
 
 
 
@@ -332,6 +333,26 @@ def pet_update_system(f):
 
         return message
     return wrapper
+class AddRefamilyvView(APIView):
+    serializer_class = Add_familyrefSer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = request.user.profile
+        serializer = self.serializer_class(data=request.data)
+
+        if serializer.is_valid():
+            family_ref = serializer.validated_data['family_ref']
+            profile_ref=Profile.objects.filter(family_ref=family_ref).update(recommended_by_family=profile,family=profile)
+
+            # Создаем кастомный ответ с сообщением
+            response_data = {
+                "status": "Добавлен в семью",
+                "data": serializer.data
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminTestsView(APIView):
     serializer_class = AdminTestsSer
@@ -2094,6 +2115,7 @@ class PetRentgenView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
 class PetView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PetSerCreate
