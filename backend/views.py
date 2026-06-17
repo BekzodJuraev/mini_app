@@ -166,6 +166,14 @@ def get_chat_history(profile):
 
 
 def get_user_and_pet_context(profile):
+    """
+    Максимальный медицинский контекст:
+    Профиль, Семья, Цели, Последние 15 чекапов, Тесты, Рентген/МРТ,
+    Давление, Привычки, Калории за 30 дней для человека, его семьи и питомцев.
+    """
+    # ЛОКАЛЬНЫЕ ИМПОРТЫ МОДЕЛЕЙ (Защита от Circular Import)
+    from .models import Calories, Rentgen
+
     # Временной отрезок за последние 30 дней
     start_date = timezone.now().date() - timedelta(days=30)
 
@@ -173,7 +181,7 @@ def get_user_and_pet_context(profile):
     human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:10])
     human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
 
-    # 2. ПОСЛЕДНИЕ 5 ЗАКЛЮЧЕНИЙ РЕНТГЕНА / МРТ (Rentgen)
+    # 2. Последние 5 заключений рентгена / МРТ (Rentgen)
     rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:5])
     rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
 
@@ -230,6 +238,7 @@ def get_user_and_pet_context(profile):
     pets_data = []
     for pet in profile.pet.all():
         pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:5])
+        pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
 
         pet_calories_30_days = pet.pet_calories.filter(
             created_at__gte=start_date,
@@ -262,9 +271,40 @@ def get_user_and_pet_context(profile):
             "birth_date": pet.age.strftime('%Y-%m-%d') if pet.age else None,
             "health_system_metrics": pet.health_system or {},
             "environmental_risks_report": pet.risk_test,
-            "last_medical_tests": [pt.message for pt in pet_tests if pt.message],
+            "last_medical_tests": pet_tests_history,
             "nutrition_history_30_days": pet_food_history,
             "nutrition_goals": pet_nutrition_goals
+        })
+
+    # 9. ПОДКЛЮЧАЕМ ДАННЫЕ О СЕМЬЕ (Profile.family)
+    family_data = []
+
+    # Собираем всех членов семьи: и того, на кого указывает текущий профиль,
+    # и тех, кто указал текущий профиль у себя (обратная связь через related_name)
+    family_members = set()
+    if profile.family:
+        family_members.add(profile.family)
+
+    # Добавляем тех, у кого этот юзер прописан как глава семьи/родственник
+    for member in profile.family_family.all():
+        family_members.add(member)
+
+    for member in family_members:
+        # Для каждого члена семьи собираем только критически важный срез данных (без ухода в рекурсию)
+        m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:5])
+        m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
+
+        m_habits = [f"{h.name_habit} ({h.lenght})" for h in member.habit.all()]
+
+        family_data.append({
+            "name": member.name,
+            "gender": member.gender,
+            "birth_date": member.date_birth.strftime('%Y-%m-%d') if member.date_birth else None,
+            "health_indicators_score": member.health_system or {},
+            "environmental_risks": member.risk_test,
+            "health_recommendations_summary": member.health_recommendations,
+            "habits": m_habits,
+            "recent_medical_tests": m_tests_history
         })
 
     # Итоговый JSON для OpenAI
@@ -282,14 +322,15 @@ def get_user_and_pet_context(profile):
         "user_nutrition_and_water_goals": user_nutrition_goals,
         "user_daily_checkups_last_15_days": daily_checks_history,
         "user_medical_tests": human_tests_history,
-        "user_rentgen_and_mri_reports": rentgen_history,  # ТУТ ТВОЙ РЕНТГЕН!
+        "user_rentgen_and_mri_reports": rentgen_history,
         "user_blood_pressure_history": pressure_history,
         "user_habits": habits_list,
         "user_nutrition_history_30_days": {
             "food_records": human_food_history,
             "total_water_intake_liters_last_30_days": total_water_30_days
         },
-        "user_pets": pets_data
+        "user_pets": pets_data,
+        "user_family_members": family_data  # СЕМЬЯ ТЕПЕРЬ ТУТ!
     }
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
@@ -2540,18 +2581,64 @@ class ChatPetAPIView(APIView):
     )
     @pet_update_system
     @translate_api_response(fields=['message'])
-    def post(self,request,message_id):
+    def post(self, request, message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            profile=request.user.profile
+            profile = request.user.profile
             message = serializer.validated_data.get('message')
 
+            # 1. Достаем питомца (сразу проверяем владельца)
             pet = get_object_or_404(Pet, id=message_id, profile=profile)
 
+            # 2. Собираем ЛЕГКИЙ контекст только для этого питомца
+            start_date = timezone.now().date() - timedelta(days=30)
 
-            response_data = chat_system_pet(message)
+            # Тянем только его тесты (исключая пустые)
+            pet_tests = pet.tests_pet.exclude(message=None).order_by('-created_at')[:5]
+            pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
 
-            PetChat.objects.create(pet_id=message_id,question=message,answer=response_data)
+            # Тянем только его историю питания за 30 дней
+            pet_calories = pet.pet_calories.filter(created_at__gte=start_date, saved=True).order_by('-created_at')
+            pet_food_history = [
+                {"date": pc.created_at.strftime('%Y-%m-%d'), "detail": pc.detail}
+                for pc in pet_calories if pc.detail
+            ]
+
+            # Цели по КБЖУ питомца
+            pet_nutrition_goals = {}
+            if hasattr(pet, 'nutrition_goal_pet') and pet.nutrition_goal_pet:
+                p_goal = pet.nutrition_goal_pet
+                pet_nutrition_goals = {
+                    "target_calories": p_goal.calories,
+                    "target_proteins": p_goal.proteins,
+                    "target_fats": p_goal.fats,
+                    "target_carbs": p_goal.carbs,
+                    "target_fiber": p_goal.fiber
+                }
+
+            # Итоговый компактный JSON-контекст для ИИ
+            pet_ai_context = {
+                "name": pet.klichka,
+                "type": pet.pet,
+                "gender": pet.gender,
+                "birth_date": pet.age.strftime('%Y-%m-%d') if pet.age else None,
+                "place_of_residence": profile.place_of_residence,  # Локация важна для климата/рисков
+                "health_system_metrics": pet.health_system or {},
+                "environmental_risks_report": pet.risk_test,
+                "last_medical_tests": pet_tests_history,
+                "nutrition_history_30_days": pet_food_history,
+                "nutrition_goals": pet_nutrition_goals
+            }
+
+            # 3. Передаем в чат сообщение и легкий контекст
+            response_data = chat_system_pet(message, pet_ai_context)
+
+            # 4. Сохраняем историю
+            PetChat.objects.create(
+                pet_id=message_id,
+                question=message,
+                answer=response_data
+            )
 
             return Response({'message': response_data}, status=status.HTTP_200_OK)
 
