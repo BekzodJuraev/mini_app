@@ -1623,6 +1623,83 @@ def rentgen(photo_files, message):
     except Exception as e:
         return {"message": f"Ошибка при запросе к API: {str(e)}"}
 
+def rentgen(photo_files, message, rentgen_history):
+    image_contents = []
+    text_from_docs = ""
+
+    for file in photo_files:
+        try:
+            file.seek(0)
+            filename = file.name.lower()
+
+            if filename.endswith((".jpg", ".jpeg", ".png", ".webp")):
+                encoded = base64.b64encode(file.read()).decode("utf-8")
+                image_contents.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encoded}"
+                    }
+                })
+            elif filename.endswith(".pdf"):
+                pdf_bytes = file.read()
+                with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+                    for page in doc:
+                        text_from_docs += page.get_text() + "\n"
+            elif filename.endswith(".txt"):
+                text_from_docs += file.read().decode("utf-8") + "\n"
+        except Exception as e:
+            print(f"FILE ERROR ({filename}):", e)
+
+    # Промпт теперь принимает всю историю (включая прошлые риски) в одном поле rentgen_history
+    prompt = f"""
+Ты квалифицированный медицинский радиолог и ИИ-ассистент. Тщательно проанализируй текущие данные пациента.
+
+ТЕКУЩИЕ ДАННЫЕ ДЛЯ АНАЛИЗА (Только для поля "message"):
+ТЕКСТ ИЗ ТЕКУЩИХ ДОКУМЕНТОВ: {text_from_docs if text_from_docs else "Не загружен."}
+СООБЩЕНИЕ ОТ ПОЛЬЗОВАТЕЛЯ: {message if message else "Нет"}
+
+КЛИНИЧЕСКИЙ КОНТЕКСТ И ИСТОРИЯ ПРОШЛЫХ РИСКОВ (Для понимания динамики и обновления поля "analysis_risk"):
+{rentgen_history if rentgen_history else "История пуста."}
+
+ТВОЯ ЗАДАЧА:
+1. В поле "message" дай свой расширенный анализ и рекомендации, касающиеся строго текущих загруженных снимков/документов, оценивая локальную динамику изменений.
+2. В поле "analysis_risk" проанализируй всю имеющуюся историю, объедини её с новыми данными и сформируй ОБНОВЛЕННЫЙ глобальный отчет рисков и рекомендаций строго по структуре из примера.
+
+Пример структуры для поля "analysis_risk":
+В результате анализа загруженных данных sistema обнаружила [актуальное описание проблемы, обновленное с учетом новых данных]. Подобные показатели могут указывать на [интерпретация]. Это состояние может сопровождаться [перечисление возможных симптомов].
+Рекомендации системы:
+— [первая рекомендация];
+— [вторая рекомендация];
+— [третья рекомендация].
+
+Формат JSON на выходе:
+{{
+  "message": "Твой расширенный анализ и рекомендации",
+  "analysis_risk": "[Сюда вставь обновленный глобальный отчет рисков и рекомендаций на основе истории рисков и новых данных]"
+}}
+"""
+
+    messages = [
+        {"role": "system", "content": "Ты квалифицированный медицинский помощник. Отвечаешь строго в формате JSON."},
+        {"role": "user", "content": [
+                                        {"type": "text", "text": prompt}
+                                    ] + image_contents}
+    ]
+
+    try:
+        response = openai.ChatCompletion.create(
+            model=MODEL,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+        result_text = response["choices"][0]["message"]["content"]
+        return json.loads(result_text)
+    except Exception as e:
+        return {
+            "message": f"Ошибка при запросе к API: {str(e)}",
+            "analysis_risk": "Не удалось обновить анализ рисков."
+        }
 def petrentgen(photo_files, message):
 
 

@@ -409,7 +409,7 @@ class ProfileSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK','place_of_residence','date_birth','pressure_test','life_expectancy_json','health_recommendations','risk_test','pressure_plus','diary_plus']
+        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK','place_of_residence','date_birth','pressure_test','life_expectancy_json','health_recommendations','risk_test','pressure_plus','diary_plus','analysis_risk']
 
 
 
@@ -811,7 +811,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test']
+        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','analysis_risk']
 
     def get_health(self, obj):
         return [obj.health_system]
