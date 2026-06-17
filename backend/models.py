@@ -181,6 +181,7 @@ class Profile(models.Model):
     risk_test=models.TextField(null=True,default=None)
     pressure_plus=models.TextField(null=True,default=None)
     diary_plus=models.TextField(null=True,default=None)
+    analysis_risk=models.TextField(null=True,default=None)
 
     #Overall_tone=models.IntegerField(default=0)
 
@@ -461,6 +462,7 @@ class Pet(models.Model):
     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
     health_system = models.JSONField(null=True, default=None)
     risk_test=models.TextField(null=True,default=None)
+    analysis_risk = models.TextField(null=True, default=None)
 
 
     def __str__(self):

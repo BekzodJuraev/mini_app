@@ -2087,27 +2087,52 @@ class RentgenView(APIView):
     @update_system
     @translate_api_response(fields=['message'])
     def post(self, request):
-
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
+            current_message = serializer.validated_data.get('message')
+            files = serializer.validated_data.get('file')
 
-            test=rentgen(serializer.validated_data.get('file'),serializer.validated_data.get('message'))
-            r=Rentgen.objects.create(profile=profile,message=serializer.validated_data.get('message'),answer=test['message'])
+            # 1. Извлекаем чистые заключения (только answer)
+            past_records = Rentgen.objects.filter(profile=profile).exclude(answer=None).order_by('-created_at')[:20]
 
+            history_lines = [
+                f"Дата: {r.created_at.strftime('%Y-%m-%d')} -> Заключение: {r.answer}"
+                for r in reversed(past_records)
+            ]
+            records_context = "\n".join(history_lines)
 
+            # 2. Соединяем с глобальным отчетом из профиля
+            rentgen_history_context = ""
+            if profile.analysis_risk:
+                rentgen_history_context += f"ПОСЛЕДНИЙ СФОРМИРОВАННЫЙ АНАЛИЗ РИСКОВ ИЗ ПРОФИЛЯ:\n{profile.analysis_risk}\n\n"
+
+            rentgen_history_context += f"ИСТОРИЯ ПРЕДЫДУЩИХ ЗАКЛЮЧЕНИЙ:\n{records_context}"
+
+            # 3. Отправляем в OpenAI (функция деф rentgen остается прежней)
+            test = rentgen(files, current_message, rentgen_history_context)
+
+            # 4. Обновляем глобальный накопительный отчет в профиле
+            new_analysis_risk = test.get('analysis_risk')
+            if new_analysis_risk:
+                profile.analysis_risk = new_analysis_risk
+                profile.save(update_fields=['analysis_risk'])
+
+            # 5. Сохраняем текущее исследование в базу
+            r = Rentgen.objects.create(
+                profile=profile,
+                message=current_message,
+                answer=test.get('message')
+            )
+
+            # 6. Сохраняем картинки/документы пачкой
             consumables = [
                 Rentgen_Image(rentgen=r, images=image)
-                for image in serializer.validated_data.get('file')
+                for image in files
             ]
             Rentgen_Image.objects.bulk_create(consumables)
 
-
-
-
-
-
-            return Response(test, status=status.HTTP_200_OK)
+            return Response({'message': test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
