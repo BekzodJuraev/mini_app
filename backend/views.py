@@ -169,10 +169,10 @@ def get_user_and_pet_context(profile):
     """
     Максимальный медицинский контекст:
     Профиль, Семья, Цели, Последние 15 чекапов, Тесты, Рентген/МРТ,
-    Давление, Привычки, Калории за 30 дней для человека, его семьи и питомцев.
+    Давление, Привычки (с историей выполнений), Калории за 30 дней для человека, его семьи и питомцев.
     """
     # ЛОКАЛЬНЫЕ ИМПОРТЫ МОДЕЛЕЙ (Защита от Circular Import)
-    from .models import Calories, Rentgen
+    from .models import Calories, Rentgen, Tracking_Habit
 
     # Временной отрезок за последние 30 дней
     start_date = timezone.now().date() - timedelta(days=30)
@@ -189,8 +189,18 @@ def get_user_and_pet_context(profile):
     pressure_records = list(profile.pressure_history.order_by('-created_at')[:10])
     pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
 
-    # 4. Привычки человека
-    habits_list = [f"{h.name_habit} ({h.lenght})" for h in profile.habit.all()]
+    # 4. Привычки человека с подсчетом выполненных дней
+    # Аннотируем каждую привычку количеством успешных отметок (check_is=True)
+    habits_with_counts = profile.habit.all().annotate(
+        completed_days_count=Count(
+            'habit_tracking',
+            filter=Q(habit_tracking__profile=profile, habit_tracking__check_is=True)
+        )
+    )
+    habits_list = [
+        f"{h.name_habit} ({h.lenght}) — выполнено дней: {h.completed_days_count}"
+        for h in habits_with_counts
+    ]
 
     # 5. Последние 15 ежедневных чекапов человека (Daily_check)
     daily_checks = list(
@@ -279,22 +289,28 @@ def get_user_and_pet_context(profile):
     # 9. ПОДКЛЮЧАЕМ ДАННЫЕ О СЕМЬЕ (Profile.family)
     family_data = []
 
-    # Собираем всех членов семьи: и того, на кого указывает текущий профиль,
-    # и тех, кто указал текущий профиль у себя (обратная связь через related_name)
     family_members = set()
     if profile.family:
         family_members.add(profile.family)
 
-    # Добавляем тех, у кого этот юзер прописан как глава семьи/родственник
     for member in profile.family_family.all():
         family_members.add(member)
 
     for member in family_members:
-        # Для каждого члена семьи собираем только критически важный срез данных (без ухода в рекурсию)
         m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:5])
         m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
 
-        m_habits = [f"{h.name_habit} ({h.lenght})" for h in member.habit.all()]
+        # Считаем привычки и для членов семьи, чтобы ИИ понимал их уровень дисциплины
+        m_habits_with_counts = member.habit.all().annotate(
+            completed_days_count=Count(
+                'habit_tracking',
+                filter=Q(habit_tracking__profile=member, habit_tracking__check_is=True)
+            )
+        )
+        m_habits = [
+            f"{h.name_habit} ({h.lenght}) — выполнено дней: {h.completed_days_count}"
+            for h in m_habits_with_counts
+        ]
 
         family_data.append({
             "name": member.name,
@@ -324,19 +340,21 @@ def get_user_and_pet_context(profile):
         "user_medical_tests": human_tests_history,
         "user_rentgen_and_mri_reports": rentgen_history,
         "user_blood_pressure_history": pressure_history,
-        "user_habits": habits_list,
+        "user_habits": habits_list,  # Теперь содержит количество выполненных дней!
         "user_nutrition_history_30_days": {
             "food_records": human_food_history,
             "total_water_intake_liters_last_30_days": total_water_30_days
         },
         "user_pets": pets_data,
-        "user_family_members": family_data  # СЕМЬЯ ТЕПЕРЬ ТУТ!
+        "user_family_members": family_data
     }
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
         message = f(self, request, *args, **kwargs)
         if message.status_code == 200 and 'message' in message.data:
             profile = request.user.profile
+            #print(message.data['message'])
+
 
 
 
@@ -461,6 +479,7 @@ class AdminTestDetailAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AIInputSer()}
     )
+    @update_system
     @translate_api_response(fields=['summary'])
     def post(self, request, pk, pet_id=None):
         test = get_object_or_404(Test, pk=pk)
@@ -1288,30 +1307,60 @@ class Tracking_checkView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: TrackingSer()}
     )
+    @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             target_date = serializer.validated_data.get('date')
-
+            check_is_val = serializer.validated_data.get('check_is')
 
             profile = request.user.profile
             habit = Habit.objects.filter(name_habit=serializer.validated_data['habit']).first()
 
             if habit:
-                # Добавляем дату в фильтр создания
+                # 1. Забираем или создаем объект трекера
                 obj, created = Tracking_Habit.objects.get_or_create(
                     profile=profile,
                     habit=habit,
                     created_at=target_date,
-                    defaults={'check_is': serializer.validated_data['check_is']}
+                    defaults={'check_is': check_is_val}
                 )
 
-                if created:
-                    return Response({'message': 'Tracking habit created'}, status=201)
-                else:
-                    return Response({'message': 'Already marked for this date'}, status=200)
+                # Если запись уже была, но юзер изменил статус (например, передумал и отметил) — обновляем
+                if not created and obj.check_is != check_is_val:
+                    obj.check_is = check_is_val
+                    obj.save(update_fields=['check_is'])
 
-            return Response({'message': 'Habit not found'}, status=404)
+                # 2. Считаем общее количество дней выполнения этой привычки
+                total_completed_days = Tracking_Habit.objects.filter(
+                    profile=profile,
+                    habit=habit,
+                    check_is=True
+                ).count()
+                total_missed_days = Tracking_Habit.objects.filter(
+                    profile=profile,
+                    habit=habit,
+                    check_is=False
+                ).count()
+
+                # 3. Формируем единый, жирный message для твоего ИИ-декоратора
+                status_text = "выполнена успешно" if obj.check_is else "не выполнена / пропущена"
+                habit_type_ru = "Полезная" if habit.type == "good" else "Вредная"
+                ai_message = (
+                    f"Привычка '{habit.name_habit}' ({habit.lenght}). "
+                    f"Тип привычки: {habit_type_ru} . "
+                    f"Статус за дату {obj.created_at}: {status_text}. "
+                    f"Статистика за всё время — выполнено дней: {total_completed_days}, пропущено дней: {total_missed_days}."
+                )
+
+                # 4. Отдаем полный фарш в Response
+                response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+                return Response({
+                    'success': obj.check_is,  # Поле успеха (True/False)
+                    'message': ai_message,  # Полный текст для chat_update промпта
+                }, status=response_status)
+
+            return Response({'message': 'Habit not found', 'success': False}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2495,6 +2544,7 @@ class CaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
+    @update_system
     @translate_api_response(fields=['detail.еда'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
@@ -2515,6 +2565,7 @@ class CaroiesView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
+    @update_system
     def patch(self, request, id):
         """
         Метод для активации флага saved=True.
@@ -2527,7 +2578,7 @@ class CaroiesView(APIView):
         cal_record.saved = True
         cal_record.save()
 
-        return Response({'message': 'Calories saved successfully'}, status=status.HTTP_200_OK)
+        return Response({'message': cal_record.detail}, status=status.HTTP_200_OK)
 
 
 class CaroiesListView(APIView):
