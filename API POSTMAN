@@ -64,7 +64,23 @@ Rel
   "smoke_what": "Cигареты",
   "smoke_day": 10
 }
-
+{
+  "who_is": "Бабушка/дедушка",
+  "name": "John",
+  "lastname": "Doe",
+  "middle_name": "Michael",
+  "gender": "Мучжина",
+  "place_of_residence": "Москва",
+  "date_birth": "1990-05-20",
+  "height": 180,
+  "weight": 75,
+  "recent_smoke": "да",
+  "now_smoke": "нет",
+  "exp_smoke": 5,
+  "smoke_what": "Cигареты",
+  "smoke_day": 10,
+  "ref_family":"e6188f91-e803-4d38-97c6-c4f20fc2fc3d"
+}
 {
     "catigories":"Антибиотик4",
     "name":"Аспирин4",

@@ -290,7 +290,7 @@ class RelationshipSer(serializers.ModelSerializer):
         smoke_what = validated_data.pop('smoke_what', "")
         smoke_day = validated_data.pop('smoke_day', 0)
         ref_family = validated_data.pop('ref_family', None)
-        print(user)
+
         ik = 0
         if now_smoke and exp_smoke and smoke_day:
             ik = (smoke_day * exp_smoke / 20)
