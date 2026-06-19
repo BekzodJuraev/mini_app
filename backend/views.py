@@ -1404,12 +1404,13 @@ class RelationshipView(APIView):
     )
 
     def post(self,request):
+        #print(request.user)
         serializer = self.serializer_class(data=request.data,context={'request': request})
         serializer.is_valid(raise_exception=True)
 
         user = serializer.save()
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key}, status=status.HTTP_201_CREATED)
+        #token, created = Token.objects.get_or_create(user=user)
+        return Response({'message': "Created"}, status=status.HTTP_201_CREATED)
 
 
 class RelationshipBabyView(APIView):

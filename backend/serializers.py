@@ -266,18 +266,18 @@ class RelationshipSer(serializers.ModelSerializer):
     exp_smoke = serializers.IntegerField(required=False)
     smoke_what = serializers.CharField(required=False)
     smoke_day = serializers.IntegerField(required=False)
-
+    ref_family = serializers.UUIDField(required=True)
 
 
 
     class Meta:
-        model=User
-        fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day']
+        model=Profile
+        fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref_family']
 
 
 
     def create(self, validated_data):
-        profile = self.context['request'].user.profile
+        user=self.context['request'].user
         recent_smoke=validated_data.pop('recent_smoke')
         who_is=validated_data.get('who_is')
         now_smoke=validated_data.pop('now_smoke')
@@ -289,7 +289,8 @@ class RelationshipSer(serializers.ModelSerializer):
         date_birth=validated_data.get('date_birth')
         smoke_what = validated_data.pop('smoke_what', "")
         smoke_day = validated_data.pop('smoke_day', 0)
-
+        ref_family = validated_data.pop('ref_family', None)
+        print(user)
         ik = 0
         if now_smoke and exp_smoke and smoke_day:
             ik = (smoke_day * exp_smoke / 20)
@@ -310,8 +311,9 @@ class RelationshipSer(serializers.ModelSerializer):
             user.profile.save(update_fields=['health_system'])
 
 
-        user = User.objects.create_user(username=str(uuid.uuid4()))
-        profile = Profile.objects.create(username=user, family=profile, **validated_data,IK=ik)
+        #user = User.objects.create_user(username=str(uuid.uuid4()))
+        family = Profile.objects.filter(family_ref=ref_family).first()
+        profile = Profile.objects.create(username=user, family=family, **validated_data,IK=ik)
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
