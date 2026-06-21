@@ -312,8 +312,8 @@ class RelationshipSer(serializers.ModelSerializer):
 
 
         #user = User.objects.create_user(username=str(uuid.uuid4()))
-        family = Profile.objects.filter(family_ref=ref_family).first()
-        profile = Profile.objects.create(username=user, family=family, **validated_data,IK=ik)
+        family = Profile.objects.filter(family_ref=ref_family).first() #A
+        profile = Profile.objects.create(username=user, family=family, **validated_data,IK=ik) #B
 
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
@@ -650,7 +650,7 @@ class GetRelationship(serializers.ModelSerializer):
         # 1. Проверяем наличие цели (NutritionGoal). Если её нет — сразу возвращаем None
         goal = getattr(obj, 'nutrition_goal', None)
         if not goal or goal.calories <= 0:
-            return None
+            return 100
 
         # 2. Считаем факт калорий за сегодня для конкретного профиля
         today = localtime(now()).date()

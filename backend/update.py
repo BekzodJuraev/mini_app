@@ -195,48 +195,95 @@ def monthly_report_only_tests_decorator(model_class):
 
     model_class.save = new_save
     return model_class
+
+
+from threading import Thread
+
+
 def environmental_risk_decorator(model_class):
     original_save = model_class.save
 
     def new_save(self, *args, **kwargs):
-        # 1. Проверяем, изменился ли именно timezone
-        is_timezone_changed = False
+        # 1. Проверяем, изменилось ли именно место проживания (place_of_residence)
+        is_place_changed = False
+
         if self.pk:
             try:
-                # Берем старое значение из БД
+                # Берем старое значение из БД для сравнения
                 old_instance = self.__class__.objects.get(pk=self.pk)
-                if old_instance.timezone != self.timezone:
-                    is_timezone_changed = True
+                if old_instance.place_of_residence != self.place_of_residence:
+                    is_place_changed = True
             except self.__class__.DoesNotExist:
-                # Если это создание нового объекта, тоже триггерим
-                is_timezone_changed = True
+                is_place_changed = True
         else:
-            # Новый объект (без PK)
-            is_timezone_changed = True
+            # Новый объект (первичное создание профиля)
+            is_place_changed = True
 
-        # 2. Сохраняем объект
+        # 2. Сохраняем объект стандартным методом
         original_save(self, *args, **kwargs)
 
-        # 3. Если timezone изменился — запускаем ИИ в фоне
-        if is_timezone_changed and self.timezone:
+        # 3. Если город проживания изменился или заполнился впервые — запускаем ИИ в фоне
+        if is_place_changed and self.place_of_residence:
             def run_analysis():
                 try:
-                    # Вызываем промпт, передавая только timezone
-                    result = environmental_risk_analysis(self.timezone)
+                    # Передаем в ИИ-анализатор город/регион проживания
+                    result = environmental_risk_analysis(self.place_of_residence)
 
-                    # Сохраняем результат в поле (например, env_risks_json)
-                    # Используем .update() чтобы не вызвать save() повторно
+                    # Сохраняем результат анализа в поле risk_test профиля
+                    # Используем update(), чтобы не вызвать бесконечный рекурсивный save()
                     self.__class__.objects.filter(pk=self.pk).update(
-                        risk_test=result.get("message", "")
-                        # Если у тебя есть поле для штрафа к легким:
+                        risk_test=result.get("message", "Анализ рисков пуст.")
                     )
                 except Exception as e:
-                    print(f"Error in environmental analysis: {e}")
+                    print(f"Error in environmental analysis for {self.place_of_residence}: {e}")
 
+            # Запуск тяжелого запроса к OpenAI в отдельном потоке (background task)
             Thread(target=run_analysis, daemon=True).start()
 
     model_class.save = new_save
     return model_class
+# def environmental_risk_decorator(model_class):
+#     original_save = model_class.save
+#
+#     def new_save(self, *args, **kwargs):
+#         # 1. Проверяем, изменился ли именно timezone
+#         is_timezone_changed = False
+#         if self.pk:
+#             try:
+#                 # Берем старое значение из БД
+#                 old_instance = self.__class__.objects.get(pk=self.pk)
+#                 if old_instance.timezone != self.timezone:
+#                     is_timezone_changed = True
+#             except self.__class__.DoesNotExist:
+#                 # Если это создание нового объекта, тоже триггерим
+#                 is_timezone_changed = True
+#         else:
+#             # Новый объект (без PK)
+#             is_timezone_changed = True
+#
+#         # 2. Сохраняем объект
+#         original_save(self, *args, **kwargs)
+#
+#         # 3. Если timezone изменился — запускаем ИИ в фоне
+#         if is_timezone_changed and self.timezone:
+#             def run_analysis():
+#                 try:
+#                     # Вызываем промпт, передавая только timezone
+#                     result = environmental_risk_analysis(self.timezone)
+#
+#                     # Сохраняем результат в поле (например, env_risks_json)
+#                     # Используем .update() чтобы не вызвать save() повторно
+#                     self.__class__.objects.filter(pk=self.pk).update(
+#                         risk_test=result.get("message", "")
+#                         # Если у тебя есть поле для штрафа к легким:
+#                     )
+#                 except Exception as e:
+#                     print(f"Error in environmental analysis: {e}")
+#
+#             Thread(target=run_analysis, daemon=True).start()
+#
+#     model_class.save = new_save
+#     return model_class
 def update_life_expectancy_decorator(model_class):
     original_save = model_class.save
 

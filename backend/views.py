@@ -402,8 +402,10 @@ class AddRefamilyvView(APIView):
 
         if serializer.is_valid():
             family_ref = serializer.validated_data['family_ref']
-            profile_ref=Profile.objects.filter(family_ref=family_ref).update(recommended_by_family=profile,family=profile)
-
+            family = Profile.objects.filter(family_ref=family_ref).first()
+            profile.recommended_by_family=family
+            profile.family=family
+            profile.save(update_fields=['recommended_by_family','family'])
             # Создаем кастомный ответ с сообщением
             response_data = {
                 "status": "Добавлен в семью",
@@ -412,6 +414,21 @@ class AddRefamilyvView(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class DeleteFromFamilyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        profile=request.user.profile
+
+
+        # Remove them from the family without deleting the user row
+        profile.family = None
+        profile.save(update_fields=['family'])
+
+        return Response(
+            {"detail": "User's family association cleared. Account is safe."},
+            status=status.HTTP_200_OK
+        )
 
 class AdminTestsView(APIView):
     serializer_class = AdminTestsSer
@@ -422,7 +439,7 @@ class AdminTestsView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: AdminTestsSer()}
     )
-    @translate_api_response(fields=['title','description'])
+    @translate_api_response(fields=['title','description','system_display'])
     def get(self, request):
         query=Test.objects.all()
         serializer = self.serializer_class(query,many=True)
