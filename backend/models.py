@@ -183,6 +183,7 @@ class Choice(models.Model):
         return self.text
 @environmental_risk_decorator
 @update_life_expectancy_decorator
+@health_recommendations_decorator
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     telegram_id=models.IntegerField(default=0)
@@ -304,7 +305,6 @@ class Tests_Pet(models.Model):
 @pulse_diary_decorator
 @update_life_expectancy_decorator
 @monthly_report_only_tests_decorator
-
 class Tests(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='tests', verbose_name="Профиль"
