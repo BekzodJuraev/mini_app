@@ -168,8 +168,9 @@ def get_chat_history(profile):
 def get_user_and_pet_context(profile):
     """
     Максимальный медицинский контекст:
-    Профиль, Семья, Цели, Последние 15 чекапов, Тесты, Рентген/МРТ,
-    Давление, Привычки (с историей выполнений), Калории за 30 дней для человека, его семьи и питомцев.
+    Профиль (с ростом и весом), Семья, Цели, Последние 15 чекапов, Тесты, Рентген/МРТ,
+    Давление, Привычки (с историей выполнений и типами "Полезная/Вредная"),
+    Калории за 30 дней для человека, его семьи и питомцев.
     """
     # ЛОКАЛЬНЫЕ ИМПОРТЫ МОДЕЛЕЙ (Защита от Circular Import)
     from .models import Calories, Rentgen, Tracking_Habit
@@ -189,16 +190,17 @@ def get_user_and_pet_context(profile):
     pressure_records = list(profile.pressure_history.order_by('-created_at')[:10])
     pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
 
-    # 4. Привычки человека с подсчетом выполненных дней
-    # Аннотируем каждую привычку количеством успешных отметок (check_is=True)
+    # 4. Привычки человека с подсчетом выполненных дней и типами
     habits_with_counts = profile.habit.all().annotate(
         completed_days_count=Count(
             'habit_tracking',
             filter=Q(habit_tracking__profile=profile, habit_tracking__check_is=True)
         )
     )
+
+    # Формируем список привычек с явным указанием типа (Полезная/Вредная)
     habits_list = [
-        f"{h.name_habit} ({h.lenght}) — выполнено дней: {h.completed_days_count}"
+        f"{h.name_habit} ({h.lenght}) [Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней: {h.completed_days_count}"
         for h in habits_with_counts
     ]
 
@@ -300,7 +302,7 @@ def get_user_and_pet_context(profile):
         m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:5])
         m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
 
-        # Считаем привычки и для членов семьи, чтобы ИИ понимал их уровень дисциплины
+        # Считаем привычки и их типы для членов семьи
         m_habits_with_counts = member.habit.all().annotate(
             completed_days_count=Count(
                 'habit_tracking',
@@ -308,7 +310,7 @@ def get_user_and_pet_context(profile):
             )
         )
         m_habits = [
-            f"{h.name_habit} ({h.lenght}) — выполнено дней: {h.completed_days_count}"
+            f"{h.name_habit} ({h.lenght}) [Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней: {h.completed_days_count}"
             for h in m_habits_with_counts
         ]
 
@@ -316,10 +318,12 @@ def get_user_and_pet_context(profile):
             "name": member.name,
             "gender": member.gender,
             "birth_date": member.date_birth.strftime('%Y-%m-%d') if member.date_birth else None,
+            "height": member.height,
+            "weight": member.weight,
             "health_indicators_score": member.health_system or {},
             "environmental_risks": member.risk_test,
             "health_recommendations_summary": member.health_recommendations,
-            "habits": m_habits,
+            "habits": m_habits,  # Теперь содержит русское обозначение типа
             "recent_medical_tests": m_tests_history
         })
 
@@ -329,6 +333,8 @@ def get_user_and_pet_context(profile):
             "name": profile.name,
             "gender": profile.gender,
             "birth_date": profile.date_birth.strftime('%Y-%m-%d') if profile.date_birth else None,
+            "height": profile.height,
+            "weight": profile.weight,
             "place_of_residence": profile.place_of_residence,
             "health_indicators_score": profile.health_system or {},
             "calculated_life_expectancy": profile.life_expectancy,
@@ -340,7 +346,7 @@ def get_user_and_pet_context(profile):
         "user_medical_tests": human_tests_history,
         "user_rentgen_and_mri_reports": rentgen_history,
         "user_blood_pressure_history": pressure_history,
-        "user_habits": habits_list,  # Теперь содержит количество выполненных дней!
+        "user_habits": habits_list,  # Теперь содержит русское обозначение типа
         "user_nutrition_history_30_days": {
             "food_records": human_food_history,
             "total_water_intake_liters_last_30_days": total_water_30_days
