@@ -492,8 +492,8 @@ class Rentgen_Image(models.Model):
         return self.rentgen.profile.name
 @pet_risk_analysis_decorator(fields_to_track=['gender', 'health_system','age','pet'])
 class Pet(models.Model):
-    profile = models.ForeignKey(
-        'Profile', on_delete=models.CASCADE, related_name='pet', verbose_name="Профиль"
+    profile = models.ManyToManyField(
+        'Profile',  related_name='pet', verbose_name="Профиль"
     )
     klichka=models.CharField(max_length=200)
     pet=models.CharField(max_length=200)
@@ -503,11 +503,11 @@ class Pet(models.Model):
     health_system = models.JSONField(null=True, default=None)
     risk_test=models.TextField(null=True,default=None)
     analysis_risk = models.TextField(null=True, default=None)
-    family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
+    family_ref = models.UUIDField(default=uuid.uuid4,unique=True,blank=True)
 
 
     def __str__(self):
-        return self.profile.name
+        return self.klichka
 
 
 class NutritionGoalPet(models.Model):

@@ -80,7 +80,7 @@ urlpatterns=[
  path('api/pet/grizun/forma/<int:message_id>',views.PetGrizunFormaView.as_view(),name='forma'),
  path('api/pet/grizun/apetit/<int:message_id>',views.PetGrizunApetitView.as_view(),name='apetit'),
  path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
-
+ path('api/pet/join/<uuid:family_ref>', views.JoinPetFamilyView.as_view(), name='join_pet_family'),
 
 
  path('api/calories',views.CaroiesView.as_view(),name='calories'),

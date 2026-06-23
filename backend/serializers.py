@@ -813,7 +813,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','analysis_risk']
+        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','analysis_risk','family_ref']
 
     def get_health(self, obj):
         return [obj.health_system]
@@ -824,7 +824,7 @@ class PetSerGet(serializers.ModelSerializer):
 
         # Если цели нет или норма калорий не установлена — возвращаем None
         if not goal or goal.calories <= 0:
-            return None
+            return 100
 
         # 2. Считаем факт калорий за сегодня для этого питомца
         today = localtime(now()).date()
