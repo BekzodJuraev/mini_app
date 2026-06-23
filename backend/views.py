@@ -116,6 +116,40 @@ from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
+
+class JoinPetFamilyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, family_ref):
+        """
+        Юзер Б делает запрос по ссылке — бэкенд СРАЗУ привязывает питомца к его профилю.
+        """
+        try:
+            pet = Pet.objects.get(family_ref=family_ref)
+        except (Pet.DoesNotExist, ValueError):
+            return Response(
+                {"detail": "Ссылка недействительна или питомец не найден."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        current_profile = request.user.profile
+
+        # Проверяем, не добавлен ли этот питомец к нему уже ранее
+        if pet.profile.filter(id=current_profile.id).exists():
+            return Response(
+                {"detail": f"Питомец {pet.klichka} уже привязан к вашему профилю."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Сразу добавляем текущего пользователя в ManyToMany связь к питомцу Юзера А
+        pet.profile.add(current_profile)
+
+        return Response({
+            "success": True,
+            "message": f"Питомец {pet.klichka} успешно добавлен в ваш профиль!"
+        }, status=status.HTTP_200_OK)
+
+
 # def update_life_expectancy(f):
 #
 #     def wrapper(self, request, *args, **kwargs):
@@ -2279,8 +2313,16 @@ class PetView(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
-            pet=Pet.objects.create(profile=profile,photo=serializer.validated_data.get('photo'),klichka=serializer.validated_data.get('klichka'),pet=serializer.validated_data.get('pet'),
-                                   gender=serializer.validated_data.get('gender'),age=serializer.validated_data.get('age'))
+            pet = Pet.objects.create(
+                photo=serializer.validated_data.get('photo'),
+                klichka=serializer.validated_data.get('klichka'),
+                pet=serializer.validated_data.get('pet'),
+                gender=serializer.validated_data.get('gender'),
+                age=serializer.validated_data.get('age')
+            )
+
+            # 2. Добавляем профиль создателя в ManyToMany связь profiles
+            pet.profile.add(profile)
 
             health_system = get_health_scale_pet(serializer.validated_data)
             pet.health_system = health_system
