@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator,pet_risk_analysis_decorator
+from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator,pet_risk_analysis_decorator,health_recommendations_start_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -183,7 +183,7 @@ class Choice(models.Model):
         return self.text
 @environmental_risk_decorator
 @update_life_expectancy_decorator
-@health_recommendations_decorator
+@health_recommendations_start_decorator
 class Profile(models.Model):
     username = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     telegram_id=models.IntegerField(default=0)
@@ -200,6 +200,8 @@ class Profile(models.Model):
     life_expectancy=models.IntegerField(null=True,default=None,blank=True)
     family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
     ref = models.UUIDField(default=uuid.uuid4, unique=True)
+    height=models.IntegerField(default=0,blank=True)
+    weight = models.FloatField(default=0, blank=True)
     family = models.ForeignKey("Profile", on_delete=models.CASCADE,
                                                related_name='family_family',
                                                null=True, blank=True)
@@ -501,6 +503,7 @@ class Pet(models.Model):
     health_system = models.JSONField(null=True, default=None)
     risk_test=models.TextField(null=True,default=None)
     analysis_risk = models.TextField(null=True, default=None)
+    family_ref = models.UUIDField(default=uuid.uuid4, unique=True)
 
 
     def __str__(self):

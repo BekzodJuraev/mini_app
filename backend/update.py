@@ -1,5 +1,5 @@
 from threading import Thread
-from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis,monthly_pressure_analysis,pulse_diary_analysis,environmental_and_data_risk_analysis_pet
+from .prompt import life_expectancy,health_recommendations,environmental_risk_analysis,monthly_pressure_analysis,pulse_diary_analysis,environmental_and_data_risk_analysis_pet,health_recommendations_start
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from datetime import date
@@ -207,6 +207,7 @@ def environmental_risk_decorator(model_class):
         # 1. Проверяем, изменилось ли именно место проживания (place_of_residence)
         is_place_changed = False
 
+
         if self.pk:
             try:
                 # Берем старое значение из БД для сравнения
@@ -388,7 +389,9 @@ def health_recommendations_decorator(model_class):
                     "profile": {
                         "date_birth": p.date_birth,
                         "gender": p.gender,
-                        "region": p.place_of_residence
+                        "region": p.place_of_residence,
+                        "height":p.height,
+                        "weight":p.weight
                     },
                     "nutrition_context": {
                         "recent_food_details": food_details  # Только текстовые детали
@@ -413,6 +416,69 @@ def health_recommendations_decorator(model_class):
 
         # Фоновый запуск
         Thread(target=run_update, daemon=True).start()
+
+    model_class.save = new_save
+    return model_class
+
+
+import json
+from threading import Thread
+from django.core.serializers.json import DjangoJSONEncoder
+
+
+def health_recommendations_start_decorator(model_class):
+    """
+    Стартовый декоратор: срабатывает после регистрации только один раз,
+    пока поле health_recommendations пустое.
+    Передает базовые антропометрические данные в health_recommendations_start.
+    """
+    original_save = model_class.save
+
+    def new_save(self, *args, **kwargs):
+        # 1. Сначала стандартно сохраняем профиль в базу данных
+        original_save(self, *args, **kwargs)
+
+        # Вытаскиваем инстанс профиля (зависит от того, на какую модель вешается декоратор)
+        if hasattr(self, 'place_of_residence'):
+            p = self
+        # 2. Если это другая модель, у которой есть связь 'profile'
+        elif hasattr(self, 'profile') and self.profile is not None:
+            p = self.profile
+        else:
+            return
+
+        # Проверяем условие: сработает только если поле рекомендаций еще абсолютно пустое
+        if p.health_recommendations in [None, ""]:
+
+            def run_start_recommendations():
+                try:
+                    # Формируем легкий стартовый контекст (только анкетные данные при регистрации)
+                    raw_data = {
+                        "profile": {
+                            "date_birth": p.date_birth,
+                            "gender": p.gender,
+                            "region": p.place_of_residence,
+                            "height": p.height,
+                            "weight": p.weight
+                        }
+                    }
+
+                    # Быстрая сериализация дат и типов Django
+                    user_data = json.loads(json.dumps(raw_data, cls=DjangoJSONEncoder))
+
+                    # Вызываем СТАРТОВУЮ функцию ИИ (health_recommendations_start)
+                    result = health_recommendations_start(user_data)
+
+                    # Записываем первичный ответ ИИ прямо в поле профиля
+                    p.__class__.objects.filter(pk=p.pk).update(
+                        health_recommendations=result.get("message", "Стартовые рекомендации формируются...")
+                    )
+
+                except Exception as e:
+                    print(f"Ошибка в генерации стартовых рекомендаций: {e}")
+
+            # Запускаем один раз в фоновом потоке, чтобы регистрация не висла
+            Thread(target=run_start_recommendations, daemon=True).start()
 
     model_class.save = new_save
     return model_class
