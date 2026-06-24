@@ -235,6 +235,7 @@ def environmental_risk_decorator(model_class):
                     self.__class__.objects.filter(pk=self.pk).update(
                         risk_test=result.get("message", "Анализ рисков пуст.")
                     )
+                    print(result)
                 except Exception as e:
                     print(f"Error in environmental analysis for {self.place_of_residence}: {e}")
 
