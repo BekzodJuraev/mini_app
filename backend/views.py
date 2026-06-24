@@ -202,11 +202,14 @@ def get_chat_history(profile):
 def get_user_and_pet_context(profile):
     """
     Максимальный медицинский контекст:
-    Профиль (с ростом и весом), Семья, Цели, Последние 15 чекапов, Тесты, Рентген/МРТ,
-    Давление, Привычки (с историей выполнений и типами "Полезная/Вредная"),
+    Профиль (с ростом, весом и JSON медицинским анамнезом), Семья (с анамнезом каждого члена),
+    Цели, Последние 15 чекапов, Тесты, Рентген/МРТ, Давление, Привычки,
     Калории за 30 дней для человека, его семьи и питомцев.
     """
     # ЛОКАЛЬНЫЕ ИМПОРТЫ МОДЕЛЕЙ (Защита от Circular Import)
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from datetime import timedelta
     from .models import Calories, Rentgen, Tracking_Habit
 
     # Временной отрезок за последние 30 дней
@@ -282,6 +285,7 @@ def get_user_and_pet_context(profile):
 
     # 8. Данные обо всех питомцах хозяина
     pets_data = []
+    # ИСПРАВЛЕНО: перешли на связь ManyToMany (profile.pets.all())
     for pet in profile.pet.all():
         pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:5])
         pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
@@ -310,6 +314,7 @@ def get_user_and_pet_context(profile):
                 "target_fiber": p_goal.fiber
             }
 
+        # Структуру полей питомца оставляем без изменений, как ты и просил
         pets_data.append({
             "name": pet.klichka,
             "type": pet.pet,
@@ -357,8 +362,11 @@ def get_user_and_pet_context(profile):
             "health_indicators_score": member.health_system or {},
             "environmental_risks": member.risk_test,
             "health_recommendations_summary": member.health_recommendations,
-            "habits": m_habits,  # Теперь содержит русское обозначение типа
-            "recent_medical_tests": m_tests_history
+            "habits": m_habits,
+            "recent_medical_tests": m_tests_history,
+
+            # ДОБАВЛЕНО: Медицинская карта конкретного члена семьи для ИИ 🚀
+            "medical_history_anamnesis": member.medical_history or {}
         })
 
     # Итоговый JSON для OpenAI
@@ -373,14 +381,17 @@ def get_user_and_pet_context(profile):
             "health_indicators_score": profile.health_system or {},
             "calculated_life_expectancy": profile.life_expectancy,
             "environmental_risks": profile.risk_test,
-            "health_recommendations_summary": profile.health_recommendations
+            "health_recommendations_summary": profile.health_recommendations,
+
+            # ДОБАВЛЕНО: Медицинская карта самого пользователя для ИИ 🚀
+            "medical_history_anamnesis": profile.medical_history or {}
         },
         "user_nutrition_and_water_goals": user_nutrition_goals,
         "user_daily_checkups_last_15_days": daily_checks_history,
         "user_medical_tests": human_tests_history,
         "user_rentgen_and_mri_reports": rentgen_history,
         "user_blood_pressure_history": pressure_history,
-        "user_habits": habits_list,  # Теперь содержит русское обозначение типа
+        "user_habits": habits_list,
         "user_nutrition_history_30_days": {
             "food_records": human_food_history,
             "total_water_intake_liters_last_30_days": total_water_30_days
@@ -1094,7 +1105,7 @@ class HeartRelaxTestAPIView(APIView):
             today = localtime(now()).date()
             test=lestnica_test(serializer.validated_data['pulse'])
             Quest.objects.get_or_create(profile=profile, tests_id=3)
-            Tests.objects.create(profile=profile, name="Тест в  состоянии покоя", created_at=today, message=test['message'])
+            Tests.objects.create(profile=profile, name="Тест в состоянии покоя", created_at=today, message=test['message'])
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)

@@ -166,233 +166,313 @@ class RegistrationFirstSer(serializers.ModelSerializer):
         return user
 
 
-
-
 class RegistrationSerializer(serializers.ModelSerializer):
-    name=serializers.CharField()
-    lastname=serializers.CharField()
-    middle_name=serializers.CharField()
-    gender=serializers.CharField()
-    place_of_residence=serializers.CharField()
-    date_birth=serializers.DateField()
-    photo=serializers.ImageField(required=False)
-    height=serializers.IntegerField()
-    weight=serializers.IntegerField()
-    recent_smoke=serializers.CharField()
-    now_smoke=serializers.CharField()
-    exp_smoke = serializers.IntegerField(required=False)
-    smoke_what = serializers.CharField(required=False)
-    smoke_day = serializers.IntegerField(required=False)
-    ref=serializers.UUIDField(required=False)
-    ref_family=serializers.UUIDField(required=False)
-    telegram_id=serializers.IntegerField(required=True)
-
-
-
-
-    class Meta:
-        model=Profile
-        fields=['telegram_id','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref','ref_family']
-
-
-
-    def create(self, validated_data):
-        user=validated_data.pop('user')
-        recent_smoke=validated_data.pop('recent_smoke')
-        now_smoke=validated_data.pop('now_smoke')
-        exp_smoke=validated_data.pop('exp_smoke',"")
-        height=validated_data.get('height')
-        weight=validated_data.get('weight')
-        place_of_residence=validated_data.get('place_of_residence')
-        gender=validated_data.get('gender')
-        date_birth=validated_data.get('date_birth')
-        smoke_what=validated_data.pop('smoke_what',"")
-        smoke_day=validated_data.pop('smoke_day',0)
-        ref = validated_data.pop('ref', None)
-        ref_family=validated_data.pop('ref_family',None)
-
-        ik=0
-        water_goal=(weight * 30)/1000
-        if now_smoke and exp_smoke and smoke_day:
-            ik=(smoke_day * exp_smoke / 20)
-
-
-        def fetch_and_save_health(user):
-            health_system = get_health_scale(
-                height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
-                location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke,smoke_what=smoke_what,smoke_day=smoke_day
-            )
-            #print(health_system)
-            if isinstance(health_system, str):
-                try:
-                    health_system = json.loads(health_system)  # Convert JSON string to dictionary
-                except json.JSONDecodeError:
-                    raise ValueError("Invalid JSON format returned from OpenAI API")
-            user.profile.health_system = health_system
-            user.profile.save()
-
-
-
-
-       # user = User.objects.create_user(username=username)
-        if ref:
-            ref=Profile.objects.filter(ref=ref).first()
-            profile = Profile.objects.create(username=user, recommended_by_partner=ref, **validated_data,IK=ik,water_goal=water_goal)
-        elif ref_family:
-            ref_family = Profile.objects.filter(family_ref=ref_family).first()
-            profile = Profile.objects.create(username=user, recommended_by_family=ref_family,family=ref_family, **validated_data,IK=ik,water_goal=water_goal)
-        else:
-            profile = Profile.objects.create(username=user, **validated_data,IK=ik,water_goal=water_goal)
-
-        Thread(target=fetch_and_save_health, args=(user,)).start()
-
-
-        return user
-
-
-class RelationshipSer(serializers.ModelSerializer):
-    who_is=serializers.CharField()
     name = serializers.CharField()
     lastname = serializers.CharField()
     middle_name = serializers.CharField()
     gender = serializers.CharField()
     place_of_residence = serializers.CharField()
     date_birth = serializers.DateField()
-    photo=serializers.ImageField(required=False)
+    photo = serializers.ImageField(required=False)
     height = serializers.IntegerField()
     weight = serializers.IntegerField()
+
+    # Эти поля мы упакуем в JSON medical_history, но оставим для расчетов
     recent_smoke = serializers.CharField()
     now_smoke = serializers.CharField()
-    exp_smoke = serializers.IntegerField(required=False)
-    smoke_what = serializers.CharField(required=False)
-    smoke_day = serializers.IntegerField(required=False)
-    ref_family = serializers.UUIDField(required=True)
+    exp_smoke = serializers.IntegerField(required=False, default=0)
+    smoke_what = serializers.CharField(required=False, allow_blank=True, default="")
+    smoke_day = serializers.IntegerField(required=False, default=0)
 
-
+    ref = serializers.UUIDField(required=False)
+    ref_family = serializers.UUIDField(required=False)
+    telegram_id = serializers.IntegerField(required=True)
 
     class Meta:
-        model=Profile
-        fields=['who_is','name','lastname','middle_name','gender','place_of_residence','date_birth','photo','recent_smoke','now_smoke','exp_smoke','height','weight','smoke_what','smoke_day','ref_family']
-
-
+        model = Profile
+        fields = [
+            'telegram_id', 'name', 'lastname', 'middle_name', 'gender',
+            'place_of_residence', 'date_birth', 'photo', 'recent_smoke',
+            'now_smoke', 'exp_smoke', 'height', 'weight', 'smoke_what',
+            'smoke_day', 'ref', 'ref_family'
+        ]
 
     def create(self, validated_data):
-        user=self.context['request'].user
-        recent_smoke=validated_data.pop('recent_smoke')
-        who_is=validated_data.get('who_is')
-        now_smoke=validated_data.pop('now_smoke')
-        exp_smoke=validated_data.pop('exp_smoke',"")
-        height=validated_data.get('height')
-        weight=validated_data.get('weight')
-        place_of_residence=validated_data.get('place_of_residence')
-        gender=validated_data.get('gender')
-        date_birth=validated_data.get('date_birth')
+        user = validated_data.pop('user')
+
+        # 1. Извлекаем (pop) данные о курении, чтобы они не ушли в обычные поля модели Profile
+        recent_smoke = validated_data.pop('recent_smoke')
+        now_smoke = validated_data.pop('now_smoke')
+        exp_smoke = validated_data.pop('exp_smoke', 0)
         smoke_what = validated_data.pop('smoke_what', "")
         smoke_day = validated_data.pop('smoke_day', 0)
+
+        height = validated_data.get('height')
+        weight = validated_data.get('weight')
+        place_of_residence = validated_data.get('place_of_residence')
+        gender = validated_data.get('gender')
+        date_birth = validated_data.get('date_birth')
+
+        ref = validated_data.pop('ref', None)
         ref_family = validated_data.pop('ref_family', None)
 
+        # Расчет целей и индексов
+        water_goal = (weight * 30) / 1000
         ik = 0
         if now_smoke and exp_smoke and smoke_day:
             ik = (smoke_day * exp_smoke / 20)
 
+        # 2. Формируем медицинский JSON-анамнез для ИИ (английские ключи, русские значения)
+        medical_history_dict = {
+            "recent_smoke": recent_smoke,
+            "now_smoke": now_smoke,
+            "exp_smoke_years": exp_smoke,
+            "smoke_product_type": smoke_what,
+            "smoke_per_day_count": smoke_day
+        }
 
-        def fetch_and_save_health(rel):
+        def fetch_and_save_health(user_obj):
             health_system = get_health_scale(
                 height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
-                location=place_of_residence, gender=gender, date_birth=date_birth, exp_smoke=exp_smoke,smoke_what=smoke_what,smoke_day=smoke_day
+                location=place_of_residence, gender=gender, date_birth=date_birth,
+                exp_smoke=exp_smoke, smoke_what=smoke_what, smoke_day=smoke_day
             )
-            #print(health_system)
             if isinstance(health_system, str):
                 try:
-                    health_system = json.loads(health_system)  # Convert JSON string to dictionary
+                    health_system = json.loads(health_system)
                 except json.JSONDecodeError:
                     raise ValueError("Invalid JSON format returned from OpenAI API")
-            user.profile.health_system = health_system
-            user.profile.save(update_fields=['health_system'])
 
+            user_obj.profile.health_system = health_system
+            user_obj.profile.save(update_fields=['health_system'])
 
-        #user = User.objects.create_user(username=str(uuid.uuid4()))
-        family = Profile.objects.filter(family_ref=ref_family).first() #A
-        profile = Profile.objects.create(username=user, family=family, **validated_data,IK=ik) #B
+        # 3. Создаем профиль и передаем medical_history в JSONField
+        # Передаем username=user, как у тебя было заложено в логике
+        if ref:
+            ref_profile = Profile.objects.filter(ref=ref).first()
+            profile = Profile.objects.create(
+                username=user, recommended_by_partner=ref_profile,
+                medical_history=medical_history_dict, IK=ik, water_goal=water_goal, **validated_data
+            )
+        elif ref_family:
+            ref_family_profile = Profile.objects.filter(family_ref=ref_family).first()
+            profile = Profile.objects.create(
+                username=user, recommended_by_family=ref_family_profile, family=ref_family_profile,
+                medical_history=medical_history_dict, IK=ik, water_goal=water_goal, **validated_data
+            )
+        else:
+            profile = Profile.objects.create(
+                username=user, medical_history=medical_history_dict,
+                IK=ik, water_goal=water_goal, **validated_data
+            )
 
+        # Запускаем поток для OpenAI
         Thread(target=fetch_and_save_health, args=(user,)).start()
 
+        return user
+
+
+class RelationshipSer(serializers.ModelSerializer):
+    who_is = serializers.CharField()
+    name = serializers.CharField()
+    lastname = serializers.CharField()
+    middle_name = serializers.CharField()
+    gender = serializers.CharField()
+    place_of_residence = serializers.CharField()
+    date_birth = serializers.DateField()
+    photo = serializers.ImageField(required=False)
+    height = serializers.IntegerField()
+    weight = serializers.IntegerField()
+
+    # Эти поля курения упаковываем в JSON medical_history
+    recent_smoke = serializers.CharField()
+    now_smoke = serializers.CharField()
+    exp_smoke = serializers.IntegerField(required=False, default=0)
+    smoke_what = serializers.CharField(required=False, allow_blank=True, default="")
+    smoke_day = serializers.IntegerField(required=False, default=0)
+
+    ref_family = serializers.UUIDField(required=True)
+
+    class Meta:
+        model = Profile
+        fields = [
+            'who_is', 'name', 'lastname', 'middle_name', 'gender',
+            'place_of_residence', 'date_birth', 'photo', 'recent_smoke',
+            'now_smoke', 'exp_smoke', 'height', 'weight', 'smoke_what',
+            'smoke_day', 'ref_family'
+        ]
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+
+        # 1. Извлекаем (pop) данные о курении, чтобы они не ушли в обычные поля модели Profile
+        recent_smoke = validated_data.pop('recent_smoke')
+        now_smoke = validated_data.pop('now_smoke')
+        exp_smoke = validated_data.pop('exp_smoke', 0)
+        smoke_what = validated_data.pop('smoke_what', "")
+        smoke_day = validated_data.pop('smoke_day', 0)
+
+        height = validated_data.get('height')
+        weight = validated_data.get('weight')
+        place_of_residence = validated_data.get('place_of_residence')
+        gender = validated_data.get('gender')
+        date_birth = validated_data.get('date_birth')
+        ref_family = validated_data.pop('ref_family', None)
+        water_goal = (weight * 30) / 1000
+        # Расчет индекса курильщика (IK)
+        ik = 0
+        if now_smoke and exp_smoke and smoke_day:
+            ik = (smoke_day * exp_smoke / 20)
+
+        # 2. Формируем медицинский JSON-анамнез для ИИ
+        medical_history_dict = {
+            "recent_smoke": recent_smoke,
+            "now_smoke": now_smoke,
+            "exp_smoke_years": exp_smoke,
+            "smoke_product_type": smoke_what,
+            "smoke_per_day_count": smoke_day
+        }
+
+        # Исправлено: передаем profile_obj вместо user, чтобы обновлять здоровье родственника, а не создателя
+        def fetch_and_save_health(profile_obj):
+            health_system = get_health_scale(
+                height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
+                location=place_of_residence, gender=gender, date_birth=date_birth,
+                exp_smoke=exp_smoke, smoke_what=smoke_what, smoke_day=smoke_day
+            )
+            if isinstance(health_system, str):
+                try:
+                    health_system = json.loads(health_system)
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON format returned from OpenAI API")
+
+            profile_obj.health_system = health_system
+            profile_obj.save(update_fields=['health_system'])
+
+        # 3. Ищем семью и привязываем
+        family = Profile.objects.filter(family_ref=ref_family).first()
+
+        profile = Profile.objects.create(
+            username=user,
+            family=family,
+            medical_history=medical_history_dict,
+            IK=ik,
+            water_goal=water_goal,
+            **validated_data
+        )
+
+        # Запускаем поток для расчета шкал здоровья конкретного члена семьи
+        Thread(target=fetch_and_save_health, args=(profile,)).start()
 
         return user
 class RelationshipBabySer(serializers.ModelSerializer):
     who_is = serializers.CharField()
     name = serializers.CharField()
-    date_birth = serializers.DateField()
+    lastname = serializers.CharField()
+    middle_name = serializers.CharField()
     gender = serializers.CharField()
-    # Поля с изображения 7
-    blood_group = serializers.CharField(required=False, allow_blank=True)  # Группа крови
-    rh_factor = serializers.CharField(required=False, allow_blank=True)  # Резус-фактор
-    weight = serializers.FloatField()  # Укажите вес при рождении (кг)
-    height = serializers.IntegerField()  # Укажите рост при рождении (см)
+
+    date_birth = serializers.DateField()
+
+    # Медицинские поля для упаковки в JSON medical_history
+    blood_group = serializers.CharField(required=False, allow_blank=True, default="")
+    rh_factor = serializers.CharField(required=False, allow_blank=True, default="")
+    weight = serializers.FloatField()  # Вес при рождении
+    height = serializers.IntegerField()  # Рост при рождении
     gestation_period = serializers.IntegerField()  # Срок гестации (недели)
-    birth_features = serializers.CharField(required=False, allow_blank=True)  # Особенности родов
-    chronic_diseases = serializers.CharField(required=False, allow_blank=True)  # Хронические заболевания
-    allergies = serializers.CharField(required=False, allow_blank=True)  # Аллергии
-    operations = serializers.CharField(required=False, allow_blank=True)  # Перенесённые операции
-    hereditary_diseases = serializers.CharField(required=False, allow_blank=True)  # Наследственные заболевания
+    birth_features = serializers.CharField(required=False, allow_blank=True, default="")
+    chronic_diseases = serializers.CharField(required=False, allow_blank=True, default="")
+    allergies = serializers.CharField(required=False, allow_blank=True, default="")
+    operations = serializers.CharField(required=False, allow_blank=True, default="")
+    hereditary_diseases = serializers.CharField(required=False, allow_blank=True, default="")
 
     photo = serializers.ImageField(required=False)
 
 
-
-
-
-
-
     class Meta:
-        model=Profile
-        fields=['who_is','name','gender','date_birth','photo','height','weight','blood_group','rh_factor','gestation_period','birth_features'
-                ,'chronic_diseases','allergies','operations','hereditary_diseases']
-
-
+        model = Profile
+        # Явно перечисляем ВСЕ поля, чтобы Django REST Framework их пропустил
+        fields = [
+            'who_is', 'name', 'lastname', 'middle_name', 'gender',
+            'date_birth', 'photo', 'height', 'weight', 'blood_group', 'rh_factor',
+            'gestation_period', 'birth_features', 'chronic_diseases', 'allergies',
+            'operations', 'hereditary_diseases'
+        ]
 
     def create(self, validated_data):
-        profile = self.context['request'].user.profile
-        who_is=validated_data.get('who_is')
-        height=validated_data.get('height')
-        weight=validated_data.get('weight')
-        place_of_residence=validated_data.get('place_of_residence')
-        gender=validated_data.get('gender')
-        date_birth=validated_data.get('date_birth')
+        parent_profile = self.context['request'].user.profile
 
-        gestation_period = validated_data.pop('gestation_period')# Срок гестации (недели)
-        birth_features = validated_data.pop('birth_features') # Особенности родов
-        chronic_diseases = validated_data.pop('chronic_diseases') # Хронические заболевания
-        allergies = validated_data.pop('allergies')  # Аллергии
-        operations = validated_data.pop('operations')  # Перенесённые операции
-        hereditary_diseases = validated_data.pop('hereditary_diseases')
-        blood_group = validated_data.pop('blood_group')
-        rh_factor = validated_data.pop('rh_factor')
+        # 1. Извлекаем (pop) ВСЕ медицинские данные для JSON-карты
+        gestation_period = validated_data.pop('gestation_period')
+        birth_features = validated_data.pop('birth_features', "")
+        chronic_diseases = validated_data.pop('chronic_diseases', "")
+        allergies = validated_data.pop('allergies', "")
+        operations = validated_data.pop('operations', "")
+        hereditary_diseases = validated_data.pop('hereditary_diseases', "")
+        blood_group = validated_data.pop('blood_group', "")
+        rh_factor = validated_data.pop('rh_factor', "")
 
+        # Метрики оставляем для создания записи, но копируем их для отправки в ИИ
+        height = validated_data.get('height')
+        weight = validated_data.get('weight')
+        gender = validated_data.get('gender')
+        date_birth = validated_data.get('date_birth')
+        water_goal = (weight * 30) / 1000
 
+        # 2. Формируем единый медицинский JSON-анамнез ребенка
+        medical_history_dict = {
+            "blood_group": blood_group,
+            "rh_factor": rh_factor,
+            "gestation_period_weeks": gestation_period,
+            "birth_features": birth_features,
+            "chronic_diseases": chronic_diseases,
+            "allergies": allergies,
+            "operations": operations,
+            "hereditary_diseases": hereditary_diseases
+        }
 
-
-        def fetch_and_save_health(rel):
+        # Функция для фонового обращения к ИИ
+        def fetch_and_save_health(baby_profile):
             health_system = get_health_scale_baby(
-                height_birth=height, weight_birth=weight, gender=gender, date_birth=date_birth,
-
-            gestation_period=gestation_period,birth_features=birth_features,chronic_diseases=chronic_diseases,allergies=allergies,operations=operations,
-                hereditary_diseases=hereditary_diseases,blood_group=blood_group,rh_factor=rh_factor)
+                height_birth=height,
+                weight_birth=weight,
+                gender=gender,
+                date_birth=date_birth,
+                gestation_period=gestation_period,
+                birth_features=birth_features,
+                chronic_diseases=chronic_diseases,
+                allergies=allergies,
+                operations=operations,
+                hereditary_diseases=hereditary_diseases,
+                blood_group=blood_group,
+                rh_factor=rh_factor
+            )
 
             if isinstance(health_system, str):
                 try:
-                    health_system = json.loads(health_system)  # Convert JSON string to dictionary
+                    health_system = json.loads(health_system)
                 except json.JSONDecodeError:
                     raise ValueError("Invalid JSON format returned from OpenAI API")
-            user.profile.health_system = health_system
-            user.profile.save(update_fields=['health_system'])
 
-        user = User.objects.create_user(username=str(uuid.uuid4()))
-        profile = Profile.objects.create(username=user, family=profile,place_of_residence=profile.place_of_residence, **validated_data)
+            baby_profile.health_system = health_system
+            baby_profile.save(update_fields=['health_system'])
 
-        Thread(target=fetch_and_save_health, args=(user,)).start()
+        # 3. Создаем пользователя и профиль ребенка
+        new_user = User.objects.create_user(username=str(uuid.uuid4()))
 
-        return user
+        baby_profile = Profile.objects.create(
+            username=new_user,
+            family=parent_profile,
+            place_of_residence=parent_profile.place_of_residence,
+            medical_history=medical_history_dict,
+            water_goal=water_goal,
+            **validated_data
+        )
+
+        Thread(target=fetch_and_save_health, args=(baby_profile,)).start()
+
+        return new_user
+
 
 
 class LoginSer(serializers.Serializer):

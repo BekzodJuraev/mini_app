@@ -5,7 +5,7 @@ Register second
     "middle_name": "Рустамович",
     "gender": "male",
     "place_of_residence": "Ташкент, Мирабадский р-н",
-    "date_birth": "1998-05-15",
+    "date_birth": "2000-05-15",
     "height": 180,
     "weight": 85,
     "recent_smoke": "no",
@@ -151,4 +151,23 @@ Dog test
   "smell": "Иногда",
   "interest": "Да",
   "active": "Да"
+}
+{
+    "who_is": "сын",
+    "name": "Алишер",
+    "lastname": "Насимов",
+    "middle_name": "Акмалевич",
+    "gender": "мальчик",
+    "place_of_residence": "Самарканд",
+    "date_birth": "2025-11-15",
+    "height": 72,
+    "weight": 9.2,
+    "blood_group": "A(II)",
+    "rh_factor": "Rh+",
+    "gestation_period": 39,
+    "birth_features": "Естественные роды, оценка по Апгар 8/9, без осложнений.",
+    "chronic_diseases": "Не обнаружено",
+    "allergies": "Атопический дерматит на белок коровьего молока, аллергия на цитрусовые.",
+    "operations": "Нет",
+    "hereditary_diseases": "Сахарный диабет 2 типа по мужской линии (у дедушки)."
 }

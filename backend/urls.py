@@ -19,6 +19,7 @@ urlpatterns=[
  path('api/tests/symptomstest',views.SymptomsTestAPIView.as_view(),name='symptomstests'),
  path('api/tests/lifestyletest',views.LifeStyleTestAPIView.as_view(),name='lifestyletest'),
  path('api/tests/bloodpressure',views.BloodPressureTestAPIView.as_view(),name='bloodpressure'),
+
  path('api/hearthtest/relax', views.HeartRelaxTestAPIView.as_view(), name='heartrelaxtest'),
  path('api/hearthtest/lest',views.HeartLestTestAPIView.as_view(),name='hearttest'),
  path('api/hearthtest/breath', views.HeartBreathTestAPIView.as_view(),name='breathtest'),
