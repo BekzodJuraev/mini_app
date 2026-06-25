@@ -890,10 +890,11 @@ class PetSerCreate(serializers.Serializer):
 class PetSerGet(serializers.ModelSerializer):
     health = serializers.SerializerMethodField()
     percentage=serializers.SerializerMethodField()
+    tests_count = serializers.IntegerField()
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','analysis_risk','family_ref']
+        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','tests_count','analysis_risk','family_ref']
 
     def get_health(self, obj):
         return [obj.health_system]

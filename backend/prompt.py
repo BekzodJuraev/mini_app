@@ -215,7 +215,7 @@ def get_health_scale(height, weight, smoking_now, smoking_past, location, gender
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты беспристрастный медицинский калькулятор-анализатор. Твоя задача — выставлять баллы от 1.0 до 10.0. Для абсолютно здорового, молодого некурящего человека нормой являются оценки 9.0-10.0. Оценки снижаются только при наличии явных факторов риска (курение, лишний вес, возраст)."},
             {"role": "user", "content": user_input}
@@ -308,7 +308,7 @@ def get_health_scale_baby(date_birth, gender, blood_group, rh_factor, weight_bir
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты педиатрический анализатор. Оцениваешь состояние здоровья ребенка на основе данных о рождении и анамнеза."},
             {"role": "user", "content": user_input}
@@ -360,7 +360,7 @@ def get_health_scale_pet(user_data):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10 это питомец не человек"},
             {"role": "user", "content": user_input}
@@ -462,7 +462,7 @@ def chat_update(data, message):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system",
              "content": "Ты точный медицинский калькулятор. Ты обновляешь JSON цифрового двойника здоровья. Ты никогда не используешь отрицательные числа и строго соблюдаешь границы от 1 до 10."},
@@ -499,61 +499,124 @@ def chat_update(data, message):
 #     return response["choices"][0]["message"]["content"]
 
 def chat_system(message, context_data, history=None):
-    context_str = json.dumps(context_data, ensure_ascii=False)
+    """
+    Оптимизированная система чата с поддержкой цветовых шкал здоровья.
+    Структура разделена на статичную и динамичную для работы Prompt Caching OpenAI.
+    """
+    # 1. МОК-ДАННЫЕ И ПРАВИЛА ИНТЕРПРЕТАЦИИ ЦВЕТОВЫХ ШКАЛ (health_system)
+    # Синий (Топ / Отлично): 8.0 - 10.0
+    # Желтый (Внимание / Среднее): 5.0 - 7.9
+    # Красный (Опасность / Хуже всего): 0.0 - 4.9
+    HEALTH_COLOR_RULES = """
+    ВАЖНОЕ РУКОВОДСТВО ПО ЦВЕТАМ ШКАЛ ЗДОРОВЬЯ (health_system):
+    В интерфейсе приложения все показатели здоровья (score) строго привязаны к цветам. Ты должен точно называть цвет, не используя сослагательное наклонение "если". На основе числового значения score определяй цвет так:
+    - От 8.0 до 10.0 — Синяя зона (Самый топ, идеальное состояние). Если показатель в этом диапазоне, пиши: "Показатель находится в синей зоне, так как...".
+    - От 4.0 до 7.9 — Желтая зона (Внимание, есть риски или умеренные отклонения). Если показатель в этом диапазоне, пиши прямо: "Показатель сейчас в желтой зоне, потому что...".
+    - От 0.0 до 3.9 — Красная зона (Опасность, критическое состояние, хуже всего). Если показатель в этом диапазоне, пиши прямо: "Показатель находится в красной зоне, так как...".
 
-    SYSTEM_PROMPT = f"""Вы — продвинутый медицинский ИИ-ассистент. Вы знаете абсолютно всё о здоровье пользователя и его питомцах на основе следующих данных из базы:
-    {context_str}
+    Пример для питомца Реми: если у него "Зубочелюстная система" имеет score 6.5, ты обязан утверждать, что она находится в желтой зоне, и объяснять причину на основе его возраста или рисков, без предположений.
+    """
+
+    # 2. СТАТИЧНЫЙ СИСТЕМНЫЙ ПРОМПТ (Идеально для кэша — никогда не меняется)
+    SYSTEM_PROMPT = f"""Вы — продвинутый медицинский ИИ-ассистент. Вы знаете абсолютно всё о здоровье пользователя и его питомцах на основе предоставленных данных из базы.
 
     ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ОТВЕТА:
-    1. Отвечайте ТОЛЬКО на вопросы, связанные со здоровьем человека, его телом, анализами, симптомами или здоровьем его питомцев.
+    1. Отвечайте ТОЛЬКО на вопросы, связанные со здоровьем человека, его телом, анализами, симптомами, лекарствами или здоровьем его питомцев.
     2. Если пользователь спрашивает о других темах (кино, игры, политика), вежливо откажите.
     3. Отвечайте СТРОГО простым текстом. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать Markdown (никаких **, #, точек списков).
     4. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать переносы строк, символы \\n, \\r или специальные символы форматирования. Весь ответ должен идти строго в одну строку или в виде коротких понятных предложений подряд.
+
+    {HEALTH_COLOR_RULES}
     """
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    context_str = json.dumps(context_data, ensure_ascii=False)
 
+    # 3. ФОРМИРУЕМ МАССИВ MESSAGES ДЛЯ СРАБАТЫВАНИЯ PROMPT CACHING
+    # Постоянные правила и контекст идут ПЕРВЫМИ, история и новый вопрос — в самый конец.
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": f"АКТУАЛЬНЫЕ ДАННЫЕ ИЗ БАЗЫ ДАННЫХ: {context_str}"}
+    ]
+
+    # Добавляем историю диалога (уже очищенную от пустых строк)
     if history:
         messages.extend(history)
 
+    # Добавляем свежий вопрос пользователя
     messages.append({"role": "user", "content": message})
 
+    # 4. ВЫЗОВ API (Используется актуальный синтаксис для новых моделей OpenAI)
+    # Замени openai.ChatCompletion.create на client.chat.completions.create, если обновил библиотеку
     response = openai.ChatCompletion.create(
         model=MODEL,
         messages=messages
     )
 
-    clean_content = response["choices"][0]["message"]["content"].replace("\n", " ").replace("\r", " ")
+    # 5. ОЧИСТКА СТРОКИ ОТ ПЕРЕНОСОВ
+    raw_content = response["choices"][0]["message"]["content"]
+    clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip()
+
     return clean_content
 
 
 def chat_system_pet(user_message, pet_context):
     """
-    Интеграция с OpenAI для ветеринарного чата.
+    Максимально оптимизированная система ветеринарного чата.
+    Разделена под Prompt Caching и снабжена жесткой логикой цветовых шкал.
     """
-    SYSTEM_PROMPT = f"""Вы — квалифицированный ветеринарный врач и эксперт по уходу за домашними животными.
-    Вы ведете диалог с владельцем питомца.
+    pet_name = pet_context.get('name', 'питомец')
+    pet_type = pet_context.get('type', 'животное')
 
-    ДАННЫЕ О ПИТОМЦЕ, С КОТОРЫМ ИДЕТ РАБОТА:
-    {json.dumps(pet_context, ensure_ascii=False, indent=2)}
+    # 1. СТРОГИЕ ПРАВИЛА ИНТЕРПРЕТАЦИИ ЦВЕТОВЫХ ЗОН (health_system)
+    HEALTH_COLOR_RULES = """
+    ВАЖНОЕ РУКОВОДСТВО ПО ЦВЕТАМ ШКАЛ ЗДОРОВЬЯ ЖИВОТНОГО:
+    В интерфейсе приложения показатели здоровья (score) строго привязаны к цветам. Ты обязан называть цвет точно, без предположений и сослагательного наклонения. Сверяй числовые значения метрик со следующими диапазонами:
+    - От 8.0 до 10.0 — Синяя зона (Отличное состояние, самый топ). Пиши прямо: "Показатель находится в синей зоне, так как...".
+    - От 4.0 до 7.99 — Желтая зона (Внимание, умеренные отклонения или риски). Пиши прямо: "Показатель сейчас в желтой зоне, потому что...".
+    - От 0.0 до 3.99 — Красная зона (Критическое состояние, хуже всего, опасность). Пиши прямо: "Показатель находится в красной зоне, так как...".
 
-    ПРАВИЛА И СТИЛЬ ОТВЕТА:
-    1. Обращайтесь к питомцу по имени, учитывайте его вид ({pet_context['type']}), пол и возраст.
-    2. Анализируйте симптомы и вопросы, опираясь на историю его питания за 30 дней и последние медицинские тесты, если они переданы в контексте.
-    3. Отвечайте заботливо, профессионально, без лишней "воды". Если ситуация критическая исходя из анализов — мягко порекомендуйте очный визит к врачу.
+    Пример: если видишь score 5.5, ты не имеешь права писать "если он желтый". Пиши строго: "Этот показатель сейчас в желтой зоне..." и объясняй медицинскую причину.
     """
 
+    # 2. СТАТИЧНЫЙ СИСТЕМНЫЙ ПРОМПТ (Идеально кэшируется, никогда не меняется)
+    SYSTEM_PROMPT = f"""Вы — квалифицированный ветеринарный врач и эксперт по уходу за домашними животными. Вы ведете диалог с владельцем питомца.
+
+    ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА И СТИЛЬ ОТВЕТА:
+    1. Обращайтесь к питомцу строго по имени ({pet_name}), учитывайте его вид ({pet_type}), пол и возраст.
+    2. Анализируйте симптомы и вопросы, опираясь на свежую историю питания за последние дни, лекарства, привычки и медицинскую карту (medical_history_anamnesis), переданные в контексте.
+    3. Отвечайте заботливо, профессионально, строго по делу. Если по анализам или симптомам ситуация критическая — мягко порекомендуйте очный визит в клинику.
+    4. Отвечайте СТРОГО простым текстом. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать Markdown (никаких **, #, маркеров списков).
+    5. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать переносы строк, символы \\n или \\r. Весь ответ должен идти одной строкой или в виде коротких понятных предложений подряд.
+
+    {HEALTH_COLOR_RULES}
+    """
+
+    # Превращаем контекст питомца в компактную строку
+    context_str = json.dumps(pet_context, ensure_ascii=False)
+
+    # 3. СБОРКА ПИРОГА MESSAGES (Статика наверх, динамика вниз)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": f"АКТУАЛЬНЫЕ ДАННЫЕ ИЗ БАЗЫ ПО ДАННОМУ ПИТОМЦУ: {context_str}"}
+    ]
+
+
+
+
+    # В самый конец кладем свежий вопрос владельца
+    messages.append({"role": "user", "content": user_message})
+
+    # 4. ВЫЗОВ API (Используй актуальный клиент client.chat.completions.create при обновлении библиотеки)
     response = openai.ChatCompletion.create(
         model=MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message}
-        ],
-
-
+        messages=messages
     )
 
-    return response["choices"][0]["message"]["content"]
+    # 5. СТРОГАЯ ОЧИСТКА СТРОКИ ОТ ПЕРЕНОСОВ ДЛЯ МОБИЛКИ
+    raw_content = response["choices"][0]["message"]["content"]
+    clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip()
+
+    return clean_content
 
 
 def chat_update_pet(data, message):
@@ -589,7 +652,7 @@ def chat_update_pet(data, message):
 
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты медицинский анализатор. Оцени состояние организма по шкале от 1 до 10."},
             {"role": "user", "content": prompt}
@@ -645,7 +708,7 @@ def life_expectancy(user_data):
 """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -806,7 +869,7 @@ def environmental_and_data_risk_analysis_pet(data: dict) -> dict:
     try:
         # MODEL — твоя глобальная переменная модели
         response = openai.ChatCompletion.create(
-            model=MODEL,
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
 
@@ -850,7 +913,7 @@ def environmental_risk_analysis(user_timezone):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )
@@ -892,7 +955,7 @@ def health_recommendations(user_data):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system",
              "content": "Ты ИИ, формирующий рекомендации по улучшению здоровья на основе анализа данных пользователя."},
@@ -938,7 +1001,7 @@ def health_recommendations_start(user_data):
     ]
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты эксперт в области здоровья и образа жизни."},
             {"role": "user", "content": prompt}
@@ -1072,7 +1135,7 @@ def breath_test(user_data):
     """
 
     response = openai.ChatCompletion.create(
-        model="gpt-4-turbo",
+        model=MODEL,
         messages=[
             {"role": "system", "content": "Ты эксперт по физическим тестам. Дай анализ задержки дыхания."},
             {"role": "user", "content": prompt}
@@ -1245,7 +1308,7 @@ def blood_pressure_test(data_list):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL, # или ваш MODEL
+        model="gpt-4o-mini", # или ваш MODEL
         messages=[
             {"role": "system", "content": "Ты эксперт-кардиолог. Анализируешь средние показатели давления за месяц."},
             {"role": "user", "content": prompt}
@@ -1285,7 +1348,7 @@ def single_pressure_analysis(systolic, diastolic):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты медицинский ассистент. Ты мгновенно анализируешь замеры давления и даешь короткий текстовый вердикт."},
             {"role": "user", "content": prompt}
@@ -1322,7 +1385,7 @@ def monthly_pressure_analysis(test_data_text):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты ИИ-кардиолог. Ты пишешь развернутые медицинские заключения на основе месячных логов строго по заданному формату."},
             {"role": "user", "content": prompt}
@@ -1360,7 +1423,7 @@ def pulse_diary_analysis(test_data_text):
     """
 
     response = openai.ChatCompletion.create(
-        model=MODEL,
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "Ты спортивный кардио-аналитик. Ты пишешь отчеты по динамике пульса до и после нагрузок строго по заданному формату."},
             {"role": "user", "content": prompt}
