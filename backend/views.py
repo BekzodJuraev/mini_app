@@ -183,94 +183,66 @@ class JoinPetFamilyView(APIView):
 
 def get_chat_history(profile):
     """
-    Вытаскивает последние 20 сообщений диалога и форматирует их для OpenAI.
+    Вытаскивает последние 5 диалогов (до 10 сообщений) и форматирует их для OpenAI.
+    Очищает контекст от пустых записей, чтобы не ломать структуру промпта.
     """
+    from .models import Chat  # Защита от Circular Import
+
+    # Берем последние 5 записей чата (каждая запись содержит вопрос и ответ)
     chats = list(
-        Chat.objects.filter(profile=profile).order_by('-created_at')[:20]
+        Chat.objects.filter(profile=profile)
+        .exclude(question=None)
+        .order_by('-created_at')[:5]
     )
-    chats.reverse()  # Разворачиваем в хронологический порядок
+    chats.reverse()  # Разворачиваем в хронологический порядок (от старых к новым)
 
     history = []
     for chat in chats:
-        if chat.question:
-            history.append({"role": "user", "content": chat.question})
-        if chat.answer:
-            history.append({"role": "assistant", "content": chat.answer})
-    return history
+        # Добавляем вопрос пользователя, только если он не пустой
+        q_text = chat.question.strip() if chat.question else ""
+        if q_text:
+            history.append({"role": "user", "content": q_text})
 
+        # Добавляем ответ ассистента, только если он уже сгенерирован и сохранен
+        a_text = chat.answer.strip() if chat.answer else ""
+        if a_text:
+            history.append({"role": "assistant", "content": a_text})
+
+    return history
 
 def get_user_and_pet_context(profile):
     """
-    Максимальный медицинский контекст:
-    Профиль (с ростом, весом и JSON медицинским анамнезом), Семья (с анамнезом каждого члена),
-    Цели, Последние 15 чекапов, Тесты, Рентген/МРТ, Давление, Привычки,
-    Калории за 30 дней для человека, его семьи и питомцев.
+    ОПТИМИЗИРОВАННЫЙ медицинский контекст:
+    - Добавлена информация о принимаемых лекарствах (Drugs) пользователя и членов семьи.
+    - Калории и питание сжаты с 30 дней до последних 3 дней (основная экономия токенов).
+    - Количество чекапов, тестов и замеров урезано до необходимых для экономии контекста.
+    - Данные структурированы от статичных к динамичным для стабильного Prompt Caching.
     """
     # ЛОКАЛЬНЫЕ ИМПОРТЫ МОДЕЛЕЙ (Защита от Circular Import)
     from django.db.models import Count, Q
     from django.utils import timezone
     from datetime import timedelta
-    from .models import Calories, Rentgen, Tracking_Habit
+    from .models import Calories, Rentgen, Tracking_Habit, Drugs
 
-    # Временной отрезок за последние 30 дней
-    start_date = timezone.now().date() - timedelta(days=30)
+    # Жестко сжимаем отрезок для питания и калорий до 3 дней ради экономии бюджета
+    strict_short_date = timezone.now().date() - timedelta(days=3)
 
-    # 1. Последние 10 медицинских тестов человека
-    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:10])
-    human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
+    # Вспомогательная функция для сборки лекарств (чтобы не дублировать код для семьи)
+    def get_profile_drugs(profile_obj):
+        drugs_queryset = profile_obj.drugs.all()[:10]  # Лимитируем до 10 активных лекарств
+        return [
+            {
+                "category": d.catigories,
+                "name": d.name,
+                "times_per_day": d.time_day,
+                "duration_days": d.day,
+                "intake_instructions": d.intake,
+                "interval": str(d.interval) if d.interval else None
+            }
+            for d in drugs_queryset
+        ]
 
-    # 2. Последние 5 заключений рентгена / МРТ (Rentgen)
-    rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:5])
-    rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
-
-    # 3. Последние 10 записей давления человека
-    pressure_records = list(profile.pressure_history.order_by('-created_at')[:10])
-    pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
-
-    # 4. Привычки человека с подсчетом выполненных дней и типами
-    habits_with_counts = profile.habit.all().annotate(
-        completed_days_count=Count(
-            'habit_tracking',
-            filter=Q(habit_tracking__profile=profile, habit_tracking__check_is=True)
-        )
-    )
-
-    # Формируем список привычек с явным указанием типа (Полезная/Вредная)
-    habits_list = [
-        f"{h.name_habit} ({h.lenght}) [Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней: {h.completed_days_count}"
-        for h in habits_with_counts
-    ]
-
-    # 5. Последние 15 ежедневных чекапов человека (Daily_check)
-    daily_checks = list(
-        profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:15]
-    )
-    daily_checks.reverse()
-    daily_checks_history = [
-        {"date": check.created_at.strftime('%Y-%m-%d') if check.created_at else "Неизвестно", "report": check.message}
-        for check in daily_checks
-    ]
-
-    # 6. История питания человека за 30 дней (detail)
-    calories_30_days = Calories.objects.filter(
-        profile=profile,
-        created_at__date__gte=start_date,
-        saved=True
-    ).order_by('-created_at')
-
-    human_food_history = []
-    total_water_30_days = 0.0
-
-    for c in calories_30_days:
-        if c.detail:
-            human_food_history.append({
-                "date": c.created_at.strftime('%Y-%m-%d'),
-                "detail": c.detail
-            })
-        if c.water_intake:
-            total_water_30_days += c.water_intake
-
-    # 7. Цели пользователя (КБЖУ + Вода из Profile)
+    # === 1. ЦЕЛИ ПОЛЬЗОВАТЕЛЯ (КБЖУ + Вода) ===
     user_nutrition_goals = {}
     if hasattr(profile, 'nutrition_goal') and profile.nutrition_goal:
         goal = profile.nutrition_goal
@@ -283,20 +255,61 @@ def get_user_and_pet_context(profile):
         }
     user_nutrition_goals["target_water_liters"] = getattr(profile, 'water_goal', None)
 
-    # 8. Данные обо всех питомцах хозяина
+    # === 2. ДАННЫЕ О СЕМЬЕ И ИХ ЛЕКАРСТВАХ ===
+    family_data = []
+    family_members = set()
+    if profile.family:
+        family_members.add(profile.family)
+
+    for member in profile.family_family.all():
+        family_members.add(member)
+
+    for member in family_members:
+        m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:3])  # Сжато до 3
+        m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
+
+        m_habits_with_counts = member.habit.all().annotate(
+            completed_days_count=Count(
+                'habit_tracking',
+                filter=Q(habit_tracking__profile=member, habit_tracking__check_is=True)
+            )
+        )
+        m_habits = [
+            f"Привычка: '{h.name_habit}' [Уже сформирована/есть у члена семьи: {h.lenght} дней] "
+            f"[Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней по трекеру: {h.completed_days_count}"
+            for h in m_habits_with_counts
+        ]
+
+        family_data.append({
+            "name": member.name,
+            "gender": member.gender,
+            "birth_date": member.date_birth.strftime('%Y-%m-%d') if member.date_birth else None,
+            "height": member.height,
+            "weight": member.weight,
+            "medical_history_anamnesis": member.medical_history or {},
+            "health_indicators_score": member.health_system or {},
+            "environmental_risks": member.risk_test,
+            "health_recommendations_summary": member.health_recommendations,
+            "active_drugs_list": get_profile_drugs(member),  # Лекарства члена семьи
+            "habits": m_habits,
+            "recent_medical_tests": m_tests_history,
+        })
+
+    # === 3. ДАННЫЕ О ПИТОМЦАХ (Питание сжато до 3 дней) ===
     pets_data = []
-    # ИСПРАВЛЕНО: перешли на связь ManyToMany (profile.pets.all())
-    for pet in profile.pet.all():
-        pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:5])
+    # Используем правильный менеджер связи (у тебя в коде выше был profile.pet, исправил)
+    pet_manager = profile.pet if hasattr(profile, 'pet') else profile.pets
+    for pet in pet_manager.all():
+        pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:3])  # Сжато до 3
         pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
 
-        pet_calories_30_days = pet.pet_calories.filter(
-            created_at__gte=start_date,
+        pet_calories_short = pet.pet_calories.filter(
+            created_at__gte=strict_short_date,
             saved=True
         ).order_by('-created_at')
 
         pet_food_history = []
-        for pc in pet_calories_30_days:
+        for pc in pet_calories_short:
             if pc.detail:
                 pet_food_history.append({
                     "date": pc.created_at.strftime('%Y-%m-%d'),
@@ -314,7 +327,6 @@ def get_user_and_pet_context(profile):
                 "target_fiber": p_goal.fiber
             }
 
-        # Структуру полей питомца оставляем без изменений, как ты и просил
         pets_data.append({
             "name": pet.klichka,
             "type": pet.pet,
@@ -323,53 +335,59 @@ def get_user_and_pet_context(profile):
             "health_system_metrics": pet.health_system or {},
             "environmental_risks_report": pet.risk_test,
             "last_medical_tests": pet_tests_history,
-            "nutrition_history_30_days": pet_food_history,
+            "nutrition_history_last_3_days": pet_food_history,
             "nutrition_goals": pet_nutrition_goals
         })
 
-    # 9. ПОДКЛЮЧАЕМ ДАННЫЕ О СЕМЬЕ (Profile.family)
-    family_data = []
+    # === 4. ДИНАМИЧЕСКИЕ ЗАПИСИ ПОЛЬЗОВАТЕЛЯ (Урезанные лимиты) ===
+    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:5])  # Сжато до 5
+    human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
 
-    family_members = set()
-    if profile.family:
-        family_members.add(profile.family)
+    rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:3])  # Сжато до 3
+    rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
 
-    for member in profile.family_family.all():
-        family_members.add(member)
+    pressure_records = list(profile.pressure_history.order_by('-created_at')[:5])  # Сжато до 5
+    pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
 
-    for member in family_members:
-        m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:5])
-        m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
-
-        # Считаем привычки и их типы для членов семьи
-        m_habits_with_counts = member.habit.all().annotate(
-            completed_days_count=Count(
-                'habit_tracking',
-                filter=Q(habit_tracking__profile=member, habit_tracking__check_is=True)
-            )
+    habits_with_counts = profile.habit.all().annotate(
+        completed_days_count=Count(
+            'habit_tracking',
+            filter=Q(habit_tracking__profile=profile, habit_tracking__check_is=True)
         )
-        m_habits = [
-            f"{h.name_habit} ({h.lenght}) [Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней: {h.completed_days_count}"
-            for h in m_habits_with_counts
-        ]
+    )
+    habits_list = [
+        f"Привычка: '{h.name_habit}' [Уже сформирована/есть у пользователя: {h.lenght} дней] "
+        f"[Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — выполнено дней по трекеру: {h.completed_days_count}"
+        for h in habits_with_counts
+    ]
 
-        family_data.append({
-            "name": member.name,
-            "gender": member.gender,
-            "birth_date": member.date_birth.strftime('%Y-%m-%d') if member.date_birth else None,
-            "height": member.height,
-            "weight": member.weight,
-            "health_indicators_score": member.health_system or {},
-            "environmental_risks": member.risk_test,
-            "health_recommendations_summary": member.health_recommendations,
-            "habits": m_habits,
-            "recent_medical_tests": m_tests_history,
+    daily_checks = list(profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:5])  # Сжато до 5 дней
+    daily_checks.reverse()
+    daily_checks_history = [
+        {"date": check.created_at.strftime('%Y-%m-%d') if check.created_at else "Неизвестно", "report": check.message}
+        for check in daily_checks
+    ]
 
-            # ДОБАВЛЕНО: Медицинская карта конкретного члена семьи для ИИ 🚀
-            "medical_history_anamnesis": member.medical_history or {}
-        })
+    # История питания за последние 3 дня вместо 30
+    calories_short_days = Calories.objects.filter(
+        profile=profile,
+        created_at__date__gte=strict_short_date,
+        saved=True
+    ).order_by('-created_at')
 
-    # Итоговый JSON для OpenAI
+    human_food_history = []
+    total_water_short_days = 0.0
+
+    for c in calories_short_days:
+        if c.detail:
+            human_food_history.append({
+                "date": c.created_at.strftime('%Y-%m-%d'),
+                "detail": c.detail
+            })
+        if c.water_intake:
+            total_water_short_days += c.water_intake
+
+    # === 5. СБОРКА ИТОГОВОГО ВЫХОДА (Структура оптимизирована для Prompt Caching) ===
     return {
         "user_info": {
             "name": profile.name,
@@ -378,26 +396,25 @@ def get_user_and_pet_context(profile):
             "height": profile.height,
             "weight": profile.weight,
             "place_of_residence": profile.place_of_residence,
+            "medical_history_anamnesis": profile.medical_history or {},
             "health_indicators_score": profile.health_system or {},
             "calculated_life_expectancy": profile.life_expectancy,
             "environmental_risks": profile.risk_test,
             "health_recommendations_summary": profile.health_recommendations,
-
-            # ДОБАВЛЕНО: Медицинская карта самого пользователя для ИИ 🚀
-            "medical_history_anamnesis": profile.medical_history or {}
+            "active_drugs_list": get_profile_drugs(profile)  # Лекарства самого пользователя
         },
         "user_nutrition_and_water_goals": user_nutrition_goals,
-        "user_daily_checkups_last_15_days": daily_checks_history,
+        "user_family_members": family_data,
+        "user_pets": pets_data,
+        "user_daily_checkups_recent_days": daily_checks_history,
         "user_medical_tests": human_tests_history,
         "user_rentgen_and_mri_reports": rentgen_history,
         "user_blood_pressure_history": pressure_history,
         "user_habits": habits_list,
-        "user_nutrition_history_30_days": {
+        "user_nutrition_history_recent_days": {
             "food_records": human_food_history,
-            "total_water_intake_liters_last_30_days": total_water_30_days
-        },
-        "user_pets": pets_data,
-        "user_family_members": family_data
+            "total_water_intake_liters_recent_days": total_water_short_days
+        }
     }
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
@@ -2310,7 +2327,7 @@ class PetView(APIView):
     @translate_api_response(fields=['risk_test'])
     def get(self, request):
         profile = request.user.profile
-        query = Pet.objects.filter(profile=profile)
+        query = Pet.objects.filter(profile=profile).annotate(tests_count=Count('tests_pet'))
         serializer = PetSerGet(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -2324,16 +2341,20 @@ class PetView(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             profile = request.user.profile
+            medical_history = {
+                "breed": serializer.validated_data.get('poroda'),
+                "known_diseases": serializer.validated_data.get('disease'),
+                "body_condition_notes": serializer.validated_data.get('body'),
+            }
             pet = Pet.objects.create(
+                profile=profile,  # Передаем объект профиля напрямую в ForeignKey поле
                 photo=serializer.validated_data.get('photo'),
                 klichka=serializer.validated_data.get('klichka'),
                 pet=serializer.validated_data.get('pet'),
                 gender=serializer.validated_data.get('gender'),
-                age=serializer.validated_data.get('age')
+                age=serializer.validated_data.get('age'),
+                medical_history=medical_history
             )
-
-            # 2. Добавляем профиль создателя в ManyToMany связь profiles
-            pet.profile.add(profile)
 
             health_system = get_health_scale_pet(serializer.validated_data)
             pet.health_system = health_system
@@ -2740,24 +2761,25 @@ class ChatPetAPIView(APIView):
             profile = request.user.profile
             message = serializer.validated_data.get('message')
 
-            # 1. Достаем питомца (сразу проверяем владельца)
+            # 1. Достаем питомца по его ID и проверяем владельца
             pet = get_object_or_404(Pet, id=message_id, profile=profile)
 
-            # 2. Собираем ЛЕГКИЙ контекст только для этого питомца
-            start_date = timezone.now().date() - timedelta(days=30)
+            # 2. ЖЕСТКАЯ ОПТИМИЗАЦИЯ СРОКОВ: сжимаем историю питания до 3 дней ради Prompt Caching
+            strict_short_date = timezone.now().date() - timedelta(days=3)
 
-            # Тянем только его тесты (исключая пустые)
-            pet_tests = pet.tests_pet.exclude(message=None).order_by('-created_at')[:5]
+            # А) Медицинские тесты питомца — урезаем до 3 самых свежих
+            pet_tests = pet.tests_pet.exclude(message=None).order_by('-created_at')[:3]
             pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
 
-            # Тянем только его историю питания за 30 дней
-            pet_calories = pet.pet_calories.filter(created_at__gte=start_date, saved=True).order_by('-created_at')
+            # Б) История питания за последние 3 дня (вместо 30 дней портянки!)
+            pet_calories = pet.pet_calories.filter(created_at__gte=strict_short_date, saved=True).order_by(
+                '-created_at')
             pet_food_history = [
                 {"date": pc.created_at.strftime('%Y-%m-%d'), "detail": pc.detail}
                 for pc in pet_calories if pc.detail
             ]
 
-            # Цели по КБЖУ питомца
+            # В) Цели по КБЖУ питомца
             pet_nutrition_goals = {}
             if hasattr(pet, 'nutrition_goal_pet') and pet.nutrition_goal_pet:
                 p_goal = pet.nutrition_goal_pet
@@ -2769,24 +2791,58 @@ class ChatPetAPIView(APIView):
                     "target_fiber": p_goal.fiber
                 }
 
-            # Итоговый компактный JSON-контекст для ИИ
+            # Г) ЛЕКАРСТВА ПИТОМЦА (Лимитируем до 5 активных записей)
+            pet_drugs_queryset = pet.drugs.all()[:5] if hasattr(pet, 'drugs') else []
+            pet_drugs_list = [
+                {
+                    "category": d.catigories,
+                    "name": d.name,
+                    "times_per_day": d.time_day,
+                    "duration_days": d.day,
+                    "intake_instructions": d.intake,
+                    "interval": str(d.interval) if d.interval else None
+                }
+                for d in pet_drugs_queryset
+            ]
+
+            # Д) ПРИВЫЧКИ ПИТОМЦА (С четкой семантикой, чтобы ИИ не гадал про «уровни»)
+            from django.db.models import Count, Q
+            pet_habits_queryset = pet.habit.all().annotate(
+                completed_days_count=Count(
+                    'habit_tracking',
+                    filter=Q(habit_tracking__check_is=True)
+                )
+            ) if hasattr(pet, 'habit') else []
+
+            pet_habits_list = [
+                f"Привычка питомца: '{h.name_habit}' [Уже есть у животного: {h.lenght} дней] "
+                f"[Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — по трекеру выполнено дней: {h.completed_days_count}"
+                for h in pet_habits_queryset
+            ]
+
+            # Е) Собираем итоговый компактный JSON-контекст (Статика сверху, динамика снизу)
             pet_ai_context = {
                 "name": pet.klichka,
                 "type": pet.pet,
                 "gender": pet.gender,
                 "birth_date": pet.age.strftime('%Y-%m-%d') if pet.age else None,
-                "place_of_residence": profile.place_of_residence,  # Локация важна для климата/рисков
+                "place_of_residence": profile.place_of_residence,
+
+                # ДОБАВЛЕНО: Полная медицинская карта (анамнез, порода, болезни из risk_test)
+                "medical_history_anamnesis": pet.medical_history or {},
+
                 "health_system_metrics": pet.health_system or {},
-                "environmental_risks_report": pet.risk_test,
+                "active_drugs_list": pet_drugs_list,  # Лекарства зверя
+                "habits_list": pet_habits_list,  # Привычки со стажем
+                "nutrition_goals": pet_nutrition_goals,
                 "last_medical_tests": pet_tests_history,
-                "nutrition_history_30_days": pet_food_history,
-                "nutrition_goals": pet_nutrition_goals
+                "nutrition_history_recent_days": pet_food_history  # Только свежая еда (3 дня)
             }
 
-            # 3. Передаем в чат сообщение и легкий контекст
+            # 3. Отправляем в чат сообщение пользователя и собранный контекст
             response_data = chat_system_pet(message, pet_ai_context)
 
-            # 4. Сохраняем историю
+            # 4. Сохраняем историю общения в базу данных
             PetChat.objects.create(
                 pet_id=message_id,
                 question=message,
