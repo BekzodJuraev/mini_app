@@ -338,11 +338,20 @@ class Chat(models.Model):
     )
     question=models.TextField(null=True, default=None)
     answer=models.TextField(null=True, default=None)
-    created_at=models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.profile.name
 
+
+class PetShare(models.Model):
+    profile = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='shared_pets_links', verbose_name="Кто добавил питомца")
+    pet = models.ForeignKey("Pet", on_delete=models.CASCADE, related_name='shared_profiles_links', verbose_name="Привязанный питомец")
+    #created_at = models.DateField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('profile', 'pet') # Защита, чтобы нельзя было добавить одного питомца дважды
+        verbose_name = "Совместный доступ к питомцу"
+        verbose_name_plural = "Совместный доступ к питомцам"
 class Notification_Pet_drugs(models.Model):
     # Specific time of day to take the drug
     time = models.CharField(max_length=255)

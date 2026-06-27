@@ -71,16 +71,23 @@ urlpatterns=[
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
  path('api/rentgen',views.RentgenView.as_view(),name='rentgen'),
  path('api/pet',views.PetView.as_view(),name='pet'),
+
  path('api/pet/dog/lifestyletest/<int:message_id>',views.PetstyleView.as_view(),name='lifestyletest'),
  path('api/pet/dog/emotion/<int:message_id>',views.PetEmotionView.as_view(),name='emotion'),
  path('api/pet/dog/habit/<int:message_id>', views.PetHabitView.as_view(), name='habit'),
+
  path('api/pet/cat/emotion/<int:message_id>',views.PetCatEmotView.as_view(),name='cat_emotion'),
  path('api/pet/cat/sleep/<int:message_id>',views.PetCatSleepView.as_view(),name='cat_sleep'),
  path('api/pet/cat/apetit/<int:message_id>',views.PetCatApetitView.as_view(),name='cat_apetit'),
+
  path('api/pet/grizun/pov/<int:message_id>',views.PetGrizunPovidenieView.as_view(),name='pov'),
  path('api/pet/grizun/forma/<int:message_id>',views.PetGrizunFormaView.as_view(),name='forma'),
  path('api/pet/grizun/apetit/<int:message_id>',views.PetGrizunApetitView.as_view(),name='apetit'),
+
+
  path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
+
+
  path('api/pet/join/<uuid:family_ref>', views.JoinPetFamilyView.as_view(), name='join_pet_family'),
 
 
