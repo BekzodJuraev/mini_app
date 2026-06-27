@@ -554,7 +554,7 @@ def chat_system(message, context_data, history=None):
 
     # 4. ВЫЗОВ API (актуальный синтаксис для новых моделей OpenAI)
     response = openai.ChatCompletion.create(
-        model="gpt-5-4-mini",
+        model="gpt-5-mini",
         messages=messages
     )
 
@@ -614,7 +614,7 @@ def chat_system_pet(user_message, pet_context):
 
     # 4. ВЫЗОВ API (Используй актуальный клиент client.chat.completions.create при обновлении библиотеки)
     response = openai.ChatCompletion.create(
-        model="gpt-5-4-mini",
+        model="gpt-5-mini",
         messages=messages
     )
 
