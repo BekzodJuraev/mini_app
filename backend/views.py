@@ -106,7 +106,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -121,34 +121,31 @@ class JoinPetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, family_ref):
-        """
-        Юзер Б делает запрос по ссылке — бэкенд СРАЗУ привязывает питомца к его профилю.
-        """
-        try:
-            pet = Pet.objects.get(family_ref=family_ref)
-        except (Pet.DoesNotExist, ValueError):
-            return Response(
-                {"detail": "Ссылка недействительна или питомец не найден."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        profile = request.user.profile
+        ref_uuid = family_ref
 
-        current_profile = request.user.profile
+        if not ref_uuid:
+            return Response({'error': 'Параметр pet_family_ref обязателен'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Проверяем, не добавлен ли этот питомец к нему уже ранее
-        if pet.profile.filter(id=current_profile.id).exists():
-            return Response(
-                {"detail": f"Питомец {pet.klichka} уже привязан к вашему профилю."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
-        # Сразу добавляем текущего пользователя в ManyToMany связь к питомцу Юзера А
-        pet.profile.add(current_profile)
+        pet = get_object_or_404(Pet, family_ref=ref_uuid)
 
-        return Response({
-            "success": True,
-            "message": f"Питомец {pet.klichka} успешно добавлен в ваш профиль!"
-        }, status=status.HTTP_200_OK)
+        if pet.profile == profile:
+            return Response({'message': 'Вы уже являетесь главным владельцем этого питомца'}, status=status.HTTP_200_OK)
 
+
+        pet_share, created = PetShare.objects.get_or_create(profile=profile, pet=pet)
+
+        if created:
+            return Response({
+                'message': f'Питомец {pet.klichka} успешно добавлен в вашу семью!',
+                'pet_id': pet.id
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'message': f'Питомец {pet.klichka} уже был добавлен вами ранее.',
+                'pet_id': pet.id
+            }, status=status.HTTP_200_OK)
 
 # def update_life_expectancy(f):
 #
@@ -842,7 +839,14 @@ class AdminTestDetailAPIView(APIView):
             }
             test_ai=testadmin(full_context_for_ai)
             if test.role == "animal":
-                pet=get_object_or_404(Pet,id=pet_id,profile=request.user.profile)
+                profile = request.user.profile
+                message_id=pet_id
+                shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+                pet = get_object_or_404(
+                    Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                    id=message_id
+                )
                 Tests_Pet.objects.create(pet=pet, name=test.title, message=test_ai['summary'])
             else:
                 Tests.objects.create(profile=request.user.profile, name=test.title, message=test_ai['summary'])
@@ -1549,7 +1553,12 @@ class NotificationPetAPIView(APIView):
     )
     def get(self,request,message_id):
         profile = request.user.profile
-        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         cat = Tests_Pet.objects.filter(pet=pet).order_by('-id')
         filter = request.query_params.get('filter')
 
@@ -1566,8 +1575,13 @@ class MessagePetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, message_id,test_id):
-        profile=request.user.profile
-        pet = get_object_or_404(Pet, profile=profile, id=message_id)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         message = get_object_or_404(Tests_Pet, id=test_id, pet=pet)
         if message.read == False:
             message.read=True
@@ -1787,7 +1801,13 @@ class PetDrugsAPiView(APIView):
 
     def post(self,request,message_id):
         serializer = self.serializer_class(data=request.data)
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         if serializer.is_valid():
             drug_instance=serializer.save(pet_id=message_id)
 
@@ -1846,7 +1866,13 @@ class PetDrugsAPIListView(APIView):
     )
 
     def get(self,request,message_id):
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         today = localtime(now()).date()
         query = Pet_Drugs.objects.filter(pet=pet).prefetch_related(
             Prefetch(
@@ -1894,7 +1920,12 @@ class Notification_Pet_create(APIView):
     )
     def post(self, request, message_id,drug_id):  # переименовал message_id в drug_id для ясности
         profile = request.user.profile
-        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
 
         # Проверяем, что лекарство принадлежит именно этому профилю
         drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
@@ -1992,7 +2023,12 @@ class MonthlyStatisticsPetView(APIView):
 
     def get(self, request,message_id):
         profile = request.user.profile
-        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         today = localtime(now()).date()
 
 
@@ -2270,7 +2306,12 @@ class DrugEditPetView(APIView):
     @swagger_auto_schema(request_body=DrugUpdatePetSer)
     def patch(self, request, message_id, drug_id):
         profile = request.user.profile
-        pet=get_object_or_404(Pet,profile=profile,id=message_id)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         # Ищем лекарство именно этого пользователя
         drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
 
@@ -2289,7 +2330,12 @@ class DrugEditPetView(APIView):
     # Если нужен полный апдейт (PUT)
     def put(self, request, message_id, drug_id):
         profile = request.user.profile
-        pet = get_object_or_404(Pet, profile=profile, id=message_id)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         drug = get_object_or_404(Pet_Drugs, id=drug_id, pet=pet)
         serializer = DrugUpdateSer(drug, data=request.data)
         if serializer.is_valid():
@@ -2299,10 +2345,25 @@ class DrugEditPetView(APIView):
 class DeletePetDrugsView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request,pk):
-        item = get_object_or_404(Pet_Drugs, pk=pk,pet__profile=request.user.profile)
+    def delete(self, request, pk):
+        profile = request.user.profile
+
+        # 1. Собираем ID всех питомцев, к которым у юзера есть доступ по рефу
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        # 2. Ищем лекарство: питомец должен либо принадлежать юзеру напрямую,
+        # либо находиться в списке расшаренных по рефу.
+        item = get_object_or_404(
+            Pet_Drugs.objects.filter(
+                Q(pet__profile=profile) | Q(pet_id__in=shared_pet_ids)
+            ),
+            pk=pk
+        )
+
+        # 3. Удаляем
         item.delete()
-        return Response({'message':'Drug deleted'}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Drug deleted'}, status=status.HTTP_200_OK)
 
 
 
@@ -2316,7 +2377,12 @@ class PetDrugCheckbyDayView(APIView):
     def post(self,request,message_id,notification_id):
         today = localtime(now()).date()
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         get_object_or_404(Notification_Pet_drugs,drugs__pet=pet)
         try:
             Pet_Check_Drugs.objects.get_or_create(
@@ -2427,7 +2493,13 @@ class PetDailyCheckView(APIView):
     )
     @translate_api_response(fields=['message'])
     def post(self, request,message_id):
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             today = localtime(now()).date()
@@ -2524,7 +2596,13 @@ class PetRentgenView(APIView):
     )
     @translate_api_response(fields=['message','answer'])
     def get(self, request,message_id):
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         query = PetRentgen.objects.filter(pet_id=message_id).prefetch_related('rentgen_image').order_by('created_at')
         serializer = RentgenSerGet(query, many=True)
 
@@ -2570,7 +2648,18 @@ class PetView(APIView):
     @translate_api_response(fields=['risk_test'])
     def get(self, request):
         profile = request.user.profile
-        query = Pet.objects.filter(profile=profile).annotate(tests_count=Count('tests_pet'))
+
+        # 1. Быстро собираем ID всех питомцев, которых этот профиль добавил себе по рефу
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        # 2. Достаем питомцев: где профиль является создателем ИЛИ ID питомца есть в добавленных по рефу
+        query = Pet.objects.filter(
+            Q(profile=profile) | Q(id__in=shared_pet_ids)
+        ).distinct().annotate(
+            tests_count=Count('tests_pet')  # Твоя аннотация счетчика тестов остается на месте
+        )
+
+        # 3. Сериализуем общий список
         serializer = PetSerGet(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -2634,8 +2723,16 @@ class PetstyleView(APIView):
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            #profile = request.user.profile
             test=lifestyle_test_dog(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet,name="Энергетический уровень и активность собаки",message=test['message'])
+
 
 
 
@@ -2658,7 +2755,15 @@ class PetEmotionView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=emotion_test_dog(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Эмоциональное состояние и стресс",
+                                     message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -2677,7 +2782,14 @@ class PetHabitView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=habit_test_dog(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Пищевые привычкии здоровье ЖКТ",message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -2698,6 +2810,14 @@ class PetCatEmotView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=emotion_test_cat(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Поведение и эмоциональное состояние кошки", message=test['message'])
 
 
             return Response(test, status=status.HTTP_200_OK)
@@ -2719,7 +2839,14 @@ class PetCatSleepView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=sleep_test_cat(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Качество сна и суточная активность", message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -2741,6 +2868,14 @@ class PetCatApetitView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=apetit_test_cat(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Аппетит и пищеварение кошки", message=test['message'])
 
 
             return Response(test, status=status.HTTP_200_OK)
@@ -2757,12 +2892,19 @@ class PetGrizunPovidenieView(APIView):
     )
     @pet_update_system
     @translate_api_response(fields=['message'])
-    def post(self, request,messsage_id):
+    def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             #profile = request.user.profile
             test=povidenie_test_grizuna(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Поведение и признаки комфорта", message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -2782,7 +2924,14 @@ class PetGrizunFormaView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=forma_test_grizuna(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Активность и физическая форма", message=test['message'])
 
             return Response(test, status=status.HTTP_200_OK)
 
@@ -2801,6 +2950,14 @@ class PetGrizunApetitView(APIView):
         if serializer.is_valid():
             #profile = request.user.profile
             test=apetit_test_grizuna(serializer.validated_data)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
+            Tests_Pet.objects.create(pet=pet, name="Аппетит и пищеварение", message=test['message'])
 
 
             return Response(test, status=status.HTTP_200_OK)
@@ -2987,8 +3144,13 @@ class ChatPetAPIView(APIView):
     )
 
     def get(self,request,message_id):
-        profile=request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         query=PetChat.objects.filter(pet_id=message_id).order_by('created_at')
         serializer=PetChatGet(query,many=True)
 
@@ -3001,11 +3163,17 @@ class ChatPetAPIView(APIView):
     def post(self, request, message_id):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            profile = request.user.profile
+            from django.db.models import Q
             message = serializer.validated_data.get('message')
 
             # 1. Достаем питомца по его ID и проверяем владельца
-            pet = get_object_or_404(Pet, id=message_id, profile=profile)
+            profile = request.user.profile
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
 
             # 2. ЖЕСТКАЯ ОПТИМИЗАЦИЯ СРОКОВ: сжимаем историю питания до 3 дней ради Prompt Caching
             strict_short_date = timezone.now().date() - timedelta(days=3)
@@ -3165,7 +3333,12 @@ class CaloriesPetEdit(APIView):
 
     def get(self,request,message_id):
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         cal = PetCalories.objects.filter(pet=pet,saved=True).last()
         serializer = self.serializer_class(cal)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -3179,7 +3352,12 @@ class CaloriesPetEdit(APIView):
 
     def post(self, request,message_id):
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         # Берем последнюю запись (обычно ту, что сейчас на экране)
         cal = PetCalories.objects.filter(pet=pet).last()
 
@@ -3273,7 +3451,12 @@ class NutritionGoalPETView(APIView):
 
     def get(self, request,message_id):
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         goal = NutritionGoalPet.objects.filter(pet=pet).first()
         if not goal:
             return Response({
@@ -3290,7 +3473,12 @@ class NutritionGoalPETView(APIView):
         Работает для кнопки 'Подтвердить цель'.
         """
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
 
         # update_or_create ищет запись по profile,
         # если находит — обновляет поля из defaults, если нет — создает.
@@ -3312,7 +3500,12 @@ class NutritionGoalPETView(APIView):
 
     def patch(self, request,message_id):
         profile = request.user.profile
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
 
         goal = get_object_or_404(NutritionGoalPet, pet=pet)
         serializer = self.serializer_class(goal, data=request.data, partial=True)
@@ -3348,8 +3541,12 @@ class PetCaroiesView(APIView):
     )
     def get(self, request, message_id):
         profile = request.user.profile
-        # Проверяем, что питомец принадлежит именно этому пользователю
-        pet = get_object_or_404(Pet, id=message_id, profile=profile)
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         today = localtime(now()).date()
 
         # 1. Собираем данные о потребленных нутриентах
@@ -3421,7 +3618,13 @@ class PetCaroiesView(APIView):
     @translate_api_response(fields=['detail.еда'])
     def post(self, request,message_id):
         serializer = self.serializer_class(data=request.data)
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         if serializer.is_valid():
 
             test=pet_calories(serializer.validated_data['photo'])
@@ -3444,7 +3647,13 @@ class PetCaroiesView(APIView):
         Метод для активации флага saved=True.
         Передай id в URL: <id>/
         """
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         # Ищем запись именно этого пользователя
         cal_record = get_object_or_404(PetCalories, id=id, pet=pet)
 
@@ -3462,7 +3671,13 @@ class PetCaroiesListView(APIView):
     @translate_api_response(fields=['foods.meals.detail.еда'])
     def get(self, request,message_id):
 
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile = request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         query=PetCalories.objects.filter(pet_id=message_id).exclude(detail=[]).order_by('-id')
 
         dic = defaultdict(lambda: {
@@ -3525,7 +3740,13 @@ class PetCaloriesChatView(APIView):
     def get(self, request,message_id):
         #today = localtime(now()).date()
         #three_days_ago = today - timedelta(days=2)
-        pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
+        profile=request.user.profile
+        shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
+
+        pet = get_object_or_404(
+            Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+            id=message_id
+        )
         query = PetCalories.objects.filter(
             pet_id=message_id
         ).order_by('created_at')
