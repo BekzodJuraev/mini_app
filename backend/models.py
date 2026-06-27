@@ -338,6 +338,7 @@ class Chat(models.Model):
     )
     question=models.TextField(null=True, default=None)
     answer=models.TextField(null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.profile.name
