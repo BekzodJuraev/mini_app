@@ -147,6 +147,36 @@ class JoinPetFamilyView(APIView):
                 'pet_id': pet.id
             }, status=status.HTTP_200_OK)
 
+# class JoinPetFamilyView(APIView):
+#     permission_classes = [IsAuthenticated]
+#
+#     def post(self, request, family_ref):
+#         profile = request.user.profile
+#         ref_uuid = family_ref
+#
+#         if not ref_uuid:
+#             return Response({'error': 'Параметр pet_family_ref обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#
+#         pet = get_object_or_404(Pet, family_ref=ref_uuid)
+#
+#         if pet.profile == profile:
+#             return Response({'message': 'Вы уже являетесь главным владельцем этого питомца'}, status=status.HTTP_200_OK)
+#
+#
+#         pet_share, created = PetShare.objects.get_or_create(profile=profile, pet=pet)
+#
+#         if created:
+#             return Response({
+#                 'message': f'Питомец {pet.klichka} успешно добавлен в вашу семью!',
+#                 'pet_id': pet.id
+#             }, status=status.HTTP_201_CREATED)
+#         else:
+#             return Response({
+#                 'message': f'Питомец {pet.klichka} уже был добавлен вами ранее.',
+#                 'pet_id': pet.id
+#             }, status=status.HTTP_200_OK)
+
 # def update_life_expectancy(f):
 #
 #     def wrapper(self, request, *args, **kwargs):
@@ -3217,19 +3247,19 @@ class ChatPetAPIView(APIView):
             ]
 
             # Д) ПРИВЫЧКИ ПИТОМЦА (С четкой семантикой, чтобы ИИ не гадал про «уровни»)
-            from django.db.models import Count, Q
-            pet_habits_queryset = pet.habit.all().annotate(
-                completed_days_count=Count(
-                    'habit_tracking',
-                    filter=Q(habit_tracking__check_is=True)
-                )
-            ) if hasattr(pet, 'habit') else []
 
-            pet_habits_list = [
-                f"Привычка питомца: '{h.name_habit}' [Уже есть у животного: {h.lenght} дней] "
-                f"[Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — по трекеру выполнено дней: {h.completed_days_count}"
-                for h in pet_habits_queryset
-            ]
+            # pet_habits_queryset = pet.habit.all().annotate(
+            #     completed_days_count=Count(
+            #         'habit_tracking',
+            #         filter=Q(habit_tracking__check_is=True)
+            #     )
+            # ) if hasattr(pet, 'habit') else []
+            #
+            # pet_habits_list = [
+            #     f"Привычка питомца: '{h.name_habit}' [Уже есть у животного: {h.lenght} дней] "
+            #     f"[Тип: {'Полезная' if h.type == 'good' else 'Вредная'}] — по трекеру выполнено дней: {h.completed_days_count}"
+            #     for h in pet_habits_queryset
+            # ]
 
             # Е) Собираем итоговый компактный JSON-контекст (Статика сверху, динамика снизу)
             pet_ai_context = {
@@ -3244,7 +3274,7 @@ class ChatPetAPIView(APIView):
 
                 "health_system_metrics": pet.health_system or {},
                 "active_drugs_list": pet_drugs_list,  # Лекарства зверя
-                "habits_list": pet_habits_list,  # Привычки со стажем
+                #"habits_list": pet_habits_list,  # Привычки со стажем
                 "nutrition_goals": pet_nutrition_goals,
                 "last_medical_tests": pet_tests_history,
                 "nutrition_history_recent_days": pet_food_history  # Только свежая еда (3 дня)
