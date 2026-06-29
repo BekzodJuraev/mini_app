@@ -201,8 +201,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user = validated_data.pop('user')
 
         # 1. Извлекаем (pop) данные о курении, чтобы они не ушли в обычные поля модели Profile
-        recent_smoke = validated_data.pop('recent_smoke')
-        now_smoke = validated_data.pop('now_smoke')
+        recent_smoke = validated_data.pop('recent_smoke','no')
+        now_smoke = validated_data.pop('now_smoke','no')
         exp_smoke = validated_data.pop('exp_smoke', 0)
         smoke_what = validated_data.pop('smoke_what', "")
         smoke_day = validated_data.pop('smoke_day', 0)
@@ -306,8 +306,8 @@ class RelationshipSer(serializers.ModelSerializer):
         user = self.context['request'].user
 
         # 1. Извлекаем (pop) данные о курении, чтобы они не ушли в обычные поля модели Profile
-        recent_smoke = validated_data.pop('recent_smoke')
-        now_smoke = validated_data.pop('now_smoke')
+        recent_smoke = validated_data.pop('recent_smoke', 'no')
+        now_smoke = validated_data.pop('now_smoke', 'no')
         exp_smoke = validated_data.pop('exp_smoke', 0)
         smoke_what = validated_data.pop('smoke_what', "")
         smoke_day = validated_data.pop('smoke_day', 0)
