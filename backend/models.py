@@ -517,7 +517,7 @@ class Pet(models.Model):
     health_system = models.JSONField(null=True, default=None)
     risk_test=models.TextField(null=True,default=None)
     analysis_risk = models.TextField(null=True, default=None)
-    family_ref = models.UUIDField(default=uuid.uuid4,unique=True,blank=True)
+    pet_family_ref = models.UUIDField(default=uuid.uuid4,unique=True,blank=True)
     medical_history = models.JSONField(default=dict, blank=True, verbose_name="Медицинская карта")
 
 

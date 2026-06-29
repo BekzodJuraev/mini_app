@@ -848,6 +848,10 @@ class RefGet(serializers.Serializer):
     ref = serializers.UUIDField()
     family_ref = serializers.UUIDField()
 
+
+class Add_familyrefPetSer(serializers.Serializer):
+    family_ref = serializers.UUIDField()
+    pet_family_ref=serializers.UUIDField()
 class Add_familyrefSer(serializers.Serializer):
     family_ref = serializers.UUIDField()
 class DailyCheckSer(serializers.Serializer):
@@ -894,7 +898,7 @@ class PetSerGet(serializers.ModelSerializer):
 
     class Meta:
         model=Pet
-        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','tests_count','analysis_risk','family_ref']
+        fields=['id','klichka','pet','gender','age','health','photo','percentage','risk_test','tests_count','analysis_risk','pet_family_ref']
 
     def get_health(self, obj):
         return [obj.health_system]
