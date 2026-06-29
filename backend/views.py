@@ -86,7 +86,8 @@ from .serializers import (
     DrugUpdatePetSer,
     NotificationPEtSer,
     HearthTestSer,
-    Add_familyrefSer
+    Add_familyrefSer,
+    Add_familyrefPetSer
 
 
 
@@ -117,33 +118,59 @@ from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
 
+
 class JoinPetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = Add_familyrefPetSer
 
-    def post(self, request, family_ref):
-        profile = request.user.profile
-        ref_uuid = family_ref
-
-        if not ref_uuid:
-            return Response({'error': 'Параметр pet_family_ref обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+    def post(self, request):
+        current_profile = request.user.profile
+        serializer = self.serializer_class(data=request.data)
 
 
-        pet = get_object_or_404(Pet, family_ref=ref_uuid)
+        # 1. Валидируем входящие данные (проверяем, что оба UUID пришли и они корректны)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if pet.profile == profile:
-            return Response({'message': 'Вы уже являетесь главным владельцем этого питомца'}, status=status.HTTP_200_OK)
+        # 2. Достаем UUID из отвалидированных данных сериализатора
+        target_family_ref = serializer.validated_data.get('family_ref')
+        target_pet_ref = serializer.validated_data.get('pet_family_ref')
 
 
-        pet_share, created = PetShare.objects.get_or_create(profile=profile, pet=pet)
+        # 3. Находим принимающую семью (профиль) и питомца в базе данных
+        target_profile = get_object_or_404(Profile, family_ref=target_family_ref)
+        pet = get_object_or_404(Pet, pet_family_ref=target_pet_ref)
+
+        # 4. Проверки безопасности:
+        # Проверяем, не является ли принимающий профиль уже главным хозяином питомца
+        if pet.profile == target_profile:
+            return Response(
+                {'message': f'Питомец {pet.klichka} уже находится в этой семье (он её главный владелец).'},
+                status=status.HTTP_200_OK
+            )
+
+        # 5. ЛОГИКА ДОБAВЛЕНИЯ (или создания запроса на апрув)
+        # Если у тебя логика создаёт связь сразу, то пишем в PetShare:
+        pet_share, created = PetShare.objects.get_or_create(
+            profile=target_profile,  # Семья, КУДА добавляем
+            pet=pet  # ПИТОМЕЦ, которого добавляем
+        )
+
+        # Если тебе нужно именно состояние "Ожидает апрува", здесь вместо PetShare
+        # должна создаваться запись в модели запросов, например:
+        # PetShareRequest.objects.get_or_create(from_profile=current_profile, to_profile=target_profile, pet=pet, status='pending')
 
         if created:
             return Response({
-                'message': f'Питомец {pet.klichka} успешно добавлен в вашу семью!',
-                'pet_id': pet.id
+                'status': 'success',
+                'message': f'Запрос на добавление питомца {pet.klichka} в семью успешно отправлен/создан!',
+                'pet_id': pet.id,
+                'family_id': target_profile.id
             }, status=status.HTTP_201_CREATED)
         else:
             return Response({
-                'message': f'Питомец {pet.klichka} уже был добавлен вами ранее.',
+                'status': 'already_exists',
+                'message': f'Этот питомец уже добавлен (или запрос уже существует) в данной семье.',
                 'pet_id': pet.id
             }, status=status.HTTP_200_OK)
 

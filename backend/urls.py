@@ -88,7 +88,7 @@ urlpatterns=[
  path('api/pet/chat/<int:message_id>',views.ChatPetAPIView.as_view(),name='chat_pet'),
 
 
- path('api/pet/join/<uuid:family_ref>', views.JoinPetFamilyView.as_view(), name='join_pet_family'),
+ path('api/pet/join', views.JoinPetFamilyView.as_view(), name='join_pet_family'),
 
 
  path('api/calories',views.CaroiesView.as_view(),name='calories'),

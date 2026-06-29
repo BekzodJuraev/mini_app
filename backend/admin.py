@@ -102,7 +102,7 @@ class Calories(admin.ModelAdmin):
     list_display = ['profile','created_at']
 @admin.register(Pet)
 class Pet(admin.ModelAdmin):
-    list_display = ('klichka', 'pet', 'age', 'family_ref')
+    list_display = ('klichka', 'pet', 'age', 'pet_family_ref')
 
 class Rentgen(admin.ModelAdmin):
     list_display = ['profile']
