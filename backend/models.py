@@ -176,7 +176,7 @@ class Notification(models.Model):
         return self.profile.name
 class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
-    text = models.CharField(max_length=255, verbose_name="Вариант ответа")
+    text = models.CharField(max_length=255, verbose_name="Вариант ответа",null=True,blank=True)
 
 
     def __str__(self):
@@ -224,6 +224,13 @@ class Profile(models.Model):
     pressure_plus=models.TextField(null=True,default=None)
     diary_plus=models.TextField(null=True,default=None)
     analysis_risk=models.TextField(null=True,default=None)
+    notification_drugs=models.BooleanField(default=True)
+    notification_health = models.BooleanField(default=True)
+    notification_calories = models.BooleanField(default=True)
+    notification_habit = models.BooleanField(default=True)
+
+
+
 
     #Overall_tone=models.IntegerField(default=0)
 

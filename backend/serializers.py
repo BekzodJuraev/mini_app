@@ -146,12 +146,12 @@ class RegistrationFirstSer(serializers.ModelSerializer):
 
     def validate_password(self, value):
         if len(value) < 6:
-            raise serializers.ValidationError("Password must be at least 6 characters long.")
+            raise serializers.ValidationError("Пароль должен быть не менее 6 символов в длину.")
         return value
 
     def validate(self, data):
         if data['password'] != data['password2']:
-            raise serializers.ValidationError("The two password fields didn't match.")
+            raise serializers.ValidationError("Пароли не совпадают.")
         return data
 
     class Meta:
@@ -501,7 +501,7 @@ class ProfileUpdateSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit']
 
     def update(self, instance, validated_data):
 
