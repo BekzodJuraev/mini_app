@@ -70,3 +70,12 @@ def send_missed_medication_warning(user_id, notif_id, **kwargs):
             f"Сегодня лекарство  не было отмечено как принято."
         )
         send_user_notification(user_id, text)
+def send_health_reminder(user_id):
+    """Напоминание об измерении давления по макету"""
+    text = (
+        "🩺 *Пора измерить давление*\n"
+        "Сделайте замер давления и\n"
+        "внести данные в приложение.\n\n"
+
+    )
+    send_user_notification(user_id, text)

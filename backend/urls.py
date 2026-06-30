@@ -64,8 +64,7 @@ urlpatterns=[
  path('api/pet/drugs/list/<int:message_id>', views.PetDrugsAPIListView.as_view(), name='list_drugs'), #done
  path('api/pet/drugs/edit/<int:message_id>/<int:drug_id>', views.DrugEditPetView.as_view()),#done
  path('api/pet/drugs/check/<int:message_id>/<int:notification_id>', views.PetDrugCheckbyDayView.as_view(), name='check'), #done
- path('api/pet/drugs/notification_create/<int:message_id>/<int:drug_id>', views.Notification_Pet_create.as_view(),
-      name='drugs_notificaton_create'), #done
+ path('api/pet/drugs/notification_create/<int:message_id>/<int:drug_id>', views.Notification_Pet_create.as_view(), name='drugs_notificaton_create'), #done
  path('api/pet/drugs/notifications/<int:message_id>/<int:pk>', views.Notification_Pet_Detail.as_view()),
  path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
@@ -89,6 +88,7 @@ urlpatterns=[
 
 
  path('api/pet/join', views.JoinPetFamilyView.as_view(), name='join_pet_family'),
+ path('api/pet/leave/<uuid:ref_pet_family>', views.LeavePetFamilyView.as_view(), name='pet-leave'),
 
 
  path('api/calories',views.CaroiesView.as_view(),name='calories'),

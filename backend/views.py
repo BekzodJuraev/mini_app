@@ -118,7 +118,31 @@ from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
 
+class LeavePetFamilyView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    # Передаем ref_pet_family прямо в URL (например, /api/pets/leave/some-uuid/)
+    def delete(self, request, ref_pet_family):
+        my_profile = request.user.profile  # Твоя семья (определяется автоматически по токену)
+
+        # 1. Находим питомца по его уникальному UUID
+        pet = get_object_or_404(Pet, pet_family_ref=ref_pet_family)
+
+        # 2. Ищем запись в PetShare, которая связывает ТВОЙ профиль и ЭТОГО питомца
+        pet_share = PetShare.objects.filter(profile=my_profile, pet=pet).first()
+
+        if pet_share:
+            # Удаляем связь из таблицы
+            pet_share.delete()
+            return Response({
+                'status': 'success',
+                'message': f'Питомец {pet.klichka} успешно удален из вашей семьи.'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'Этот питомец не найден в вашей семье или вы не подписаны на него.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 class JoinPetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = Add_familyrefPetSer
@@ -990,7 +1014,7 @@ class LoginAPIView(APIView):
 
                 return Response(response_data, status=status.HTTP_200_OK)
             else:
-                return Response({'message': 'User not registered'}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({'message': 'Пользователь не зарегистрирован'}, status=status.HTTP_401_UNAUTHORIZED)
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1119,6 +1143,8 @@ class ProfileUpdateAPIView(APIView):
             "message": "Profile update failed!",
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 
 

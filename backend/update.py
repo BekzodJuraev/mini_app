@@ -230,6 +230,7 @@ def environmental_risk_decorator(model_class):
                     # Передаем в ИИ-анализатор город/регион проживания
                     result = environmental_risk_analysis(self.place_of_residence)
 
+
                     # Сохраняем результат анализа в поле risk_test профиля
                     # Используем update(), чтобы не вызвать бесконечный рекурсивный save()
                     self.__class__.objects.filter(pk=self.pk).update(
