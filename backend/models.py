@@ -228,6 +228,8 @@ class Profile(models.Model):
     notification_health = models.BooleanField(default=True)
     notification_calories = models.BooleanField(default=True)
     notification_habit = models.BooleanField(default=True)
+    food_percentage=models.FloatField(default=100)
+
 
 
 
@@ -526,6 +528,7 @@ class Pet(models.Model):
     analysis_risk = models.TextField(null=True, default=None)
     pet_family_ref = models.UUIDField(default=uuid.uuid4,unique=True,blank=True)
     medical_history = models.JSONField(default=dict, blank=True, verbose_name="Медицинская карта")
+    food_percentage = models.FloatField(default=100)
 
 
     def __str__(self):

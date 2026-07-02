@@ -137,7 +137,7 @@ class Tracking_Habit(admin.ModelAdmin):
 
 @admin.register(Chat)
 class Chat(admin.ModelAdmin):
-    list_display = ['profile']
+    list_display = ['profile','created_at']
 
 @admin.register(Tests)
 class Tests(admin.ModelAdmin):

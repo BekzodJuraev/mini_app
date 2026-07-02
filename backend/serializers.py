@@ -675,11 +675,15 @@ class QuestSer(serializers.ModelSerializer):
         model=Categories_Quest
         fields=['name','status']
 
-
 class ChatGETSer(serializers.ModelSerializer):
     class Meta:
         model=Chat
-        fields=['question','answer','created_at']
+        fields=['answer','created_at']
+
+class ChatGETSerQuestion(serializers.ModelSerializer):
+    class Meta:
+        model=Chat
+        fields=['question','created_at']
 
 
 class HabitSer(serializers.ModelSerializer):
@@ -713,7 +717,7 @@ class CountHabitSer(serializers.Serializer):
 
 class GetRelationship(serializers.ModelSerializer):
     token=serializers.SerializerMethodField()
-    percentage_food = serializers.SerializerMethodField()
+    percentage_food = serializers.IntegerField(source='food_percentage')
     tests_count=serializers.IntegerField()
     class Meta:
         model=Profile
@@ -726,33 +730,7 @@ class GetRelationship(serializers.ModelSerializer):
         token, _ = Token.objects.get_or_create(user=obj.username)
         return token.key
 
-    def get_percentage_food(self, obj):
-        # 1. Проверяем наличие цели (NutritionGoal). Если её нет — сразу возвращаем None
-        goal = getattr(obj, 'nutrition_goal', None)
-        if not goal or goal.calories <= 0:
-            return 100
 
-        # 2. Считаем факт калорий за сегодня для конкретного профиля
-        today = localtime(now()).date()
-        query = Calories.objects.filter(
-            profile=obj,
-            created_at__date=today,
-            saved=True
-        ).values_list('total', flat=True)
-
-        calories = 0
-        for item in query:
-            if item:
-                calories += item.get('ккал', 0)
-
-        # 3. Рассчитываем процент
-        percentage = int((calories / goal.calories) * 100)
-
-        # Ограничиваем сотней, если на макете круг не должен выворачиваться наизнанку
-        if percentage > 100:
-            percentage = 100
-
-        return percentage
 
 
 
@@ -893,7 +871,7 @@ class PetSerCreate(serializers.Serializer):
 
 class PetSerGet(serializers.ModelSerializer):
     health = serializers.SerializerMethodField()
-    percentage=serializers.SerializerMethodField()
+    percentage=serializers.IntegerField(source='food_percentage')
     tests_count = serializers.IntegerField()
 
     class Meta:
@@ -903,35 +881,7 @@ class PetSerGet(serializers.ModelSerializer):
     def get_health(self, obj):
         return [obj.health_system]
 
-    def get_percentage(self, obj):
-        # 1. Получаем цели (нормы) для конкретного питомца
-        goal = getattr(obj, 'nutrition_goal_pet', None)
 
-        # Если цели нет или норма калорий не установлена — возвращаем None
-        if not goal or goal.calories <= 0:
-            return 100
-
-        # 2. Считаем факт калорий за сегодня для этого питомца
-        today = localtime(now()).date()
-
-        # Фильтруем по pet_id=obj.id и по сегодняшней дате (как в твоем шаблоне)
-        query = PetCalories.objects.filter(
-            pet_id=obj.id,
-            created_at=today,
-            # Если в базеDateField, оставляем так. Если DateTimeField, лучше использовать created_at__date=today
-            saved=True
-        ).values_list('total', flat=True)
-
-        calories = 0
-        for item in query:
-            if item:
-                # Забираем 'ккал' из JSON
-                calories += item.get('ккал', 0)
-
-        # 3. Считаем общий процент выполнения по калориям (не более 100%)
-        percentage = min(int((calories / goal.calories) * 100), 100)
-
-        return percentage
 
 class PetstyleSer(serializers.Serializer):
     dog_street=serializers.CharField()

@@ -15,6 +15,7 @@ urlpatterns=[
  path('api/profile/update',views.ProfileUpdateAPIView.as_view(),name='profile_update'),
  path('api/profile/healthsystem', views.ProfileMainSystemAPIView.as_view(),name='healthsystem'),
  path('api/profile/chat',views.ChatAPIView.as_view(),name='chat'),
+ path('api/profile/chat/question',views.ChatAPIViewQuestion.as_view(),name='chat'),
  path('api/tests/crashtest',views.CrashTestAPIView.as_view(),name='crashtest'),
  path('api/tests/symptomstest',views.SymptomsTestAPIView.as_view(),name='symptomstests'),
  path('api/tests/lifestyletest',views.LifeStyleTestAPIView.as_view(),name='lifestyletest'),
@@ -68,7 +69,7 @@ urlpatterns=[
  path('api/pet/drugs/notifications/<int:message_id>/<int:pk>', views.Notification_Pet_Detail.as_view()),
  path('api/ref/list',views.RefGetView.as_view(),name='ref_list'),
  path('api/profile/daily_check',views.DailyCheckView.as_view(),name='daily_check'),
- path('api/rentgen',views.RentgenView.as_view(),name='rentgen'),
+ path('api/rentgen',views.ChatRentgenView.as_view(),name='rentgen'),
  path('api/pet',views.PetView.as_view(),name='pet'),
 
  path('api/pet/dog/lifestyletest/<int:message_id>',views.PetstyleView.as_view(),name='lifestyletest'),

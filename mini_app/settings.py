@@ -159,7 +159,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'user': '2/day',  # Allows 10 requests per minute per user/IP
     },
-    'DATETIME_FORMAT': "%d.%m.%Y",
+    'DATETIME_FORMAT': "%d.%m.%Y %H:%M",
     'DATE_FORMAT': "%d.%m.%Y",
 }
 

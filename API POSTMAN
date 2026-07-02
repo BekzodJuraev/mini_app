@@ -1,3 +1,5 @@
+gunicorn mini_app.wsgi:application --bind 127.0.0.1:7000 --workers 4 --daemon && nohup python manage.py qcluster > qcluster.log 2>&1 & nohup python bot.py > bot.log 2>&1 &
+
 Register second
 {
     "name": "Бекзод",

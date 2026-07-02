@@ -87,7 +87,8 @@ from .serializers import (
     NotificationPEtSer,
     HearthTestSer,
     Add_familyrefSer,
-    Add_familyrefPetSer
+    Add_familyrefPetSer,
+    ChatGETSerQuestion
 
 
 
@@ -111,7 +112,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness
 
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -123,25 +124,41 @@ class LeavePetFamilyView(APIView):
 
     # Передаем ref_pet_family прямо в URL (например, /api/pets/leave/some-uuid/)
     def delete(self, request, ref_pet_family):
-        my_profile = request.user.profile  # Твоя семья (определяется автоматически по токену)
+        my_profile = request.user.profile
 
-        # 1. Находим питомца по его уникальному UUID
+        # 1. Находим питомца
         pet = get_object_or_404(Pet, pet_family_ref=ref_pet_family)
 
-        # 2. Ищем запись в PetShare, которая связывает ТВОЙ профиль и ЭТОГО питомца
+        # 2. Ищем связь текущего пользователя с питомцем
         pet_share = PetShare.objects.filter(profile=my_profile, pet=pet).first()
 
-        if pet_share:
-            # Удаляем связь из таблицы
-            pet_share.delete()
+        # Если связи нет, но пользователь каким-то образом пытается удалить (например, он владелец, но не в share)
+        # На всякий случай проверяем и связь, и статус владельца
+        if pet_share or pet.profile == my_profile:
+            pet_name = pet.klichka
+
+            # Если связь в PetShare существовала, удаляем её
+            if pet_share:
+                pet_share.delete()
+
+            # 3. ПРОВЕРКА НА OWNER'А: Если этот профиль — владелец, сносим питомца целиком
+            if pet.profile == my_profile:
+                pet.delete()
+                return Response({
+                    'status': 'success',
+                    'message': f'Вы были владельцем, поэтому питомец {pet_name} полностью удален из базы.'
+                }, status=status.HTTP_200_OK)
+
+            # Если это был обычный член семьи (не owner)
             return Response({
                 'status': 'success',
-                'message': f'Питомец {pet.klichka} успешно удален из вашей семьи.'
+                'message': f'Вы успешно покинули семью питомца {pet_name}. Сам питомец не удален.'
             }, status=status.HTTP_200_OK)
+
         else:
             return Response({
                 'status': 'error',
-                'message': 'Этот питомец не найден в вашей семье или вы не подписаны на него.'
+                'message': 'Этот питомец не найден в вашей семье.'
             }, status=status.HTTP_400_BAD_REQUEST)
 class JoinPetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
@@ -512,6 +529,9 @@ def get_chat_history(profile):
 #             "total_water_intake_liters_recent_days": total_water_short_days
 #         }
 #     }
+
+
+
 def get_user_and_pet_context(profile):
 
 
@@ -547,13 +567,16 @@ def get_user_and_pet_context(profile):
 
     def build_habits_block(habits_qs):
         """
-        Табличный формат привычек: fields + rows (как мини-CSV в JSON).
-        Ключи name/type/streak_days/completed_days указаны ОДИН раз в "fields",
-        а не повторяются на каждую запись — экономия ~60% токенов против
-        списка словарей или текстовых строк, без потери информации.
+        Табличный формат привычек питомца с заменой good/bad
+        на понятные для ИИ текстовые значения.
         """
         rows = [
-            [h.name_habit, ("good" if h.type == "good" else "bad"), h.lenght, h.completed_days_count]
+            [
+                h.name_habit,
+                ("полезная привычка" if h.type == "good" else "вредная привычка"),
+                h.lenght,
+                h.completed_days_count
+            ]
             for h in habits_qs
         ]
         if not rows:
@@ -602,8 +625,6 @@ def get_user_and_pet_context(profile):
             "weight": member.weight,
             "medical_history_anamnesis": member.medical_history or {},
             "health_indicators_score": member.health_system or {},
-            "environmental_risks": member.risk_test,
-            "health_recommendations_summary": member.health_recommendations,
             "active_drugs_list": get_object_drugs(member),
             "habits": m_habits,
             "recent_medical_tests": m_tests_history,
@@ -666,13 +687,13 @@ def get_user_and_pet_context(profile):
         })
 
     # === 4. ДИНАМИЧЕСКИЕ ЗАПИСИ ПОЛЬЗОВАТЕЛЯ (Урезанные лимиты) ===
-    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:5])
+    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:3])
     human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
 
     rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:3])
     rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
 
-    pressure_records = list(profile.pressure_history.order_by('-created_at')[:5])
+    pressure_records = list(profile.pressure_history.order_by('-created_at')[:3])
     pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
 
     habits_with_counts = profile.habit.all().annotate(
@@ -683,7 +704,7 @@ def get_user_and_pet_context(profile):
     )
     habits_list = build_habits_block(habits_with_counts)
 
-    daily_checks = list(profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:5])
+    daily_checks = list(profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:3])
     daily_checks.reverse()
     daily_checks_history = [
         {"date": check.created_at.strftime('%Y-%m-%d') if check.created_at else "Неизвестно", "report": check.message}
@@ -720,8 +741,6 @@ def get_user_and_pet_context(profile):
             "medical_history_anamnesis": profile.medical_history or {},
             "health_indicators_score": profile.health_system or {},
             "calculated_life_expectancy": profile.life_expectancy,
-            "environmental_risks": profile.risk_test,
-            "health_recommendations_summary": profile.health_recommendations,
             "active_drugs_list": get_object_drugs(profile)
         },
         "user_nutrition_and_water_goals": user_nutrition_goals,
@@ -737,6 +756,27 @@ def get_user_and_pet_context(profile):
             "total_water_intake_liters_recent_days": total_water_short_days
         }
     }
+
+def build_context(profile, message):
+    # ПРОВЕРКА 1: Извлекаем чистый текст, если передан объект сообщения Телеграм
+    if hasattr(message, "text"):
+        text_message = message.text
+    elif isinstance(message, dict) and "text" in message:
+        text_message = message["text"]
+    else:
+        text_message = str(message)
+
+    full = get_user_and_pet_context(profile)
+
+    # Передаем строго очищенную строку текста
+    sections = detect_context(text_message)
+
+    context = {}
+    for key in sections:
+        if key in full:
+            context[key] = full[key]
+
+    return context
 def update_system(f):
     def wrapper(self,request,*args,**kwargs):
         message = f(self, request, *args, **kwargs)
@@ -1200,8 +1240,18 @@ class ProfileMainSystemAPIView(APIView):
 
 
 
+class ChatAPIViewQuestion(APIView):
+    permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: ChatGETSer(many=True)}
+    )
+    def get(self,request):
+        profile=request.user.profile
+        query=Chat.objects.filter(profile=profile).order_by('created_at')
+        serializer=ChatGETSerQuestion(query,many=True)
 
+        return Response(serializer.data,status=status.HTTP_200_OK)
 class ChatAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ChatSer
@@ -1221,22 +1271,26 @@ class ChatAPIView(APIView):
     @update_system
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
+
         if serializer.is_valid():
+
             profile = request.user.profile
-            message = serializer.validated_data.get('message')
+            message = serializer.validated_data["message"]
 
-            # 1. Быстро собираем историю диалога и медицинский контекст через функции
             history = get_chat_history(profile)
-            context_data = get_user_and_pet_context(profile)
 
-            # 2. Получаем ответ от ИИ
+            sections = detect_context(message)
+
+
+            context_data = build_context(profile, sections)
+            print(context_data)
+
             response_data = chat_system(
                 message=message,
                 context_data=context_data,
                 history=history
             )
 
-            # 3. Сохраняем в базу
             Chat.objects.create(
                 profile=profile,
                 question=message,
@@ -2598,7 +2652,7 @@ class PetDailyCheckView(APIView):
             return Response(test, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
-class RentgenView(APIView):
+class ChatRentgenView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = RentgenSer
     parser_classes = [MultiPartParser, FormParser]
@@ -3125,7 +3179,7 @@ class CaroiesView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CaloriesSer()}
     )
-    @update_system
+    #@update_system
     @translate_api_response(fields=['detail.еда'])
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
@@ -3148,16 +3202,23 @@ class CaroiesView(APIView):
 
     @update_system
     def patch(self, request, id):
-        """
-        Метод для активации флага saved=True.
-        Передай id в URL: /calories/<id>/
-        """
         profile = request.user.profile
-        # Ищем запись именно этого пользователя
         cal_record = get_object_or_404(Calories, id=id, profile=profile)
 
+        # Вызываем вынесенную функцию
+        food_type = evaluate_food_healthiness(cal_record.detail)
+
+        # Меняем проценты, отталкиваясь от ТЕКУЩЕГО значения в ПРОФИЛЕ
+        if food_type == "good":
+            profile.food_percentage = min(profile.food_percentage + 10, 100)
+        else:
+            profile.food_percentage = max(profile.food_percentage - 10, 0)
+
         cal_record.saved = True
-        cal_record.save()
+        cal_record.save(update_fields=['saved'])
+
+        # Сохраняем профиль (декоратор @update_system поймает это изменение)
+        profile.save(update_fields=['food_percentage'])
 
         return Response({'message': cal_record.detail}, status=status.HTTP_200_OK)
 
@@ -3725,10 +3786,10 @@ class PetCaroiesView(APIView):
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, message_id,id):
+    @update_system  # Если декоратор нужен и для питомцев, оставляем его здесь
+    def patch(self, request, message_id, id):
         """
-        Метод для активации флага saved=True.
-        Передай id в URL: <id>/
+        Метод для активации флага saved=True и обновления food_percentage питомца.
         """
         profile = request.user.profile
         shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
@@ -3737,11 +3798,26 @@ class PetCaroiesView(APIView):
             Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
             id=message_id
         )
-        # Ищем запись именно этого пользователя
+
+        # Ищем запись калорий конкретного питомца
         cal_record = get_object_or_404(PetCalories, id=id, pet=pet)
 
+        # Вызываем ту же самую функцию оценки (передаем туда описание еды питомца)
+        food_type = evaluate_food_healthiness(cal_record.detail,is_pet=True)
+        #print(food_type)
+
+        # Меняем проценты, отталкиваясь от текущего здоровья ПИТОМЦА (макс 100%)
+        if food_type == "good":
+            pet.food_percentage = min(pet.food_percentage + 10, 100)
+        else:
+            pet.food_percentage = max(pet.food_percentage - 10, 0)
+
+        # Переключаем флаг сохранения у записи калорий
         cal_record.saved = True
-        cal_record.save()
+        cal_record.save(update_fields=['saved'])
+
+        # Сохраняем обновленный процент в модель питомца
+        pet.save(update_fields=['food_percentage'])
 
         return Response({'message': 'Calories saved successfully'}, status=status.HTTP_200_OK)
 class PetCaroiesListView(APIView):

@@ -579,6 +579,45 @@ def chat_system(message, context_data, history=None):
 - анализы;
 - симптомы.
 
+8. Если вопрос касается привычек пользователя:
+
+Используй только данные из истории привычек.
+
+Если привычка найдена, обязательно сообщи:
+
+- название привычки;
+- сколько дней она существует;
+- сколько раз пользователь отметил "Да";
+- сколько раз отметил "Нет";
+- сколько дней осталось без отметки.
+
+Формат ответа:
+
+У вас добавлена привычка "<название>".
+
+Она существует уже <N> дней.
+
+Статистика:
+• "Да" — <N> раз;
+• "Нет" — <N> раз;
+• Без отметки — <N> дней.
+
+После статистики кратко оцени прогресс.
+
+Пример:
+
+У вас добавлена полезная привычка «не есть после 18:00».
+
+Она существует уже 20 дней.
+
+Статистика:
+• "Да" — 3 раза;
+• "Нет" — 2 раза;
+• Без отметки — 15 дней.
+
+Пока данных немного, поэтому делать выводы рано. Если отмечать выполнение регулярно, будет проще увидеть реальный прогресс.
+Никогда не придумывай значения. Используй только предоставленные данные.
+
 Если вопрос не связан с этим — вежливо сообщи, что можешь помочь только по вопросам здоровья.
 
 Никогда не говори, что у тебя есть медицинская лицензия.
@@ -649,6 +688,137 @@ def chat_system(message, context_data, history=None):
 
     return clean_answer
 
+def detect_context(message):
+    #print(message)
+    INTENT_PROMPT = """
+    Ты классификатор запросов.
+
+    Определи, какие данные нужны для ответа.
+
+    Верни ТОЛЬКО одно слово.
+
+    Возможные категории:
+
+    user_info
+    user_habits
+    user_medical_tests
+    user_rentgen_and_mri_reports
+    user_blood_pressure_history
+    user_daily_checkups_recent_days
+    user_nutrition_history_recent_days
+    user_nutrition_and_water_goals
+    user_pets
+    user_family_members
+
+    Если вопрос требует нескольких разделов, верни их через запятую.
+
+    Например:
+
+    user_info,user_medical_tests
+
+    или
+
+    user_habits
+
+    или
+
+    user_pets
+
+    Никаких объяснений.
+    """
+
+    # 1. ИСПРАВЛЕНО: Для gpt-4o-mini нужно использовать новый синтаксис клиента (openai>=1.0.0)
+
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": INTENT_PROMPT},
+            {"role": "user", "content": message},
+        ],
+    )
+
+    # 2. ИСПРАВЛЕНО: К объекту ответа теперь нужно обращаться через точку, а не по ключам словаря
+    raw_content = response["choices"][0]["message"]["content"]
+
+    # Важно: возвращаем список, а не сырую строку,
+    # чтобы цикл `for key in sections` в build_context работал корректно!
+    clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip()
+    return [x.strip() for x in clean_content.split(",") if x.strip()]
+def evaluate_food_healthiness(detail: str, is_pet: bool = False) -> str:
+    """
+    Универсальная функция для оценки полезности пищи через LLM.
+    Поддерживает как людей, так и питомцев.
+    Возвращает 'good' (полезная) или 'bad' (вредная).
+    """
+    if not detail:
+        return "good"
+
+    # Динамически подставляем правила валидации в зависимости от того, кто ест
+    if is_pet:
+        target_context = "ДОМАШНЕГО ПИТОМЦА (собаки/кошки)"
+        criteria_good = """
+        — Качественный сухой или влажный промышленный корм.
+        — Натуральное сбалансированное питание: нежирное мясо (говядина, индейка, курица), субпродукты.
+        — Безопасные овощи и зелень (морковь, кабачок/цукини, тыква, огурец).
+        — Рисовая или гречневая каша в умеренных количествах.
+        *Примечание: совместное присутствие в миске сухого корма, сырого/вареного мяса и разрешенных овощей считается ПОЛЕЗНЫМ ("good").*
+        """
+        criteria_bad = """
+        — Еда со стола человека (жареное, соленое, со специями, сладкое, острое).
+        — Кости (особенно трубчатые птичьи), свинина, жирные мясные обрезки.
+        — Строго токсичные для животных продукты: шоколад, какао, ксилит (сахарозаменитель), виноград и изюм, лук, чеснок, авокадо.
+        — Испорченные, протухшие или заплесневелые продукты.
+        """
+    else:
+        target_context = "ЧЕЛОВЕКА"
+        criteria_good = """
+        — Здоровое, сбалансированное питание, цельные продукты.
+        — Источники чистого белка (курица, индейка, рыба, яйца, нежирное мясо, бобовые).
+        — Сложные углеводы (крупы: гречка, рис, овсянка, макароны из твердых сортов, цельнозерновой хлеб).
+        — Клетчатка (любые свежие или запеченные овощи, зелень, ягоды, фрукты).
+        — Полезные жиры (орехи, авокадо, оливковое масло, жирная рыба).
+        """
+        criteria_bad = """
+        — Фастфуд, глубоко переработанная еда (чипсы, сухарики, покупные полуфабрикаты).
+        — Избыток добавленного сахара (сладости, покупные торты, газированные напитки, соки).
+        — Трансжиры, обилие маргарина, продукты, жаренные в большом количестве фритюрного масла.
+        — Избыточно жирная пища без баланса нутриентов.
+        """
+
+    prompt = f"""
+Ты квалифицированный эксперт-нутрициолог и ветеринарный диетолог. 
+Твоя задача — проанализировать описание съеденной пищи для {target_context} и строго определить, является ли она в основном ПОЛЕЗНОЙ ("good") или ВРЕДНОЙ ("bad").
+
+КРИТЕРИИ ПОЛЕЗНОЙ ЕДЫ ("good"):
+{criteria_good}
+
+КРИТЕРИИ ВРЕДНОЙ ЕДЫ ("bad"):
+{criteria_bad}
+
+Описание пищи для анализа: {detail}
+
+Верни ответ строго в формате JSON:
+{{
+  "food_type": "good" // или "bad"
+}}
+"""
+
+    try:
+        response = openai.ChatCompletion.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": "Ты эксперт по оценке питания. Отвечаешь строго в формате JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response["choices"][0]["message"]["content"])
+        return result.get("food_type", "good")
+    except Exception as e:
+        print(f"Ошибка LLM при оценке пищи (is_pet={is_pet}): {e}")
+        return "good"  # Безопасный fallback
 
 def chat_system_pet(user_message, pet_context):
     """
@@ -1778,9 +1948,10 @@ def petdaily_check(user_data, yesterday=None):
     return result_dict
 
 
-
-
 def rentgen(photo_files, message, rentgen_history):
+    import docx  # Импортируем python-docx для работы с .docx файлами
+    import io
+
     image_contents = []
     text_from_docs = ""
 
@@ -1804,6 +1975,29 @@ def rentgen(photo_files, message, rentgen_history):
                         text_from_docs += page.get_text() + "\n"
             elif filename.endswith(".txt"):
                 text_from_docs += file.read().decode("utf-8") + "\n"
+
+            # --- Добавляем поддержку .doc и .docx ---
+            elif filename.endswith(".docx"):
+                file_bytes = file.read()
+                doc_io = io.BytesIO(file_bytes)
+                doc = docx.Document(doc_io)
+                full_text = []
+                for para in doc.paragraphs:
+                    full_text.append(para.text)
+                text_from_docs += "\n".join(full_text) + "\n"
+
+            elif filename.endswith(".doc"):
+                # Старый бинарный формат .doc напрямую python-docx не читает.
+                # Пытаемся декодировать строки как fallback, убирая бинарный мусор.
+                file_bytes = file.read()
+                try:
+                    raw_text = file_bytes.decode("utf-8", errors="ignore")
+                except Exception:
+                    raw_text = file_bytes.decode("cp1251", errors="ignore")
+                # Чистим базово от непечатных символов, оставляя кириллицу/латиницу
+                clean_text = "".join(ch for ch in raw_text if ch.isalnum() or ch.isspace() or ch in ".,-;:!?")
+                text_from_docs += clean_text + "\n"
+
         except Exception as e:
             print(f"FILE ERROR ({filename}):", e)
 
