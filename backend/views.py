@@ -553,15 +553,56 @@ def get_user_and_pet_context(profile):
         relation_name = 'pet_drugs' if isinstance(obj, Pet) else 'drugs'
         if not hasattr(obj, relation_name):
             return []
+
         drugs_queryset = getattr(obj, relation_name).all().order_by('-created_at')[:10]
-        rows = [
-            [d.catigories, d.name, d.time_day, d.day, d.intake, str(d.interval) if d.interval else None]
-            for d in drugs_queryset
-        ]
+
+        # Получаем сегодняшнюю дату для проверки чеков
+        today = timezone.now().date()
+
+        rows = []
+        for d in drugs_queryset:
+            # Проверяем, есть ли чек приема на сегодня.
+            # Предполагаем, что у твоего лекарства есть связь с уведомлениями (например, related_name='notifications' или у Notification_drugs есть FK на Drug)
+            # Здесь мы ищем, существует ли чек со значением is_taken=True на сегодняшнюю дату:
+
+            is_taken_today = False
+            if hasattr(d, 'notifications'):  # подставь сюда правильное related_name от Drug к Notification_drugs
+                is_taken_today = Check_Drugs.objects.filter(
+                    notification__in=d.notifications.all(),
+                    # или notification__drug=d в зависимости от твоей архитектуры
+                    date=today,
+                    is_taken=True
+                ).exists()
+            elif hasattr(d, 'checks'):  # Если у тебя Check_Drugs или Notification привязаны как-то иначе
+                # Альтернативный вариант связи
+                pass
+
+            # Переводим bool статус в понятную для ИИ строку
+            status_taken = "Принято" if is_taken_today else "Еще не принято"
+
+            rows.append([
+                d.catigories,
+                d.name,
+                d.time_day,
+                d.day,
+                d.intake,
+                str(d.interval) if d.interval else None,
+                status_taken  # Добавляем статус приема в массив данных
+            ])
+
         if not rows:
             return []
+
         return {
-            "fields": ["category", "name", "times_per_day", "duration_days", "intake_instructions", "interval"],
+            "fields": [
+                "category",
+                "name",
+                "times_per_day",
+                "duration_days",
+                "intake_instructions",
+                "interval",
+                "status_taken_today"  # Новое поле в заголовках
+            ],
             "rows": rows
         }
 
@@ -770,7 +811,7 @@ def build_context(profile, message):
 
     # Передаем строго очищенную строку текста
     sections = detect_context(text_message)
-
+    #print(sections)
     context = {}
     for key in sections:
         if key in full:
@@ -1283,7 +1324,7 @@ class ChatAPIView(APIView):
 
 
             context_data = build_context(profile, sections)
-            print(context_data)
+            #print(context_data)
 
             response_data = chat_system(
                 message=message,
