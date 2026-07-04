@@ -676,9 +676,9 @@ def chat_system(message, context_data, history=None):
     # ===============================
 
     response = openai.ChatCompletion.create(
-        model="gpt-5.4-mini",
+        model=MODEL,
         messages=messages,
-        temperature=0.3
+        #temperature=0.3
     )
 
     answer = response.choices[0].message.content
@@ -1162,12 +1162,8 @@ def environmental_risk_analysis(place_of_resident):
     ФОРМАТ MESSAGE:
 
     Начни:
-    "Риски в вашем окружении"
+    "В [название города или региона] Опиши 1-2 экологических риска, характерных для этого места. "
 
-    Следующая строка:
-    "В [название города или региона] "
-
-    Опиши 1-2 экологических риска, характерных для этого места.
 
     Затем:
     "Рекомендуется:"
