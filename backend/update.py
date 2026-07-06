@@ -109,88 +109,72 @@ def make_decorated_model(model_class, fields_to_track):
 
     model_class.save = new_save
     return model_class
-def pulse_diary_decorator(model_class):
+
+
+def monthly_report_only_tests_decorator(model_class):
     original_save = model_class.save
 
     def new_save(self, *args, **kwargs):
-        # 1. Сначала стандартно сохраняем текущий тест/запись дневника в базу
+        # 1. Сначала стандартно сохраняем текущий тест/замер в базу
         original_save(self, *args, **kwargs)
 
-        # 2. Уходим в фоновый поток для работы с ИИ
-        def run_pulse_analysis():
+        # 2. Уходим в фоновый поток собирать историю за последние 30 дней и отправлять в ИИ
+        def run_analysis():
             try:
-                p = self.profile
+                # Определяем владельца (поддерживает как Profile, так и Pet, если у Pet есть связь)
+                p = getattr(self, 'profile', None)
                 if p:
                     # Вычисляем точку отсчета — 30 дней назад
                     start_date = timezone.now() - timedelta(days=30)
 
-                    # Вытаскиваем максимум 7 последних непустых сообщений за месяц
-                    test_answers = list(
+                    # Вытаскиваем сообщения из пройденных тестов (последние 3 замера)
+                    test_answers_list = list(
                         p.tests.filter(
                             message__isnull=False,
                             created_at__gte=start_date
                         )
                         .exclude(message="")
                         .order_by('-created_at')
-                        .values_list('message', flat=True)[:20]
+                        .values_list('message', flat=True)[:3]
                     )
 
-                    # Если история за этот месяц есть, скармливаем её ИИ
-                    if test_answers:
-                        # Запускаем новый промпт для дневника пульса
-                        result = pulse_diary_analysis(test_answers)
-                        ai_message = result.get("message", "")
+                    # Извлекаем только вопросы и жалобы из чата пользователя (последние 3)
+                    chat_queryset = p.chat.filter(
+                        created_at__gte=start_date,
+                        question__isnull=False
+                    ).exclude(question="").order_by('-created_at')[:3]
 
-                        if ai_message:
-                            # Обновляем именно поле diary_plus в профиле напрямую через SQL
-                            p.__class__.objects.filter(pk=p.pk).update(
-                                diary_plus=ai_message
-                            )
-            except Exception as e:
-                print(f"Ошибка при работе ИИ в декораторе дневника пульса: {e}")
+                    # Формируем список признаков и жалоб от пользователя
+                    user_complaints_list = [
+                        f"Жалоба/вопрос в чате: {chat.question}" for chat in chat_queryset
+                    ]
 
-        # Запускаем асинхронно, чтобы не тормозить фронтенд при сохранении
-        Thread(target=run_pulse_analysis, daemon=True).start()
+                    # Соединяем логи тестов в один текстовый блок для аргумента `test_data_text`
+                    test_data_text = "\n".join(test_answers_list)
 
-    model_class.save = new_save
-    return model_class
-def monthly_report_only_tests_decorator(model_class):
-    original_save = model_class.save
+                    # Соединяем жалобы из чата в один текстовый блок для аргумента `user_complaints`
+                    user_complaints_text = "\n".join(user_complaints_list)
 
-    def new_save(self, *args, **kwargs):
-        # 1. Сначала стандартно сохраняем текущий тест в базу
-        original_save(self, *args, **kwargs)
-
-        # 2. Уходим в фон собирать историю за последние 30 дней и отправлять в ИИ
-        def run_analysis():
-            try:
-                p = self.profile
-                if p:
-                    # Вычисляем точку отсчета — 30 дней назад
-                    start_date = timezone.now() - timedelta(days=30)
-
-                    # Вытаскиваем максимум 7 ответов ИИ строго за последние 30 дней
-                    test_answers = list(
-                        p.tests.filter(
-                            message__isnull=False,
-                            created_at__gte=start_date  # Фильтр за последние 30 дней
+                    # ИИ запускается, только если есть хотя бы какие-то замеры давления в тестах
+                    if test_data_text or user_complaints_text:
+                        # Передаем и логи замеров, и текстовые жалобы из чата
+                        result = monthly_pressure_analysis(
+                            test_data_text=test_data_text,
+                            user_complaints=user_complaints_text
                         )
-                        .exclude(message="")
-                        .order_by('-created_at')
-                        .values_list('message', flat=True)[:20]
-                    )
+                        pressure_plus = result.get("pressure_plus", "")
+                        diary_plus = result.get("diary_plus", "")
 
-                    if test_answers:
-                        result = monthly_pressure_analysis(test_answers)
-                        ai_message = result.get("message", "")
-
-                        if ai_message:
+                        # Если ИИ успешно сгенерировал отчет, точечно обновляем поле в профиле
+                        if pressure_plus or diary_plus:
                             p.__class__.objects.filter(pk=p.pk).update(
-                                pressure_plus=ai_message
+                                pressure_plus=pressure_plus,
+                                diary_plus=diary_plus
                             )
             except Exception as e:
                 print(f"Ошибка при работе ИИ в декораторе тестов: {e}")
 
+        # Запускаем сборку в фоне, чтобы не тормозить HTTP-ответ пользователю
         Thread(target=run_analysis, daemon=True).start()
 
     model_class.save = new_save

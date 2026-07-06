@@ -6,7 +6,7 @@ import uuid
 from django_q.tasks import async_task
 from django.db.models import Sum
 from django.utils import timezone
-from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pulse_diary_decorator,pet_risk_analysis_decorator,health_recommendations_start_decorator
+from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pet_risk_analysis_decorator,health_recommendations_start_decorator
 from django.db import models
 
 # 1. Система здоровья (например, Пищеварительная)
@@ -218,11 +218,15 @@ class Profile(models.Model):
     timezone = models.CharField(max_length=50, null=True,blank=True)
     water_goal=models.FloatField(default=0)
     life_expectancy_json=models.TextField(null=True,default=None)
-    pressure_test=models.TextField(null=True,default=None)
     health_recommendations=models.TextField(null=True,default=None)
     risk_test=models.TextField(null=True,default=None)
+
+    pressure_test = models.TextField(null=True, default=None)
+
+
     pressure_plus=models.TextField(null=True,default=None)
     diary_plus=models.TextField(null=True,default=None)
+
     analysis_risk=models.TextField(null=True,default=None)
     notification_drugs=models.BooleanField(default=True)
     notification_health = models.BooleanField(default=True)
@@ -314,7 +318,6 @@ class Tests_Pet(models.Model):
     created_at = models.DateField(auto_now_add=True)
 
 @health_recommendations_decorator
-@pulse_diary_decorator
 @update_life_expectancy_decorator
 @monthly_report_only_tests_decorator
 class Tests(models.Model):
@@ -341,6 +344,7 @@ class BloodPressure(models.Model):
     class Meta:
         verbose_name = "Давление"
         verbose_name_plural = "История давления"
+@monthly_report_only_tests_decorator
 class Chat(models.Model):
     profile = models.ForeignKey(
         'Profile', on_delete=models.CASCADE, related_name='chat', verbose_name="Профиль"
@@ -510,7 +514,7 @@ class Rentgen_Image(models.Model):
 
     def __str__(self):
         return self.rentgen.profile.name
-@pet_risk_analysis_decorator(fields_to_track=['gender', 'health_system','age','pet'])
+@pet_risk_analysis_decorator(fields_to_track=['gender', 'health_system','age','pet','medical_history'])
 class Pet(models.Model):
     profile = models.ForeignKey(
         'Profile',

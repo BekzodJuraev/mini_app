@@ -2722,7 +2722,7 @@ class ChatRentgenView(APIView):
             files = serializer.validated_data.get('file')
 
             # 1. Извлекаем чистые заключения (только answer)
-            past_records = Rentgen.objects.filter(profile=profile).exclude(answer=None).order_by('-created_at')[:20]
+            past_records = Rentgen.objects.filter(profile=profile).exclude(answer=None).order_by('-created_at')[:3]
 
             history_lines = [
                 f"Дата: {r.created_at.strftime('%Y-%m-%d')} -> Заключение: {r.answer}"
@@ -2730,7 +2730,11 @@ class ChatRentgenView(APIView):
             ]
             records_context = "\n".join(history_lines)
 
-            # 2. Соединяем с глобальным отчетом из профиля
+            profile_data = (
+                f"Возраст: {profile.date_birth}, Пол: {profile.gender}, "
+                f"Рост/вес: {profile.height} см / {profile.weight} кг, "
+                f"Медицинская карта: {profile.medical_history}"
+            )
             rentgen_history_context = ""
             if profile.analysis_risk:
                 rentgen_history_context += f"ПОСЛЕДНИЙ СФОРМИРОВАННЫЙ АНАЛИЗ РИСКОВ ИЗ ПРОФИЛЯ:\n{profile.analysis_risk}\n\n"
@@ -2738,7 +2742,7 @@ class ChatRentgenView(APIView):
             rentgen_history_context += f"ИСТОРИЯ ПРЕДЫДУЩИХ ЗАКЛЮЧЕНИЙ:\n{records_context}"
 
             # 3. Отправляем в OpenAI (функция деф rentgen остается прежней)
-            test = rentgen(files, current_message, rentgen_history_context)
+            test = rentgen(files, current_message, rentgen_history_context,profile_data)
 
             # 4. Обновляем глобальный накопительный отчет в профиле
             new_analysis_risk = test.get('analysis_risk')
@@ -2793,26 +2797,62 @@ class PetRentgenView(APIView):
     @pet_update_system
     def post(self,request,message_id):
         serializer = self.serializer_class(data=request.data)
+        profile = request.user.profile
         if serializer.is_valid():
+            shared_pet_ids = PetShare.objects.filter(profile=profile).values_list('pet_id', flat=True)
 
+            pet = get_object_or_404(
+                Pet.objects.filter(Q(profile=profile) | Q(id__in=shared_pet_ids)),
+                id=message_id
+            )
 
-            test=petrentgen(serializer.validated_data.get('file'),serializer.validated_data.get('message'))
-            r=PetRentgen.objects.create(pet_id=message_id,message=serializer.validated_data.get('message'),answer=test['message'])
+            # 1. Собираем профиль питомца
+            pet_profile = (
+                f"Вид: {pet.pet}, Возраст: {pet.age}, Регион: {profile.place_of_residence}, "
+                f"Пол: {pet.gender}, Медицинская карта: {pet.medical_history}"
+            )
 
+            # 2. Собираем историю предыдущих обследований
+            past_pet_records = PetRentgen.objects.filter(pet_id=message_id).exclude(answer=None).order_by(
+                '-created_at')[:3]
+            pet_history_lines = [
+                f"Дата: {r.created_at.strftime('%Y-%m-%d')} -> Заключение: {r.answer}"
+                for r in reversed(past_pet_records)
+            ]
+            records_context = "\n".join(pet_history_lines)
 
+            pet_history_context = ""
+            if pet.analysis_risk:
+                pet_history_context += f"ПОСЛЕДНИЙ СФОРМИРОВАННЫЙ АНАЛИЗ РИСКОВ ИЗ ПРОФИЛЯ ПИТОМЦА:\n{pet.analysis_risk}\n\n"
+            pet_history_context += f"ИСТОРИЯ ПРЕДЫДУЩИХ ЗАКЛЮЧЕНИЙ:\n{records_context}"
 
+            # 3. Вызываем ИИ уже с профилем и историей
+            test = petrentgen(
+                serializer.validated_data.get('file'),
+                serializer.validated_data.get('message'),
+                pet_history_context,
+                pet_profile,
+            )
+
+            # 4. Сохраняем заключение
+            r = PetRentgen.objects.create(
+                pet_id=message_id,
+                message=serializer.validated_data.get('message'),
+                answer=test['message'],
+            )
+
+            # 5. Обновляем глобальный анализ рисков в профиле питомца
+            pet.analysis_risk = test.get('analysis_risk', pet.analysis_risk)
+            pet.save(update_fields=['analysis_risk'])
+
+            # 6. Сохраняем изображения
             consumables = [
                 PetRentgen_Image(rentgen=r, images=image)
                 for image in serializer.validated_data.get('file')
             ]
             PetRentgen_Image.objects.bulk_create(consumables)
 
-
-
-
-
-
-            return Response(test, status=status.HTTP_200_OK)
+            return Response({'message': test['message']}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
 
