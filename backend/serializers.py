@@ -271,6 +271,63 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
         return user
 
+    def update(self, instance, validated_data):
+
+        recent_smoke = validated_data.pop('recent_smoke', 'no')
+        now_smoke = validated_data.pop('now_smoke', 'no')
+        exp_smoke = validated_data.pop('exp_smoke', 0)
+        smoke_what = validated_data.pop('smoke_what', "")
+        smoke_day = validated_data.pop('smoke_day', 0)
+
+        validated_data.pop('user', None)
+        validated_data.pop('ref', None)
+        validated_data.pop('ref_family', None)
+
+        # Полностью обновляем поля профиля новыми данными из запроса
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        weight = instance.weight
+        height = instance.height
+        place_of_residence = instance.place_of_residence
+        gender = instance.gender
+        date_birth = instance.date_birth
+
+        instance.water_goal = (weight * 30) / 1000
+
+        ik = 0
+        if now_smoke == 'yes' and exp_smoke and smoke_day:
+            ik = (smoke_day * exp_smoke / 20)
+        instance.IK = ik
+
+        medical_history_dict = {
+            "recent_smoke": recent_smoke,
+            "now_smoke": now_smoke,
+            "exp_smoke_years": exp_smoke,
+            "smoke_product_type": smoke_what,
+            "smoke_per_day_count": smoke_day
+        }
+        instance.medical_history = medical_history_dict
+        instance.save()
+
+        def fetch_and_update_health(profile_obj):
+            health_system = get_health_scale(
+                height, weight, smoking_now=now_smoke, smoking_past=recent_smoke,
+                location=place_of_residence, gender=gender, date_birth=date_birth,
+                exp_smoke=exp_smoke, smoke_what=smoke_what, smoke_day=smoke_day
+            )
+            if isinstance(health_system, str):
+                try:
+                    health_system = json.loads(health_system)
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON format returned from OpenAI API")
+
+            profile_obj.health_system = health_system
+            profile_obj.save(update_fields=['health_system'])
+
+        Thread(target=fetch_and_update_health, args=(instance,)).start()
+
+        return instance
 
 class RelationshipSer(serializers.ModelSerializer):
     who_is = serializers.CharField()

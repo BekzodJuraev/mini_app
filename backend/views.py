@@ -1061,6 +1061,13 @@ class RegisterAPIView(APIView):
         serializer.save(user=request.user)
 
         return Response({'message': 'Profile Created'}, status=status.HTTP_201_CREATED)
+    def put(self,request,*args,**kwargs):
+        profile=request.user.profile
+        serializer = self.serializer_class(profile,data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({'message': 'Profile Updated'}, status=status.HTTP_201_CREATED)
 
 class RegisterFirstAPIView(APIView):
     serializer_class = RegistrationFirstSer
