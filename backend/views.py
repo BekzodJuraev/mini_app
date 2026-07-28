@@ -798,20 +798,11 @@ def get_user_and_pet_context(profile):
         }
     }
 
-def build_context(profile, message):
-    # ПРОВЕРКА 1: Извлекаем чистый текст, если передан объект сообщения Телеграм
-    if hasattr(message, "text"):
-        text_message = message.text
-    elif isinstance(message, dict) and "text" in message:
-        text_message = message["text"]
-    else:
-        text_message = str(message)
+def build_context(profile, sections):
 
     full = get_user_and_pet_context(profile)
 
-    # Передаем строго очищенную строку текста
-    sections = detect_context(text_message)
-    #print(sections)
+
     context = {}
     for key in sections:
         if key in full:
@@ -1328,6 +1319,7 @@ class ChatAPIView(APIView):
             history = get_chat_history(profile)
 
             sections = detect_context(message)
+            #print(sections)
 
 
             context_data = build_context(profile, sections)
