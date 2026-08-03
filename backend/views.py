@@ -113,7 +113,7 @@ from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
 from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness
-
+from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
@@ -801,7 +801,9 @@ def get_user_and_pet_context(profile):
 def build_context(profile, sections):
 
     full = get_user_and_pet_context(profile)
+    if "manage_nutrition_diary" in sections:
 
+        return sections
 
     context = {}
     for key in sections:
@@ -1312,35 +1314,60 @@ class ChatAPIView(APIView):
         serializer = self.serializer_class(data=request.data)
 
         if serializer.is_valid():
-
             profile = request.user.profile
             message = serializer.validated_data["message"]
 
             history = get_chat_history(profile)
-
             sections = detect_context(message)
             #print(sections)
 
+            # ==============================================================
+            # ВЕТКА: Управление дневником питания и воды (CRUD через Tools)
+            # ==============================================================
+            if "manage_nutrition_diary" in sections:
+                # 1. Запускаем специализированный обработчик с NUTRITION_TOOLS
+                response_data = nutrition_chat_system(
+                    message=message,
+                    profile_obj=profile,
+                    history=history
+                )
 
-            context_data = build_context(profile, sections)
-            #print(context_data)
+                # 2. Сохраняем диалог в базу
+                Chat.objects.create(
+                    profile=profile,
+                    question=message,
+                    answer=response_data
+                )
 
-            response_data = chat_system(
-                message=message,
-                context_data=context_data,
-                history=history
-            )
+                return Response(
+                    {"message": response_data},
+                    status=status.HTTP_200_OK
+                )
 
-            Chat.objects.create(
-                profile=profile,
-                question=message,
-                answer=response_data
-            )
+            # ==============================================================
+            # ВЕТКА: Стандартный медицинский ИИ-консультант
+            # ==============================================================
+            else:
+                context_data = build_context(profile, sections)
 
-            return Response(
-                {"message": response_data},
-                status=status.HTTP_200_OK
-            )
+                response_data = chat_system(
+                    message=message,
+                    context_data=context_data,
+                    history=history
+                )
+
+                Chat.objects.create(
+                    profile=profile,
+                    question=message,
+                    answer=response_data
+                )
+
+                return Response(
+                    {"message": response_data},
+                    status=status.HTTP_200_OK
+                )
+
+
 
         return Response(
             {"message": "Invalid form data"},
