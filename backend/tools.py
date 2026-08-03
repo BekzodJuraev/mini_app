@@ -1,7 +1,7 @@
 import json
-from django.utils import timezone
-from .models import Calories  # Подставь верный импорт твоей модели Calories
 import openai
+from django.utils import timezone
+from .models import Calories  # Убедись, что путь к модели Calories верный
 
 from config import KEY, MODEL
 openai.api_key = KEY
@@ -10,19 +10,33 @@ openai.api_key = KEY
 # 1. СИСТЕМНЫЙ ПРОМПТ
 # ==============================================================
 NUTRITION_SYSTEM_PROMPT = """Ты — умный ассистент дневника питания.
-Твоя задача — принимать запросы пользователя (добавление еды/воды, удаление или изменение позиций) и вызывать инструмент update_nutrition_log.
+Твоя задача — принимать запросы пользователя (добавление, изменение или удаление еды/воды) и вызывать инструмент update_nutrition_log.
 
-СТРОГИЕ ЕДИНИЦЫ ИЗМЕРЕНИЯ (ВСЁ В ГРАММАХ И МИЛЛИЛИТРАХ):
-1. Вес и объем продуктов/напитков ВСЕГДА указываются в абсолютных единицех: граммы (г) и миллилитры (мл).
-   - 250 мл = 250
-   - 0.5 литра / 500 мл = 500
-   - 1 литр / 1000 мл = 1000
-   - 1 кг = 1000
-2. `added_water_ml` — количество чистой питьевой воды СТРОГО в миллилитрах (например, 250 для 250мл или 500 для 0.5л).
-3. При ДОБАВЛЕНИИ: добавляй позицию в `detail` и пересчитывай `total`.
-4. При УДАЛЕНИИ: убирай позицию из `detail` и пересчитывай `total`.
-5. При ИЗМЕНЕНИИ: обновляй позицию в `detail` и пересчитывай `total`.
-6. Если пользователь не указал вес/объем — НЕ вызывай функцию, а попроси уточнить текстом."""
+КРИТИЧЕСКИЕ ПРАВИЛА ИЗМЕНЕНИЯ И УДАЛЕНИЯ:
+1. Твой ЕДИНСТВЕННЫЙ источник правды — системный блок "ПОСЛЕДНЯЯ ЗАПИСЬ ДНЕВНИКА В БД".
+2. При РЕДАКТИРОВАНИИ (например, "поменяй 1 кг на 500 г"):
+   - Найди продукт в `detail`, измени его вес и пропорционально пересчитай КБЖУ (ккал, белок, жир, углеводы).
+   - Обнови итоговые данные в `total`.
+3. При УДАЛЕНИИ ВОДЫ/ЖИДКОСТИ (например, "убери воду", "обнули воду"):
+   - Установи `water_action` в значение "reset".
+   - Установи `added_water_ml` в 0.
+   - Убери упоминания воды из `detail` (если она там была) и пересчитай `total`.
+
+УТОЧНЕНИЕ ПРИ ДОБАВЛЕНИИ:
+1. Если пользователь просит ДОБАВИТЬ еду/воду, И В ПОСЛЕДНЕЙ ЗАПИСИ УЖЕ ЕСТЬ ПРОДУКТЫ (`detail` НЕ пустой):
+   - Сначала СПРОСИ текстом: "Добавить [название продукта] в текущую запись или создать новую?"
+   - ИСКЛЮЧЕНИЕ: Если пользователь сам сразу указал контекст ("добавь в новую запись", "измени в текущей", "убери из последней"), сразу вызывай инструмент.
+2. Если последняя запись ПУСТАЯ — сразу вызывай инструмент без вопросов.
+
+ФЛАГИ В ИНСТРУМЕНТЕ:
+- `target_entry`: "current" (текущая запись) или "new" (создать новую).
+- `water_action`:
+    * "add" — прибавить `added_water_ml` к текущей воде в БД.
+    * "reset" — полностью сбросить/удалить воду (установить water_intake = 0).
+    * "set" — установить точный объем воды равным `added_water_ml`.
+
+ЕДИНИЦЫ ИЗМЕРЕНИЯ (СТРОГО В ГРАММАХ И МИЛЛИЛИТРАХ):
+- Вес и объем всегда в абсолютных числах (г/мл): 500 г -> 500, 1 кг -> 1000, 1 л -> 1000."""
 
 
 # ==============================================================
@@ -33,7 +47,7 @@ NUTRITION_TOOLS = [
         "type": "function",
         "function": {
             "name": "update_nutrition_log",
-            "description": "Обновить дневник питания (добавить, изменить или удалить еду/воду) с пересчетом detail и total.",
+            "description": "Обновить или создать запись в дневнике питания (добавить, изменить или удалить еду/воду).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -42,17 +56,27 @@ NUTRITION_TOOLS = [
                         "enum": ["add", "update", "delete"],
                         "description": "Тип действия."
                     },
+                    "target_entry": {
+                        "type": "string",
+                        "enum": ["current", "new"],
+                        "description": "'current' — обновить последнюю запись, 'new' — создать новую."
+                    },
+                    "water_action": {
+                        "type": "string",
+                        "enum": ["add", "reset", "set"],
+                        "description": "'add' — прибавить воду, 'reset' — сбросить воду в 0, 'set' — установить конкретное значение."
+                    },
                     "message": {
                         "type": "string",
-                        "description": "Краткое текстовое сообщение для пользователя (например: 'Добавил 250мл воды в дневник!')."
+                        "description": "Краткий ответ пользователю."
                     },
                     "added_water_ml": {
                         "type": "number",
-                        "description": "Количество чистой питьевой воды в миллилитрах (например, 250, 500, 1000). Если вода не добавлялась — 0."
+                        "description": "Количество воды/жидкости в мл."
                     },
                     "detail": {
                         "type": "array",
-                        "description": "ПОЛНЫЙ список всех продуктов/напитков за сегодня. Вес/объем указывается в г/мл.",
+                        "description": "Актуальный полный список продуктов записи.",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -69,7 +93,7 @@ NUTRITION_TOOLS = [
                     },
                     "total": {
                         "type": "object",
-                        "description": "ПОЛНЫЕ суммарные показатели КБЖУ всех элементов из detail.",
+                        "description": "Пересчитанные суммарные показатели КБЖУ всех элементов из detail.",
                         "properties": {
                             "вес": {"type": "number"},
                             "ккал": {"type": "number"},
@@ -81,7 +105,7 @@ NUTRITION_TOOLS = [
                         "required": ["вес", "ккал", "белок", "жир", "углеводы", "клетчатка"]
                     }
                 },
-                "required": ["action_type", "message", "added_water_ml", "detail", "total"]
+                "required": ["action_type", "target_entry", "water_action", "message", "added_water_ml", "detail", "total"]
             }
         }
     }
@@ -89,34 +113,36 @@ NUTRITION_TOOLS = [
 
 
 # ==============================================================
-# 3. ИСПОЛНИТЕЛЬ ДЕЙСТВИЙ И СОХРАНЕНИЕ В DJANGO ORM
+# 3. ИСПОЛНИТЕЛЬ ДЕЙСТВИЙ (ОБРАБОТКА ВОДЫ И ГРАММОВОК)
 # ==============================================================
 def execute_nutrition_action(tool_call, profile_obj) -> str:
-    """
-    Принимает аргументы от OpenAI, сохраняет detail/total (в г/мл),
-    а в water_intake переводит прибавку миллилитров в литры (250мл -> +0.25л).
-    """
     args = json.loads(tool_call.function.arguments)
-    today = timezone.now().date()
 
     message = args.get("message", "Дневник успешно обновлен.")
+    target_entry = args.get("target_entry", "current")
+    water_action = args.get("water_action", "add")
     added_water_ml = float(args.get("added_water_ml", 0))
     updated_detail = args.get("detail", [])
     updated_total = args.get("total", {})
 
-    entry, _ = Calories.objects.get_or_create(
-        profile=profile_obj,
-        created_at__date=today,
-        defaults={'saved': True, 'detail': [], 'total': {}, 'water_intake': 0.0}
-    )
+    last_entry = Calories.objects.filter(profile=profile_obj).order_by('-created_at').first()
 
-    # Меняем ТОЛЬКО water_intake: переводим миллилитры в литры при сохранении
-    if added_water_ml > 0:
-        added_liters = added_water_ml / 1000.0  # 250 мл -> 0.25 л
-        current_water_liters = float(entry.water_intake or 0.0)
-        entry.water_intake = round(current_water_liters + added_liters, 3)
+    # Создание новой записи или получение текущей
+    if target_entry == "new" or last_entry is None:
+        entry = Calories(profile=profile_obj, saved=True, water_intake=0.0)
+    else:
+        entry = last_entry
 
-    # detail и total сохраняются как раньше (в г/мл)
+    # ОБРАБОТКА ВОДЫ (water_intake)
+    if water_action == "reset":
+        entry.water_intake = 0.0
+    elif water_action == "set":
+        entry.water_intake = round(added_water_ml / 1000.0, 3)
+    elif water_action == "add" and added_water_ml > 0:
+        added_liters = added_water_ml / 1000.0
+        current_water = float(entry.water_intake or 0.0)
+        entry.water_intake = round(current_water + added_liters, 3)
+
     entry.detail = updated_detail
     entry.total = updated_total
     entry.saved = True
@@ -129,10 +155,7 @@ def execute_nutrition_action(tool_call, profile_obj) -> str:
 # 4. ОСНОВНАЯ ФУНКЦИЯ ЧАТА ПИТАНИЯ
 # ==============================================================
 def nutrition_chat_system(message, profile_obj, history=None) -> str:
-    today = timezone.now().date()
-
-    # 1. Загружаем текущие данные из БД Django
-    entry = Calories.objects.filter(profile=profile_obj, created_at__date=today,saved=True).last()
+    entry = Calories.objects.filter(profile=profile_obj).order_by('-created_at').first()
 
     current_detail = entry.detail if (entry and entry.detail) else []
     current_total = entry.total if (entry and entry.total) else {
@@ -140,28 +163,30 @@ def nutrition_chat_system(message, profile_obj, history=None) -> str:
     }
     current_water_liters = entry.water_intake if entry else 0.0
 
-    today_context = {
-        "date": str(today),
+    last_record_context = {
+        "record_id": entry.id if entry else None,
         "detail": current_detail,
         "total": current_total,
         "water_intake_liters": current_water_liters
     }
 
-    # 2. Формируем контекст сообщений
     messages = [
         {"role": "system", "content": NUTRITION_SYSTEM_PROMPT},
         {
             "role": "system",
-            "content": f"ТЕКУЩЕЕ СОСТОЯНИЕ ДНЕВНИКА ЗА СЕГОДНЯ ({today}):\n{json.dumps(today_context, ensure_ascii=False)}"
+            "content": (
+                f"ПОСЛЕДНЯЯ ЗАПИСЬ ДНЕВНИКА В БД:\n"
+                f"{json.dumps(last_record_context, ensure_ascii=False)}\n\n"
+                f"При удалении воды всегда передавай water_action='reset'."
+            )
         }
     ]
 
     if history:
-        messages.extend(history[-10:])
+        messages.extend(history[-4:])
 
     messages.append({"role": "user", "content": message})
 
-    # 3. Вызов OpenAI API
     response = openai.ChatCompletion.create(
         model=MODEL if 'MODEL' in globals() else "gpt-4o-mini",
         messages=messages,
@@ -171,10 +196,8 @@ def nutrition_chat_system(message, profile_obj, history=None) -> str:
 
     response_msg = response.choices[0].message
 
-    # 4. Если ИИ вызвал функцию обновления
     if response_msg.get("tool_calls"):
         for tool_call in response_msg.tool_calls:
             return execute_nutrition_action(tool_call, profile_obj)
 
-    # 5. Ответ простым текстом (если требуется уточнение)
     return response_msg.content.strip()
