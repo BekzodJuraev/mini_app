@@ -232,7 +232,16 @@ class Profile(models.Model):
     notification_health = models.BooleanField(default=True)
     notification_calories = models.BooleanField(default=True)
     notification_habit = models.BooleanField(default=True)
+    notification_reproductive=models.BooleanField(default=True)
     food_percentage=models.FloatField(default=100)
+
+
+
+    #половая систем male
+    harmone_profile=models.TextField(null=True,default=None)
+    harmone_function= models.TextField(null=True,default=None)
+    harmone_prostate = models.TextField(null=True,default=None)
+
 
 
 
@@ -243,23 +252,17 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.name
-# class Calories(models.Model):
-#
 
-# class Relationship(models.Model):
-#     profile = models.ForeignKey(
-#         'Profile', on_delete=models.CASCADE, related_name='relationship', verbose_name="Профиль"
-#     )
-#     who_is=models.CharField(max_length=150)
-#     name = models.CharField(max_length=200, null=True, blank=True, default=None)
-#     lastname = models.CharField(max_length=200, null=True, blank=True, default=None)
-#     middle_name = models.CharField(max_length=200, null=True, blank=True, default=None)
-#     gender = models.CharField(max_length=200, null=True, blank=True, default=None)
-#     photo = models.ImageField(blank=True)
-#     place_of_residence = models.CharField(max_length=200, null=True, blank=True, default=None)
-#     date_birth = models.DateField(null=True, blank=True, default=None)
-#     health_system = models.JSONField(null=True, default=None)
+class Critical_analysis(models.Model):
+    title=models.CharField(max_length=255)
+    text = models.TextField()
 
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        verbose_name="Kритические анализы"
+        verbose_name_plural = "Kритические анализы"
 @update_life_expectancy_decorator
 class Habit(models.Model):
     profile=models.ForeignKey(

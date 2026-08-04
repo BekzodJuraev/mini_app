@@ -88,7 +88,8 @@ from .serializers import (
     HearthTestSer,
     Add_familyrefSer,
     Add_familyrefPetSer,
-    ChatGETSerQuestion
+    ChatGETSerQuestion,
+    CriticalAnalsisSer
 
 
 
@@ -108,7 +109,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -4064,3 +4065,14 @@ class PublicNotificationPetDrugView(APIView):
         serializer = PublicNotificationPetDrugSer(query, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class CriticalAnalsisView(APIView):
+    serializer_class = CriticalAnalsisSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CriticalAnalsisSer(many=True)}
+    )
+    def get(self,request):
+        query = Critical_analysis.objects.all()
+        ser=self.serializer_class(query,many=True)
+        return Response(ser.data, status=status.HTTP_200_OK)
