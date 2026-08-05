@@ -89,7 +89,8 @@ from .serializers import (
     Add_familyrefSer,
     Add_familyrefPetSer,
     ChatGETSerQuestion,
-    CriticalAnalsisSer
+    CriticalAnalsisSer,
+    MaleSystemSer
 
 
 
@@ -4075,4 +4076,16 @@ class CriticalAnalsisView(APIView):
     def get(self,request):
         query = Critical_analysis.objects.all()
         ser=self.serializer_class(query,many=True)
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+
+class MaleSystemView(APIView):
+    serializer_class = MaleSystemSer
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: MaleSystemSer()}
+    )
+    def get(self, request):
+        ser = self.serializer_class(request.user.profile)
         return Response(ser.data, status=status.HTTP_200_OK)

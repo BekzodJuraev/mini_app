@@ -4,6 +4,7 @@ urlpatterns=[
  path('api/register/first',views.RegisterFirstAPIView.as_view(),name='register1'),
  path('api/register/second',views.RegisterAPIView.as_view(),name='register'),
  path('api/profile/male/critical_analis', views.CriticalAnalsisView.as_view(), name='criticalanaly'),
+ path('api/profile/male/system',views.MaleSystemView.as_view()),
 
 
  path('api/login',views.LoginAPIView.as_view(),name='login'),

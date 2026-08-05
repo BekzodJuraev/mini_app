@@ -63,6 +63,10 @@ class CriticalAnalsisSer(serializers.ModelSerializer):
     class Meta:
         model=Critical_analysis
         fields = ['title','text']
+class MaleSystemSer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields=['harmone_profile','harmone_function','harmone_prostate']
 
 class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='pet.profile.username.username')
