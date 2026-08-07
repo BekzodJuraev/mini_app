@@ -253,9 +253,25 @@ class Profile(models.Model):
     def __str__(self):
         return self.name
 
+
 class Critical_analysis(models.Model):
-    title=models.CharField(max_length=255)
-    text = models.TextField()
+    SYSTEM_CHOICES = [
+        ('reproductive', 'Половая система - мужчина'),
+    ]
+    system = models.CharField(
+        max_length=50,
+        choices=SYSTEM_CHOICES,
+        default='others',
+        verbose_name="Система"
+    )
+
+
+    title = models.CharField(max_length=255, verbose_name="Название")
+    description = models.TextField(blank=True, verbose_name="Описание")
+    example_answer = models.TextField(
+        blank=True,
+        verbose_name="Пример ответа"  # Правильный падеж
+    )
 
     def __str__(self):
         return self.title
@@ -263,6 +279,37 @@ class Critical_analysis(models.Model):
     class Meta:
         verbose_name="Kритические анализы"
         verbose_name_plural = "Kритические анализы"
+
+
+
+
+
+class Question_critical(models.Model):
+    # Типы вопросов как на картинке
+    TYPE_CHOICES = [
+        ('slider', 'Слайдер (Плохо - Хорошо)'),
+        ('binary', 'Да/Нет'),
+        ('radio', 'Несколько вариантов'),
+        ('text', 'Текстовый ответ (Поле ввода)'),
+    ]
+
+    test = models.ForeignKey(Critical_analysis, on_delete=models.CASCADE, related_name='questions')
+    text = models.CharField(max_length=500, verbose_name="Текст вопроса")
+    question_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='radio')
+
+
+
+
+    def __str__(self):
+        return self.text
+class Choice_critical(models.Model):
+    question = models.ForeignKey(Question_critical, on_delete=models.CASCADE, related_name='choices')
+    text = models.CharField(max_length=255, verbose_name="Вариант ответа",null=True,blank=True)
+
+
+    def __str__(self):
+        return self.text
+
 @update_life_expectancy_decorator
 class Habit(models.Model):
     profile=models.ForeignKey(

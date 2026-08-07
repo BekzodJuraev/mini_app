@@ -1,11 +1,50 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical
 
 
 import nested_admin
+
+
+class ChoiceInlinecritical(nested_admin.NestedTabularInline):
+    model = Choice_critical
+    extra = 0  # Было 3, теперь пустых полей по умолчанию не будет
+    # Если нужно, чтобы хотя бы один ответ был всегда:
+    min_num = 1
+
+class QuestionInlinecritical(nested_admin.NestedStackedInline):
+    model = Question_critical
+    extra = 0  # Было 1
+    inlines = [ChoiceInlinecritical]
+
 @admin.register(Critical_analysis)
-class Critical_analysis(admin.ModelAdmin):
-    list_display = ('title', 'text')
+class CriticalAdmin(nested_admin.NestedModelAdmin):
+    list_display = ('title','get_system', 'example_answer')
+    list_filter = ('system',)
+    search_fields = ('title',)
+    inlines = [QuestionInlinecritical]
+
+    fieldsets = (
+        ("Основные настройки", {
+            'fields': ('system',)
+        }),
+        ("Контент", {
+            'fields': ('title', 'description','example_answer')
+        }),
+    )
+
+    class Media:
+        js = (
+            'admin/js/vendor/jquery/jquery.js',
+            'admin/js/question_type_toggle.js',
+        )
+
+    def get_system(self, obj):
+        return obj.get_system_display() # Используем display для красивого имени из choices
+    get_system.short_description = 'Система'
+
+
+
+
 @admin.register(PetShare)
 class PetShare(admin.ModelAdmin):
     pass
