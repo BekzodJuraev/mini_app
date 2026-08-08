@@ -43,6 +43,37 @@ class AdminTestByIDSer(serializers.ModelSerializer):
             } for q in obj.questions.all()
         ]
 
+
+class CriticalAnalysisDetailSerializer(serializers.ModelSerializer):
+    question = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Critical_analysis
+        fields = [
+            'id',
+            'system',
+            'title',
+            'description',
+            'example_answer',
+            'question'
+        ]
+
+    def get_question(self, obj):
+        # Вопросы и их варианты ответов берутся из заранее подгруженных связей (prefetch_related)
+        return [
+            {
+                "id": q.id,
+                "text": q.text,
+                "type": q.question_type,
+                "type_display": q.get_question_type_display(),
+                "choices": [
+                    {
+                        "id": c.id,
+                        "text": c.text,
+                    } for c in q.choices.all()  # Без дополнительных запросов к БД при prefetch_related
+                ]
+            } for q in obj.questions.all()
+        ]
 class AdminTestsSer(serializers.ModelSerializer):
 
     role_display = serializers.ReadOnlyField(source='get_role_display')
@@ -62,7 +93,7 @@ class AdminTestsSer(serializers.ModelSerializer):
 class CriticalAnalsisSer(serializers.ModelSerializer):
     class Meta:
         model=Critical_analysis
-        fields = ['title','text']
+        fields = ['id','title','description']
 class MaleSystemSer(serializers.ModelSerializer):
     class Meta:
         model = Profile

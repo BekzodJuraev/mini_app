@@ -5,7 +5,7 @@ urlpatterns=[
  path('api/register/second',views.RegisterAPIView.as_view(),name='register'),
  path('api/profile/male/critical_analis', views.CriticalAnalsisView.as_view(), name='criticalanaly'),
  path('api/profile/male/system',views.MaleSystemView.as_view()),
-
+ path('api/profile/male/critical_analis/<int:pk>', views.CriticalTestDetailAPIView.as_view()),
 
  path('api/login',views.LoginAPIView.as_view(),name='login'),
  path('api/reset/email',views.RequestPasswordReset.as_view(),name='reset_email'),

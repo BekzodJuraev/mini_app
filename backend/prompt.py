@@ -116,6 +116,58 @@ def testadmin(full_context_for_ai):
 
     result_text = response["choices"][0]["message"]["content"]
     return json.loads(result_text)
+
+def critical_analysis_ai(full_context_for_ai):
+    prompt = f"""
+Ты медицинский/клинический эксперт-аналитик, специализирующийся на анализах для мужчин.
+
+Данные анализа:
+- Название анализа: {full_context_for_ai['metadata']['title']}
+- Описание: {full_context_for_ai['metadata']['description']}
+- Система организма: {full_context_for_ai['metadata']['system']} (мужская репродуктивная / гормональная / урологическая система)
+
+Клинические инструкции и правила интерпретации:
+{full_context_for_ai['instructions']['expert_rule']}
+
+Введенные данные / ответы пациента (мужчины):
+{full_context_for_ai['user_data']['answers']}
+
+Твоя задача:
+1. Проанализировать полученные маркеры/ответы с учетом норм и патологий мужского здоровья.
+2. Сформировать развернутый, профессиональный и структурированный вывод (summary), понятный пациенту.
+3. Указать возможные риски, причину отклонений от нормы (если есть) и необходимые дальнейшие шаги или консультации специалистов.
+
+❗️ ВАЖНО:
+- Все рассуждения и рекомендации должны быть рассчитаны СТРОГО НА МУЖЧИН.
+- Ответ должен быть ТОЛЬКО в формате JSON.
+- Без разметки markdown (без ```json), без вводных слов и текста вне JSON.
+
+Формат ответа:
+{{
+    "summary": "Подробный экспертный анализ показателей мужского здоровья, интерпретация результатов и рекомендации"
+}}
+"""
+
+    response = openai.ChatCompletion.create(
+        model=MODEL, # Убедись, что переменная MODEL определена в файле
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Ты высший эксперт в области мужского здоровья и лабораторно-клинической диагностики. "
+                    "Твой профиль — строго мужская физиология. Отвечай исключительно в формате JSON."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    result_text = response["choices"][0]["message"]["content"]
+    return json.loads(result_text)
 def get_health_scale(height, weight, smoking_now, smoking_past, location, gender, date_birth, exp_smoke, smoke_what, smoke_day):
     user_input = f"""
     Данные анкеты пользователя:

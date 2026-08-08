@@ -90,7 +90,8 @@ from .serializers import (
     Add_familyrefPetSer,
     ChatGETSerQuestion,
     CriticalAnalsisSer,
-    MaleSystemSer
+    MaleSystemSer,
+    CriticalAnalysisDetailSerializer
 
 
 
@@ -114,7 +115,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -4073,6 +4074,7 @@ class CriticalAnalsisView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: CriticalAnalsisSer(many=True)}
     )
+    @translate_api_response(fields=['title', 'description'])
     def get(self,request):
         query = Critical_analysis.objects.all()
         ser=self.serializer_class(query,many=True)
@@ -4086,6 +4088,73 @@ class MaleSystemView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: MaleSystemSer()}
     )
+
     def get(self, request):
         ser = self.serializer_class(request.user.profile)
         return Response(ser.data, status=status.HTTP_200_OK)
+
+
+
+
+
+class CriticalTestDetailAPIView(APIView):
+    serializer_class = CriticalAnalysisDetailSerializer
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CriticalAnalysisDetailSerializer()}
+    )
+    @translate_api_response(fields=['question.text', 'question.choices.text'])
+    def get(self, request, pk):
+
+        test = get_object_or_404(
+            Critical_analysis.objects.prefetch_related(
+                'questions',
+                'questions__choices'
+            ),
+            pk=pk
+        )
+
+
+        serializer = self.serializer_class(test)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: AIInputSer()}
+    )
+    @update_system
+    @translate_api_response(fields=['summary'])
+    def post(self, request, pk):
+        test = get_object_or_404(Critical_analysis, pk=pk)
+
+        # Валидируем JSON с ответами от фронта
+        input_serializer = AIInputSer(data=request.data)
+
+        if input_serializer.is_valid():
+            # Формируем контекст для ИИ
+            full_context_for_ai = {
+                "metadata": {
+                    "title": test.title,
+                    "description": test.description,
+                    "system": test.get_system_display(),
+                },
+                "instructions": {
+                    "expert_rule": test.example_answer
+                },
+                "user_data": {
+                    "answers": input_serializer.validated_data['answers']
+                }
+            }
+
+            test_ai = critical_analysis_ai(full_context_for_ai)
+
+            # Сохраняем результат только в профиль пользователя
+            Tests.objects.create(
+                profile=request.user.profile,
+                name=test.title,
+                message=test_ai['summary']
+            )
+
+            return Response(test_ai, status=status.HTTP_200_OK)
+
+        return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
