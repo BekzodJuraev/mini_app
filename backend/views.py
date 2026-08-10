@@ -91,7 +91,9 @@ from .serializers import (
     ChatGETSerQuestion,
     CriticalAnalsisSer,
     MaleSystemSer,
-    CriticalAnalysisDetailSerializer
+    CriticalAnalysisDetailSerializer,
+    CyclePeriodSer,
+    DailyLogSer
 
 
 
@@ -111,7 +113,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -4158,3 +4160,80 @@ class CriticalTestDetailAPIView(APIView):
             return Response(test_ai, status=status.HTTP_200_OK)
 
         return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CyclePeriodListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CyclePeriodSer()}
+    )
+    def get(self, request):
+        """Получить все периоды пользователя"""
+        periods = CyclePeriod.objects.filter(profile=request.user.profile)
+        serializer = CyclePeriodSer(periods, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: CyclePeriodSer()}
+    )
+    def post(self, request):
+        """Создать период вручную"""
+        serializer = CyclePeriodSer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(profile=request.user.profile)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, id):
+        period = get_object_or_404(CyclePeriod, id=id, profile=request.user.profile)
+        serializer = CyclePeriodSer(period, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CalendarMonthAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        year = int(request.query_params.get('year', date.today().year))
+        month = int(request.query_params.get('month', date.today().month))
+
+        periods = CyclePeriod.objects.filter(profile=request.user.profile).order_by('start_date')
+
+        red_days = set()
+        green_days = set()
+
+        # 1. Собираем КРАСНЫЕ дни (все зафиксированные периоды)
+        for period in periods:
+            curr = period.start_date
+            end = period.end_date or date.today()
+            while curr <= end:
+                if curr.year == year and curr.month == month:
+                    red_days.add(curr.strftime('%Y-%m-%d'))
+                curr += timedelta(days=1)
+
+            # 2. Собираем ЗЕЛЕНЫЕ дни для КАЖДОГО цикла
+            # Овуляция = старт цикла + 14 дней (или за 14 дней до следующего)
+            ovulation_day = period.start_date + timedelta(days=14)
+
+            # Фертильное окно: 5 дней ДО овуляции + день овуляции + 1 день ПОСЛЕ
+            fertility_start = ovulation_day - timedelta(days=5)
+            fertility_end = ovulation_day + timedelta(days=1)
+
+            fertile_curr = fertility_start
+            while fertile_curr <= fertility_end:
+                if fertile_curr.year == year and fertile_curr.month == month:
+                    # Добавляем в зеленые, только если это не красный день
+                    if fertile_curr.strftime('%Y-%m-%d') not in red_days:
+                        green_days.add(fertile_curr.strftime('%Y-%m-%d'))
+                fertile_curr += timedelta(days=1)
+
+        return Response({
+            "year": year,
+            "month": month,
+            "red_days": sorted(list(red_days)),
+            "green_days": sorted(list(green_days))
+        }, status=status.HTTP_200_OK)

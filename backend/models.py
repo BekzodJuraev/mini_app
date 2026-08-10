@@ -232,7 +232,7 @@ class Profile(models.Model):
     notification_health = models.BooleanField(default=True)
     notification_calories = models.BooleanField(default=True)
     notification_habit = models.BooleanField(default=True)
-    notification_reproductive=models.BooleanField(default=True)
+    notification_female=models.BooleanField(default=True)
     food_percentage=models.FloatField(default=100)
 
 
@@ -252,6 +252,40 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.name
+
+class CyclePeriod(models.Model):
+
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='periods')
+    start_date = models.DateField(verbose_name="Дата начала")
+
+    end_date = models.DateField(null=True, blank=True, verbose_name="Дата окончания")
+
+    class Meta:
+        ordering = ['-start_date']
+        verbose_name = "Период менструации"
+        verbose_name_plural = "Периоды менструаций"
+
+
+
+    def __str__(self):
+        return f"{self.profile} | {self.start_date} — {self.end_date or 'по н.в.'}"
+
+
+class DailyLog(models.Model):
+
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='daily_logs')
+    created_at = models.DateField(verbose_name="Дата записи")
+    note = models.TextField(blank=True, verbose_name="Текстовая заметка")
+    data = models.JSONField(default=dict, blank=True, verbose_name="Данные опросников и тестов")
+
+
+    class Meta:
+        # Одна запись на одного пользователя в один день
+        unique_together = ['profile', 'created_at']
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Заметка {self.profile} от {self.date}"
 
 
 class Critical_analysis(models.Model):

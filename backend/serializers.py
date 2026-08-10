@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -596,7 +596,7 @@ class ProfileUpdateSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit','notification_female']
 
     def update(self, instance, validated_data):
 
@@ -622,6 +622,9 @@ class ProfileUpdateSer(serializers.ModelSerializer):
         # 2. Update the Profile instance with the remaining data
         # validated_data now only contains Profile fields (e.g., bio, avatar)
         return super().update(instance, validated_data)
+
+
+
 class ProfileMainSystemSer(serializers.ModelSerializer):
     # RespiratorySystem=RespiratorySystemSer(source='res')
     # CardiovascularSystem=CardiovascularSystemSer(source='cardi')
@@ -1101,3 +1104,19 @@ class PetChatGet(serializers.ModelSerializer):
     class Meta:
         model=PetChat
         fields=['question','answer','created_at']
+
+
+
+class CyclePeriodSer(serializers.ModelSerializer):
+
+    end_date = serializers.DateField(required=False, allow_null=True)
+
+    class Meta:
+        model = CyclePeriod
+        fields = ['id', 'start_date', 'end_date']
+
+class DailyLogSer(serializers.ModelSerializer):
+
+    class Meta:
+        model = DailyLog
+        fields = ['note','data','created_at']
