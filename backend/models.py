@@ -238,9 +238,8 @@ class Profile(models.Model):
 
 
     #половая систем male
-    harmone_profile=models.TextField(null=True,default=None)
-    harmone_function= models.TextField(null=True,default=None)
-    harmone_prostate = models.TextField(null=True,default=None)
+
+
 
 
 
@@ -253,6 +252,30 @@ class Profile(models.Model):
     def __str__(self):
         return self.name
 
+class MenHealthProfile(models.Model):
+    """Модель для хранения AI-анализа мужского здоровья."""
+
+    profile = models.OneToOneField(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="men_health",
+    )
+    hormone_profile = models.TextField(
+        verbose_name="Гормональный профиль",
+
+    )
+    hormone_function = models.TextField(
+        verbose_name="Функциональность половой системы",
+
+    )
+    hormone_prostate = models.TextField(
+        verbose_name="Состояние простаты и онкориски",
+
+    )
+    created_at = models.DateField(auto_now=True)
+
+    def __str__(self):
+        return f"Men's Health Profile for Profile #{self.profile}"
 class CyclePeriod(models.Model):
 
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='periods')
@@ -285,7 +308,7 @@ class DailyLog(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Заметка {self.profile} от {self.date}"
+        return f"Заметка {self.profile} от {self.created_at}"
 
 
 class Critical_analysis(models.Model):

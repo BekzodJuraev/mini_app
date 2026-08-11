@@ -6,9 +6,12 @@ urlpatterns=[
  path('api/profile/male/critical_analis', views.CriticalAnalsisView.as_view(), name='criticalanaly'),
  path('api/profile/male/system',views.MaleSystemView.as_view()),
  path('api/profile/male/critical_analis/<int:pk>', views.CriticalTestDetailAPIView.as_view()),
+
+
  path('api/profile/female/period',views.CyclePeriodListAPIView.as_view()),
  path('api/profile/female/period/<int:id>',views.CyclePeriodListAPIView.as_view()),
  path('api/profile/female/calendar',views.CalendarMonthAPIView.as_view()),
+ path('api/profile/female/dailylog',views.DailyLogView.as_view()),
 
 
 

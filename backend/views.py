@@ -102,7 +102,7 @@ from threading import Thread
 from datetime import date
 from django.utils import timezone
 
-
+from .main_function import build_user_data_payload
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from django.db.models import Exists, OuterRef
@@ -113,11 +113,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -1059,6 +1059,10 @@ class RegisterAPIView(APIView):
         serializer.save(user=request.user)
 
         return Response({'message': 'Profile Created'}, status=status.HTTP_201_CREATED)
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: RegistrationSerializer()}
+    )
     def put(self,request,*args,**kwargs):
         profile=request.user.profile
         serializer = self.serializer_class(profile,data=request.data)
@@ -4087,14 +4091,34 @@ class MaleSystemView(APIView):
     serializer_class = MaleSystemSer
     permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        responses={status.HTTP_200_OK: MaleSystemSer()}
-    )
 
+    @swagger_auto_schema(responses={status.HTTP_200_OK: MaleSystemSer()})
     def get(self, request):
-        ser = self.serializer_class(request.user.profile)
-        return Response(ser.data, status=status.HTTP_200_OK)
+        profile = request.user.profile
+        today = timezone.now().date()
 
+
+        men_health = MenHealthProfile.objects.filter(profile=profile).first()
+
+
+        if not men_health or men_health.created_at < today:
+
+            user_data = build_user_data_payload(request.user.profile,models_list=None,records=3)
+
+
+
+
+            men_health = get_full_men_health_analysis(user_data)
+            men_health_obj, created = MenHealthProfile.objects.update_or_create(
+                profile=profile,
+                defaults={
+                    "hormone_profile": men_health.get("hormone_profile"),
+                    "hormone_function": men_health.get("hormone_function"),  # Ключ от ИИ — "functionality"
+                    "hormone_prostate": men_health.get("hormone_prostate"),  # Ключ от ИИ — "prostate"
+                },
+            )
+        ser = self.serializer_class(men_health)
+        return Response(ser.data, status=status.HTTP_200_OK)
 
 
 
@@ -4237,3 +4261,70 @@ class CalendarMonthAPIView(APIView):
             "red_days": sorted(list(red_days)),
             "green_days": sorted(list(green_days))
         }, status=status.HTTP_200_OK)
+
+class DailyLogView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DailyLogSer
+
+    @swagger_auto_schema(
+        responses={status.HTTP_200_OK: DailyLogSer(many=True)}
+    )
+    # @translate_api_response(fields=['question.text', 'question.choices.text'])
+    def get(self, request):
+        profile = request.user.profile
+        daily = DailyLog.objects.filter(profile=profile)
+        serializer = self.serializer_class(daily, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        request_body=DailyLogSer,
+        responses={status.HTTP_201_CREATED: DailyLogSer}
+    )
+    def post(self, request):
+        """
+        Создание записи. Валидация даты на совести DRF-сериализатора.
+        """
+        profile = request.user.profile
+        serializer = self.serializer_class(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(profile=profile)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(
+        request_body=DailyLogSer,
+        responses={status.HTTP_200_OK: DailyLogSer}
+    )
+    def patch(self, request, pk=None):
+        """
+        Частичное обновление по ID записи (pk) с проверкой принадлежности профилю.
+        """
+        profile = request.user.profile
+
+        log_id = pk or request.data.get('id')
+        if not log_id:
+            return Response(
+                {"detail": "Необходимо указать ID записи для обновления."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        daily_log = get_object_or_404(DailyLog, id=log_id, profile=profile)
+
+        serializer = self.serializer_class(daily_log, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
+
+
+

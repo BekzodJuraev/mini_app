@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -96,8 +96,12 @@ class CriticalAnalsisSer(serializers.ModelSerializer):
         fields = ['id','title','description']
 class MaleSystemSer(serializers.ModelSerializer):
     class Meta:
-        model = Profile
-        fields=['harmone_profile','harmone_function','harmone_prostate']
+        model = MenHealthProfile
+        fields = [
+            'hormone_profile',
+            'hormone_function',
+            'hormone_prostate'
+        ]
 
 class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='pet.profile.username.username')
@@ -1119,4 +1123,5 @@ class DailyLogSer(serializers.ModelSerializer):
 
     class Meta:
         model = DailyLog
-        fields = ['note','data','created_at']
+        fields = ['note','created_at','data']
+
