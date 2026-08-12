@@ -276,6 +276,29 @@ class MenHealthProfile(models.Model):
 
     def __str__(self):
         return f"Men's Health Profile for Profile #{self.profile}"
+
+class FemaleHealthProfile(models.Model):
+
+
+    profile = models.OneToOneField(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="female_health",
+    )
+    report = models.TextField(
+        verbose_name="Отчет профиль",
+
+    )
+    recommendation = models.TextField(
+        verbose_name="Рекомендация ",
+
+    )
+
+
+    created_at = models.DateField(auto_now=True)
+
+    def __str__(self):
+        return f"Female Health Profile for Profile #{self.profile}"
 class CyclePeriod(models.Model):
 
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='periods')

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -102,6 +102,15 @@ class MaleSystemSer(serializers.ModelSerializer):
             'hormone_function',
             'hormone_prostate'
         ]
+
+class FemaleSystemSer(serializers.ModelSerializer):
+    class Meta:
+        model = FemaleHealthProfile
+        fields = [
+            'report',
+            'recommendation'
+        ]
+
 class MoodFemaleSer(serializers.Serializer):
     created_at = serializers.DateField()
     mood_today = serializers.CharField()
@@ -622,7 +631,7 @@ class ProfileUpdateSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit','notification_female']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit','notification_female','medical_history']
 
     def update(self, instance, validated_data):
 

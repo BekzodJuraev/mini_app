@@ -98,7 +98,8 @@ from .serializers import (
     MoodFemaleSer,
     PainFemaleSer,
     PergenancyFemaleSer,
-    DailyLogCreateSer
+    DailyLogCreateSer,
+    FemaleSystemSer
 
 
 
@@ -118,11 +119,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -4382,9 +4383,15 @@ class DailyActivityView(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
+        weight = serializer.validated_data.get("weight")
+        profile=request.user.profile
+        # Если пользователь передал вес, обновляем его в профиле
+        if weight:
+            profile.weight = weight
+            profile.save(update_fields=["weight"])
 
         save_daily_survey(
-            profile=request.user.profile,
+            profile=profile,
             json_field_name="activities",
             validated_data=serializer.validated_data,
         )
@@ -4412,3 +4419,103 @@ class DailyPregnancyView(APIView):
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+def build_female_data_payload(profile, days_history: int = 30) -> dict:
+    """Собирает payload из DailyLog и CyclePeriod строго за текущий месяц."""
+    today = timezone.now().date()
+
+    # 1. DailyLog за последние N дней (по умолчанию 30)
+    daily_logs_qs = DailyLog.objects.filter(
+        profile=profile
+    ).order_by("-created_at")[:days_history]
+
+    daily_logs_list = []
+    for log in daily_logs_qs:
+        daily_logs_list.append(
+            {
+                "date": str(log.created_at),
+                "note": log.note,
+                "pain": log.pain,
+                "mood": log.mood,
+                "activities": log.activities,
+                "pregnancy": log.pregnancy,
+            }
+        )
+
+    # 2. CyclePeriod строго за текущий месяц
+    cycles_qs = CyclePeriod.objects.filter(
+        profile=profile,
+        start_date__year=today.year,
+        start_date__month=today.month,
+    ).order_by("-start_date")
+
+    # Если в этом месяце менструация ещё не начиналась,
+    # берём 1 самый последний цикл для контекста
+    if not cycles_qs.exists():
+        cycles_qs = CyclePeriod.objects.filter(profile=profile).order_by(
+            "-start_date"
+        )[:1]
+
+    cycles_list = []
+    for cycle in cycles_qs:
+        duration_days = None
+        if cycle.end_date:
+            duration_days = (cycle.end_date - cycle.start_date).days + 1
+
+        cycles_list.append(
+            {
+                "start_date": str(cycle.start_date),
+                "end_date": str(cycle.end_date) if cycle.end_date else None,
+                "duration_days": duration_days,
+            }
+        )
+
+    return {
+        "daily_logs": daily_logs_list,
+        "cycle_history": cycles_list,
+    }
+
+
+class FemaleSystemView(APIView):
+    """Эндпоинт для получения ИИ-анализа женского здоровья.
+
+    - Кэширует результат в базу на 1 день.
+    - Если аналитики за сегодня нет или она устарела, собирает данные
+      DailyLog + CyclePeriod за текущий месяц и генерирует новый отчет через
+      OpenAI.
+    """
+
+    serializer_class = FemaleSystemSer
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(responses={status.HTTP_200_OK: FemaleSystemSer()})
+    def get(self, request):
+        profile = request.user.profile
+        today = timezone.now().date()
+
+        female_health = FemaleHealthProfile.objects.filter(
+            profile=profile
+        ).first()
+
+        # Проверяем: если записи в базе нет или дата записи меньше сегодняшней
+        if not female_health or female_health.created_at < today:
+
+            # 1. Собираем точечный payload (только DailyLog и CyclePeriod)
+            user_data = build_female_data_payload(profile, days_history=30)
+
+            # 2. Генерируем 2 блока анализа через OpenAI
+            ai_analysis = get_female_health_analysis(user_data)
+
+            # 3. Создаем или обновляем запись в БД
+            female_health, created = FemaleHealthProfile.objects.update_or_create(
+                profile=profile,
+                defaults={
+                    "report": ai_analysis.get("status_report"),
+                    "recommendation": ai_analysis.get(
+                        "stats_and_recommendations"
+                    ),
+                },
+            )
+
+        # Отдаем через сериализатор
+        ser = self.serializer_class(female_health)
+        return Response(ser.data, status=status.HTTP_200_OK)
