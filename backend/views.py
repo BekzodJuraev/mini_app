@@ -93,7 +93,12 @@ from .serializers import (
     MaleSystemSer,
     CriticalAnalysisDetailSerializer,
     CyclePeriodSer,
-    DailyLogSer
+    DailyLogSer,
+    ActivityFemaleSer,
+    MoodFemaleSer,
+    PainFemaleSer,
+    PergenancyFemaleSer,
+    DailyLogCreateSer
 
 
 
@@ -4277,54 +4282,133 @@ class DailyLogView(APIView):
         return Response(serializer.data)
 
     @swagger_auto_schema(
-        request_body=DailyLogSer,
-        responses={status.HTTP_201_CREATED: DailyLogSer}
+        request_body=DailyLogCreateSer,
+        responses={status.HTTP_201_CREATED: DailyLogCreateSer}
     )
     def post(self, request):
-        """
-        Создание записи. Валидация даты на совести DRF-сериализатора.
-        """
-        profile = request.user.profile
         serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if serializer.is_valid():
-            serializer.save(profile=profile)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # Берем строго ту дату, которую прислал фронтенд из календаря
+        target_date = serializer.validated_data["created_at"]
+        note_text = serializer.validated_data.get("note", "")
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Обновляем или создаем запись строго за эту дату
+        daily_log, _ = DailyLog.objects.update_or_create(
+            profile=request.user.profile,
+            created_at=target_date,
+            defaults={"note": note_text},
+        )
+
+        return Response(DailyLogSer(daily_log).data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+def save_daily_survey(profile, json_field_name: str, validated_data: dict):
+    """Извлекает created_at, находит или создает запись DailyLog
+
+    и перезаписывает соответствующий опросник.
+    """
+    data = validated_data.copy()
+    target_date = data.pop("created_at")
+
+    # Ищем за эту дату или создаем новую
+    daily_log, _ = DailyLog.objects.get_or_create(
+        profile=profile, created_at=target_date
+    )
+
+    # Записываем чистые данные опросника
+    setattr(daily_log, json_field_name, data)
+    daily_log.save()
+
+    return daily_log
+
+
+# 1. ОПРОСНИК НАСТРОЕНИЯ
+class DailyMoodView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MoodFemaleSer
 
     @swagger_auto_schema(
-        request_body=DailyLogSer,
-        responses={status.HTTP_200_OK: DailyLogSer}
+        request_body=MoodFemaleSer, responses={200: MoodFemaleSer}
     )
-    def patch(self, request, pk=None):
-        """
-        Частичное обновление по ID записи (pk) с проверкой принадлежности профилю.
-        """
-        profile = request.user.profile
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        log_id = pk or request.data.get('id')
-        if not log_id:
-            return Response(
-                {"detail": "Необходимо указать ID записи для обновления."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        save_daily_survey(
+            profile=request.user.profile,
+            json_field_name="mood",
+            validated_data=serializer.validated_data,
+        )
 
-        daily_log = get_object_or_404(DailyLog, id=log_id, profile=profile)
-
-        serializer = self.serializer_class(daily_log, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+# 2. ОПРОСНИК БОЛИ
+class DailyPainView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PainFemaleSer
+
+    @swagger_auto_schema(
+        request_body=PainFemaleSer, responses={200: PainFemaleSer}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        save_daily_survey(
+            profile=request.user.profile,
+            json_field_name="pain",
+            validated_data=serializer.validated_data,
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+# 3. ОПРОСНИК АКТИВНОСТИ И ВЕСА
+class DailyActivityView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ActivityFemaleSer
+
+    @swagger_auto_schema(
+        request_body=ActivityFemaleSer, responses={200: ActivityFemaleSer}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        save_daily_survey(
+            profile=request.user.profile,
+            json_field_name="activities",
+            validated_data=serializer.validated_data,
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+# 4. ОПРОСНИК БЕРЕМЕННОСТИ
+class DailyPregnancyView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PergenancyFemaleSer
 
+    @swagger_auto_schema(
+        request_body=PergenancyFemaleSer, responses={200: PergenancyFemaleSer}
+    )
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
+        save_daily_survey(
+            profile=request.user.profile,
+            json_field_name="pregnancy",
+            validated_data=serializer.validated_data,
+        )
 
+        return Response(serializer.data, status=status.HTTP_200_OK)
 

@@ -3073,7 +3073,6 @@ def get_full_men_health_analysis(user_data: dict) -> dict:
     response = openai.ChatCompletion.create(
         model=MODEL,
         messages=messages,
-        temperature=0.3,
         response_format={"type": "json_object"},
     )
 

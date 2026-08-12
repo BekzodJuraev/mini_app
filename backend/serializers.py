@@ -102,6 +102,28 @@ class MaleSystemSer(serializers.ModelSerializer):
             'hormone_function',
             'hormone_prostate'
         ]
+class MoodFemaleSer(serializers.Serializer):
+    created_at = serializers.DateField()
+    mood_today = serializers.CharField()
+
+
+class PainFemaleSer(serializers.Serializer):
+    created_at = serializers.DateField()
+    today_pain = serializers.CharField()
+    pain_level = serializers.CharField()
+
+
+class ActivityFemaleSer(serializers.Serializer):
+    created_at = serializers.DateField()
+    today_activity = serializers.CharField()
+    change_weight = serializers.CharField()
+    weight = serializers.CharField(required=False, allow_blank=True)
+
+
+class PergenancyFemaleSer(serializers.Serializer):
+    created_at = serializers.DateField()
+    start_pergenangcy = serializers.CharField()
+    want_pergenancy = serializers.CharField()
 
 class PublicNotificationPetDrugSer(serializers.ModelSerializer):
     telegram_id = serializers.CharField(source='pet.profile.username.username')
@@ -1123,5 +1145,10 @@ class DailyLogSer(serializers.ModelSerializer):
 
     class Meta:
         model = DailyLog
-        fields = ['note','created_at','data']
+        fields = ['note','created_at','pain','mood','activities','pregnancy']
 
+class DailyLogCreateSer(serializers.ModelSerializer):
+
+    class Meta:
+        model = DailyLog
+        fields = ['note','created_at']

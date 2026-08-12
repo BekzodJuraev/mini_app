@@ -299,7 +299,10 @@ class DailyLog(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='daily_logs')
     created_at = models.DateField(verbose_name="Дата записи")
     note = models.TextField(blank=True, verbose_name="Текстовая заметка")
-    data = models.JSONField(default=dict, blank=True, verbose_name="Данные опросников и тестов")
+    pain = models.JSONField(default=dict)
+    mood = models.JSONField(default=dict)
+    activities = models.JSONField(default=dict)
+    pregnancy = models.JSONField(default=dict)
 
 
     class Meta:

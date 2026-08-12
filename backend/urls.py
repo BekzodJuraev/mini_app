@@ -13,6 +13,13 @@ urlpatterns=[
  path('api/profile/female/calendar',views.CalendarMonthAPIView.as_view()),
  path('api/profile/female/dailylog',views.DailyLogView.as_view()),
 
+ #Опросник female
+ path('api/profile/female/dailylog/mood', views.DailyMoodView.as_view()),
+ path('api/profile/female/dailylog/pain', views.DailyPainView.as_view()),
+ path('api/profile/female/dailylog/activities', views.DailyActivityView.as_view()),
+ path('api/profile/female/dailylog/pregnancy', views.DailyPregnancyView.as_view()),
+
+
 
 
  path('api/login',views.LoginAPIView.as_view(),name='login'),
