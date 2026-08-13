@@ -99,7 +99,8 @@ from .serializers import (
     PainFemaleSer,
     PergenancyFemaleSer,
     DailyLogCreateSer,
-    FemaleSystemSer
+    FemaleSystemSer,
+    NotificationFemaleSer
 
 
 
@@ -119,7 +120,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -4519,3 +4520,204 @@ class FemaleSystemView(APIView):
         # Отдаем через сериализатор
         ser = self.serializer_class(female_health)
         return Response(ser.data, status=status.HTTP_200_OK)
+
+
+
+from datetime import timedelta
+from django.utils import timezone
+from .models import CyclePeriod, NotificationFemale
+
+
+def get_female_reminders(profile) -> dict:
+    today = timezone.now().date()
+
+    # ==========================================
+    # 1. АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ (Цикл / Фертильность)
+    # ==========================================
+    last_cycle = (
+        CyclePeriod.objects.filter(profile=profile)
+        .order_by("-start_date")
+        .first()
+    )
+
+    if not last_cycle:
+        period_data = {
+            "title": "Дни менструации",
+            "days_left": None,
+            "status_text": "Нет данных о циклах",
+            "next_date": None,
+        }
+        fertility_data = {
+            "title": "Дни фертильности",
+            "days_left": None,
+            "status_text": "Нет данных о циклах",
+            "next_date": None,
+        }
+    else:
+        # Средняя длина цикла
+        cycles = list(
+            CyclePeriod.objects.filter(profile=profile).order_by("-start_date")[:4]
+        )
+        if len(cycles) >= 2:
+            diffs = [
+                (cycles[i].start_date - cycles[i + 1].start_date).days
+                for i in range(len(cycles) - 1)
+            ]
+            avg_cycle_length = sum(diffs) // len(diffs)
+        else:
+            avg_cycle_length = 28
+
+        # Менструация
+        next_period_date = last_cycle.start_date + timedelta(days=avg_cycle_length)
+        days_to_period = (next_period_date - today).days
+
+        if days_to_period > 0:
+            period_text = f"До начала менструации осталось: {days_to_period} д"
+            period_days = days_to_period
+        elif days_to_period == 0:
+            period_text = "Сегодня предполагаемый день менструации"
+            period_days = 0
+        else:
+            period_text = f"Задержка {abs(days_to_period)} д"
+            period_days = 0
+
+        period_data = {
+            "title": "Дни менструации",
+            "days_left": period_days,
+            "status_text": period_text,
+            "next_date": str(next_period_date),
+        }
+
+        # Фертильность
+        fertile_start_date = next_period_date - timedelta(days=19)
+        fertile_end_date = next_period_date - timedelta(days=13)
+        days_to_fertility = (fertile_start_date - today).days
+
+        if days_to_fertility > 0:
+            fertility_text = f"До начала фертильности осталось: {days_to_fertility} д"
+            fertility_days = days_to_fertility
+        elif fertile_start_date <= today <= fertile_end_date:
+            fertility_text = "Сейчас фертильный период!"
+            fertility_days = 0
+        else:
+            next_fertile_start = (
+                next_period_date + timedelta(days=avg_cycle_length) - timedelta(days=19)
+            )
+            fertility_days = (next_fertile_start - today).days
+            fertility_text = f"До начала фертильности осталось: {fertility_days} д"
+
+        fertility_data = {
+            "title": "Дни фертильности",
+            "days_left": fertility_days,
+            "status_text": fertility_text,
+            "next_date": str(fertile_start_date),
+        }
+
+    # ==========================================
+    # 2. ПОЛЬЗОВАТЕЛЬСКИЕ НАПОМИНАНИЯ (NotificationFemale)
+    # Забираем ВСЕ записи профиля без фильтрации по дате
+    # ==========================================
+    custom_notifications = NotificationFemale.objects.filter(profile=profile)
+
+    custom_list = []
+    for item in custom_notifications:
+        custom_list.append({
+            "id": item.id,
+            "title": item.title,
+            "description": item.description,
+            "created_at": str(item.created_at),
+            "three_days_before": item.three_days_before,
+        })
+
+    # ==========================================
+    # 3. ИТОГОВЫЙ ОТВЕТ
+    # ==========================================
+    return {
+        "auto_reminders": {
+            "period": period_data,
+            "fertility": fertility_data,
+        },
+        "custom_reminders": custom_list
+    }
+
+
+class FemaleRemindersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Получить автоматические и пользовательские напоминания"
+    )
+    def get(self, request):
+        reminders_data = get_female_reminders(request.user.profile)
+        return Response(reminders_data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_summary="Создать новое пользовательское напоминание",
+        request_body=NotificationFemaleSer,
+        responses={201: NotificationFemaleSer},
+    )
+    def post(self, request):
+        serializer = NotificationFemaleSer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(profile=request.user.profile)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @swagger_auto_schema(
+        operation_summary="Частично обновить пользовательское напоминание",
+        request_body=NotificationFemaleSer,
+        responses={200: NotificationFemaleSer},
+    )
+    def patch(self, request, pk=None):
+        # Извлекаем ID из URL-параметра (pk) или из тела запроса
+        reminder_id = pk or request.data.get("id")
+
+        if not reminder_id:
+            return Response(
+                {"error": "Передайте 'id' напоминания в URL или в JSON"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Проверяем, что объект принадлежит текущему пользователю
+        notification = get_object_or_404(
+            NotificationFemale, id=reminder_id, profile=request.user.profile
+        )
+
+        serializer = NotificationFemaleSer(
+            notification, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_summary="Удалить пользовательское напоминание",
+        manual_parameters=[
+            openapi.Parameter(
+                "id",
+                openapi.IN_QUERY,
+                description="ID напоминания для удаления",
+                type=openapi.TYPE_INTEGER,
+            )
+        ],
+        responses={204: "Успешно удалено"},
+    )
+    def delete(self, request, pk=None):
+        # Извлекаем ID из URL (pk), query-параметра (?id=1) или тела запроса
+        reminder_id = (
+            pk or request.query_params.get("id") or request.data.get("id")
+        )
+
+        if not reminder_id:
+            return Response(
+                {"error": "Передайте 'id' напоминания в URL, query-параметрах или в JSON"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        notification = get_object_or_404(
+            NotificationFemale, id=reminder_id, profile=request.user.profile
+        )
+        notification.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
