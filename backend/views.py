@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 import calendar
+from django.core.files.base import ContentFile
 from .tranlater import translate_api_response,translate_health_keys_api
 from django.db.models import Avg
 from drf_yasg import openapi
@@ -130,6 +131,11 @@ from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
 import json
 from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
+from .generate_avatar import (
+    generate_direct_dalle_avatar
+)
+
+
 
 class LeavePetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2402,7 +2408,7 @@ class Notification_Detail(APIView):
             {"message": f"Deleted {pk} "},
             status=status.HTTP_200_OK
         )
-    
+
 class Notification_Pet_Detail(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -4721,3 +4727,86 @@ class FemaleRemindersView(APIView):
         notification.delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+
+class DirectAvatarGenerateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        profile = request.user.profile
+
+        # ======================================================
+        # 1. Check profile photo
+        # ======================================================
+
+        if not profile.photo:
+            return Response(
+                {
+                    "error": "Profile photo is required"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ======================================================
+        # 2. Collect fresh user data
+        # ======================================================
+
+        user_data = build_user_data_payload(
+            profile,
+            models_list=None,
+            records=3,
+        )
+
+        gender = getattr(
+            profile,
+            "gender",
+            "female",
+        )
+
+        # ======================================================
+        # 3. Generate avatar
+        # ======================================================
+
+        try:
+
+            png_bytes = generate_direct_dalle_avatar(
+                user_data_payload=user_data,
+                gender=gender,
+                profile_photo=profile.photo,
+            )
+
+        except Exception as exc:
+
+            return Response(
+                {
+                    "error": "Avatar generation failed",
+                    "details": str(exc),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # ======================================================
+        # 4. Save PNG
+        # ======================================================
+
+        file_name = f"avatar_{profile.id}.png"
+
+        profile.avatar_image.save(
+            file_name,
+            ContentFile(png_bytes),
+            save=True,
+        )
+
+        # ======================================================
+        # 5. Return URL
+        # ======================================================
+
+        return Response(
+            {
+                "message": "Avatar generated and saved successfully",
+                "avatar_url": profile.avatar_image.url,
+            },
+            status=status.HTTP_200_OK,
+        )

@@ -6,7 +6,7 @@ openai.api_key = KEY
 import fitz
 import json
 
-import openai
+
 
 
 def translate_text_on_the_fly(payload, target_lang: str):

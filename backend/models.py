@@ -195,6 +195,7 @@ class Profile(models.Model):
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
     photo = models.ImageField(blank=True, upload_to='pictures/')
+    avatar_image = models.ImageField(blank=True, upload_to='avatars/')
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
     life_expectancy=models.IntegerField(null=True,default=None,blank=True)

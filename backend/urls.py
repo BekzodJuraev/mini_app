@@ -31,6 +31,7 @@ urlpatterns=[
  path('api/reset/code',views.VerifyResetCode.as_view(),name='reset_code'),
  path('api/logout',views.LogoutAPIView.as_view(),name='logout'),
  path('api/profile/main',views.ProfileAPIView.as_view(),name='profile_main'),
+ path('api/profile/avatar', views.DirectAvatarGenerateView.as_view(), name='avatar'),
  path('api/profile/update',views.ProfileUpdateAPIView.as_view(),name='profile_update'),
  path('api/profile/healthsystem', views.ProfileMainSystemAPIView.as_view(),name='healthsystem'),
  path('api/profile/chat',views.ChatAPIView.as_view(),name='chat'),
