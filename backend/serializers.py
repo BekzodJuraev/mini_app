@@ -627,7 +627,7 @@ class ProfileSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['name','lastname','middle_name','gender','age','photo','life_expectancy','balance','IK','place_of_residence','date_birth','pressure_test','life_expectancy_json','health_recommendations','risk_test','pressure_plus','diary_plus','analysis_risk']
+        fields=['name','lastname','middle_name','gender','age','photo','avatar_image','life_expectancy','balance','IK','place_of_residence','date_birth','pressure_test','life_expectancy_json','health_recommendations','risk_test','pressure_plus','diary_plus','analysis_risk']
 
 
 

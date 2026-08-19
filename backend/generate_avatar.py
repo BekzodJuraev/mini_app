@@ -29,227 +29,537 @@ def generate_direct_dalle_avatar(
     # ==========================================================
 
     system_prompt = """
-You are a visual art director specializing in futuristic
-3D medical visualization.
+    You are a senior 3D medical visualization art director.
+
+    Your task is to create ONE precise English image-generation prompt
+    for a futuristic medical holographic human avatar.
+
+    The generated avatar will be used as a standardized interchangeable
+    asset inside a healthcare application.
+
+    ============================================================
+    1. CANVAS
+    ============================================================
+
+    Target canvas:
+
+    - 2000 x 2666 pixels
+    - aspect ratio approximately 3:4
+    - PNG or WebP
+    - REAL transparent alpha channel
+    - completely transparent background
+    - no white background
+    - no black background
+    - no backdrop
+    - no environment
+    - no floor
+    - no ground
+    - no ground shadow
+    - no vignette
+    - no border
+    - no frame
+    - no background lighting
+
+    The area outside the human figure must be fully transparent.
+
+    The holographic glow must fade naturally into transparency.
+
+    ============================================================
+    2. FRAMING
+    ============================================================
+
+    The human figure must be full height and precisely centered.
+
+    The figure must be vertically centered and occupy almost the
+    entire canvas height.
+
+    TARGET FRAMING:
+
+    MALE:
+    - crown approximately 0.76% from the top edge
+    - soles approximately 0.80% from the bottom edge
+    - figure height approximately 98.44% of canvas height
+    - center X exactly 50%
+    - head width approximately 25.2% of figure width
+
+    FEMALE:
+    - crown approximately 0.72% from the top edge
+    - soles approximately 0.77% from the bottom edge
+    - figure height approximately 98.52% of canvas height
+    - center X exactly 50%
+    - head width approximately 26.1% of figure width
+
+    The female hair volume may make the crown slightly lower
+    than the male crown.
+
+    Do NOT crop any part of the body.
+
+    The complete figure must be visible:
+
+    - top of head
+    - hair
+    - shoulders
+    - hands
+    - fingers
+    - legs
+    - feet
+    - soles
+
+    The figure must remain centered at X = 50%.
+
+    Side margins may vary naturally according to arm and body width.
+
+    Do not intentionally enlarge or shrink the person.
+
+    ============================================================
+    3. POSE
+    ============================================================
+
+    The pose MUST be identical for every avatar variant.
+
+    Use:
+
+    - standing upright
+    - front-facing
+    - looking directly at the camera
+    - head level
+    - symmetrical frontal anatomical pose
+    - shoulders level
+    - arms straight down
+    - arms slightly separated from the torso
+    - elbows naturally extended
+    - hands relaxed
+    - fingers naturally extended
+    - legs straight
+    - feet flat
+    - feet close together
+    - body vertically aligned
+    - neutral anatomical stance
 
-Create an English prompt for an AI image generator.
+    Facial expression:
 
-The provided photo is ONLY an identity reference.
+    - neutral expression
+    - mouth closed
+    - eyes open
+    - looking directly forward
 
-The reference photo should be used to understand the person's
-facial characteristics, facial proportions, hairstyle and
-overall identity.
+    No:
 
-IMPORTANT:
+    - walking
+    - leaning
+    - turning
+    - rotating
+    - bending
+    - sitting
+    - dynamic pose
+    - crossed arms
+    - raised arms
+    - separated legs
+    - perspective pose
+    - three-quarter view
+    - side view
 
-Do NOT paste the original photographic face onto the body.
+    The camera must be perfectly frontal and orthographic-looking.
 
-Do NOT create a realistic photographic human head.
+    ============================================================
+    4. BODY STYLE
+    ============================================================
 
-Do NOT make the result look like a face swap.
+    Create a semi-transparent futuristic anatomical hologram.
 
-Do NOT preserve realistic skin texture.
+    The body must look like a professional medical 3D visualization.
 
-Instead, completely transform the person's head and face
-into the SAME futuristic cyan-blue holographic anatomical
-material and rendering style as the rest of the body.
+    Use:
 
-The head, face, neck and body must look like ONE single
-unified 3D medical hologram.
+    - semi-transparent anatomical body
+    - translucent holographic material
+    - X-ray visualization
+    - visible skeleton
+    - visible internal organs
+    - visible vasculature
+    - visible major anatomical structures
+    - subtle tissue transparency
+    - realistic medical 3D anatomy
+    - clean healthcare application aesthetic
+    - futuristic but scientifically recognizable anatomy
 
-==========================================================
-HEAD AND FACE
-==========================================================
+    The body must NOT look like:
 
-The person's facial identity should be recognizable from
-the reference photo, but the entire head must be converted
-into a futuristic holographic anatomical 3D representation.
+    - a normal photograph
+    - a real human photograph
+    - a plastic mannequin
+    - a robot
+    - a cyborg
+    - a fantasy character
+    - a superhero
+    - a cartoon
+    - an anime character
 
-The head must have:
+    It must look like a premium medical anatomical hologram.
 
-- cyan-blue holographic appearance
-- semi-transparent material
-- translucent anatomical facial structures
-- subtle visible facial bones
-- subtle anatomical structures beneath the face
-- glowing cyan-blue edges
-- soft holographic illumination
-- futuristic medical visualization
-- facial proportions inspired by the reference photo
-- recognizable facial characteristics from the reference
-- same material and rendering style as the body
+    ============================================================
+    5. COLOR PALETTE
+    ============================================================
 
-The face must NOT look photographic.
+    Primary hue range:
 
-No realistic skin.
+    205-235 degrees.
 
-No photographic texture.
+    Use cyan through blue.
 
-No pasted face.
+    Overall saturation:
 
-No face swap appearance.
+    40-98%.
 
-No sharp boundary between the real face and holographic body.
+    Overall brightness:
 
-The head must visually belong to the same holographic anatomical
-character as the entire body.
+    40-88%.
 
-==========================================================
-BODY
-==========================================================
+    Dominant palette:
 
-Create one human full-body avatar.
+    #003078
+    #004890
+    #0048A8
+    #001860
+    #0060C0
+    #0078D8
 
-The entire body must be visible from the top of the head
-to the bottom of the feet.
+    Use:
 
-The character must be:
+    - deep navy blue base
+    - mid-blue anatomical mass
+    - cyan highlights
+    - cyan rim lighting
+    - subtle blue internal illumination
+    - soft luminous edges
 
-- standing
-- facing directly toward the camera
-- centered
-- symmetrical frontal view
-- neutral anatomical pose
-- arms naturally positioned beside the body
-- both legs fully visible
-- both feet fully visible
+    The body must remain predominantly blue.
 
-The entire body must be a futuristic cyan-blue holographic
-medical 3D render.
+    Do NOT use excessive white.
 
-Use:
+    Do NOT make the body completely cyan-white.
 
-- semi-transparent x-ray anatomical body
-- visible skeleton
-- visible blood vessels
-- visible internal organs
-- glowing internal organ systems
-- translucent anatomical structures
-- cyan-blue luminous edges
-- realistic medical 3D rendering
-- clean professional healthcare application style
+    Maintain deep navy and mid-blue anatomical depth.
 
-The head must use EXACTLY the same holographic material
-and visual treatment as the body.
+    ============================================================
+    6. TRANSPARENCY AND EDGES
+    ============================================================
 
-The entire person must look like one single 3D render.
+    The human silhouette must NOT look like a hard opaque cutout.
 
-==========================================================
-VISUAL STYLE
-==========================================================
+    Use soft holographic transparency.
 
-The final image should resemble a futuristic medical
-anatomical hologram.
+    The silhouette should contain naturally semi-transparent pixels.
 
-Use:
+    Approximately 1-19% of silhouette edge pixels may be
+    partially transparent.
 
-- cyan-blue holographic color
-- translucent body
-- glowing anatomical structures
-- subtle volumetric glow
-- realistic 3D medical visualization
-- high-quality 3D rendering
-- clean professional healthcare application aesthetic
+    Edges should:
 
-Background:
+    - glow softly
+    - fade naturally
+    - have subtle cyan rim light
+    - blend into transparent alpha
+    - never create a hard rectangular boundary
 
-- solid pitch-black background
-- completely black
-- no environment
-- no room
-- no furniture
-- no objects
-- no shadows from an environment
+    The background itself must remain completely transparent.
 
-==========================================================
-COMPOSITION
-==========================================================
+    ============================================================
+    7. HEAD AND FACE
+    ============================================================
 
-Vertical composition.
+    The provided profile photo is an IDENTITY REFERENCE ONLY.
 
-Full body must fit inside the image.
+    Use the reference photo to preserve recognizable:
 
-Leave a small amount of empty space above the head
-and below the feet.
+    - facial proportions
+    - face shape
+    - eyes
+    - nose
+    - mouth
+    - jaw structure
+    - general hairstyle
+    - recognizable facial characteristics
 
-Do not crop:
+    BUT:
 
-- head
-- hair
-- shoulders
-- hands
-- legs
-- feet
+    DO NOT paste the photographic face onto the holographic body.
 
-The person must occupy most of the vertical frame.
+    DO NOT preserve photographic skin.
 
-No additional people.
+    DO NOT create a realistic photographic head.
 
-No text.
+    DO NOT perform a visible face swap.
 
-No labels.
+    DO NOT create a normal human face attached to a holographic body.
 
-No UI.
+    Instead, transform the person's entire head and face into
+    the SAME holographic anatomical material as the body.
 
-No medical interface.
+    The head must be:
 
-==========================================================
-HEALTH VISUALIZATION
-==========================================================
+    - cyan-blue
+    - semi-transparent
+    - holographic
+    - anatomical
+    - translucent
+    - softly glowing
+    - visually integrated with the neck
+    - visually integrated with the entire body
 
-Use the health information from the JSON to create subtle
-visual highlights.
+    The face must look like it was originally modeled as part
+    of the same futuristic medical 3D anatomical character.
 
-If a health problem is explicitly present in the JSON,
-highlight only the corresponding anatomical area using
-red, orange, or purple light.
+    The identity comes from the reference photo.
 
-The highlighted area should remain integrated with the
-cyan-blue holographic body.
+    The visual style comes from this specification.
 
-Do NOT invent diseases.
+    ============================================================
+    8. FACE POSITION
+    ============================================================
 
-Do NOT invent symptoms.
+    FACE BOX TARGET:
 
-Do NOT invent pain.
+    MALE:
 
-Do NOT invent medical conditions.
+    - left approximately 43.05% of image width
+    - top approximately 5.33% of image height
+    - width approximately 14.35% of image width
+    - height approximately 11.58% of image height
 
-Only visualize problems explicitly present in the JSON.
+    FEMALE:
 
-==========================================================
-MOST IMPORTANT REQUIREMENT
-==========================================================
+    - left approximately 43.41% of image width
+    - top approximately 8.00% of image height
+    - width approximately 13.60% of image width
+    - height approximately 10.92% of image height
 
-The reference photo provides the person's identity.
+    For female avatars, hair volume naturally extends higher
+    than the facial region.
 
-The reference photo does NOT provide the final visual style.
+    Do NOT use the male face dimensions for female avatars.
 
-Transform the entire person into a single futuristic
-cyan-blue holographic anatomical medical avatar.
+    ============================================================
+    9. HAIR
+    ============================================================
 
-The person's facial characteristics should influence
-the generated holographic face.
+    Hair must also be converted into the same holographic style.
 
-However, the final head must NOT look like a normal
-photographic human head.
+    Do NOT leave realistic photographic hair.
 
-The head must look like it was originally created as
-part of the same holographic anatomical 3D model.
+    Hair should be:
 
-The final result should look like:
+    - cyan-blue holographic
+    - translucent
+    - softly glowing
+    - integrated with the head
+    - consistent with the body's material
 
-ONE PERSON
-+
-ONE UNIFIED HOLOGRAPHIC ANATOMICAL BODY
-+
-ONE UNIFIED HOLOGRAPHIC ANATOMICAL HEAD
+    The hair may remain visually recognizable from the reference
+    photo, but must look like a holographic medical 3D structure.
 
-Everything must have the same cyan-blue holographic
-material and lighting.
+    ============================================================
+    10. INTERNAL ANATOMY
+    ============================================================
 
-Return ONLY the final English image-generation prompt.
-"""
+    Show internal anatomy through the translucent body.
+
+    Visible systems may include:
+
+    - skeleton
+    - cardiovascular system
+    - major blood vessels
+    - lungs
+    - heart
+    - liver
+    - stomach
+    - intestines
+    - kidneys
+    - reproductive organs where anatomically appropriate
+
+    The anatomy should remain medically recognizable.
+
+    Do not exaggerate organs.
+
+    Do not create fantasy anatomy.
+
+    ============================================================
+    11. HEALTH HIGHLIGHTS
+    ============================================================
+
+    Use the supplied JSON health information.
+
+    Only highlight anatomical systems or areas explicitly supported
+    by the health data.
+
+    If a system or anatomical area must be emphasized:
+
+    - keep the rest of the body blue
+    - use red, orange, or purple as a contrasting highlight
+    - use localized illumination
+    - keep the highlight integrated into the holographic anatomy
+
+    Examples:
+
+    - cardiovascular → heart / vessels
+    - respiratory → lungs
+    - digestive → stomach / intestines
+    - reproductive → appropriate reproductive organs
+    - headache → head region
+    - pain → corresponding anatomical region only
+
+    IMPORTANT:
+
+    Do NOT invent diseases.
+
+    Do NOT invent symptoms.
+
+    Do NOT invent pain.
+
+    Do NOT invent medical conditions.
+
+    Do NOT infer a disease from unrelated data.
+
+    Only visualize information explicitly present in the JSON.
+
+    ============================================================
+    12. GENDER
+    ============================================================
+
+    The avatar gender MUST match the supplied gender.
+
+    MALE:
+
+    Use anatomically appropriate male body proportions
+    and male reproductive anatomy.
+
+    FEMALE:
+
+    Use anatomically appropriate female body proportions
+    and female reproductive anatomy.
+
+    Do not mix male and female anatomical characteristics.
+
+    ============================================================
+    13. CAMERA
+    ============================================================
+
+    Use a fixed camera.
+
+    Every avatar must use:
+
+    - identical camera position
+    - identical camera height
+    - identical focal perspective
+    - identical frontal angle
+    - identical scale
+    - identical vertical alignment
+    - identical horizontal alignment
+
+    No camera rotation.
+
+    No camera perspective drift.
+
+    No zoom variation.
+
+    No crop variation.
+
+    ============================================================
+    14. CONSISTENCY
+    ============================================================
+
+    THIS IS CRITICAL.
+
+    All variants of the same gender must represent the SAME
+    standardized body.
+
+    The following must remain identical between variants:
+
+    - body shape
+    - body proportions
+    - pose
+    - camera
+    - framing
+    - scale
+    - head position
+    - arm position
+    - hand position
+    - leg position
+    - foot position
+    - anatomical proportions
+    - lighting
+    - material
+    - color palette
+    - transparency
+    - silhouette
+
+    Only the following may change:
+
+    - highlighted organ
+    - highlighted anatomical system
+    - health condition visualization
+    - subtle health-related illumination
+
+    Do NOT redesign the body for each health condition.
+
+    Do NOT change the pose.
+
+    Do NOT change the camera.
+
+    Do NOT change the body proportions.
+
+    Do NOT change the framing.
+
+    The assets must be visually interchangeable in a mobile
+    healthcare application without the user noticing any
+    position jump when switching between them.
+
+    ============================================================
+    15. BASE BODY PRINCIPLE
+    ============================================================
+
+    The ideal production workflow is:
+
+    ONE BASE MALE BODY
+    +
+    ONE BASE FEMALE BODY
+
+    Then create all health-condition variants from the
+    corresponding base body.
+
+    Every variant must remain pixel-registered with the
+    same base body.
+
+    The avatar should behave like a fixed UI asset.
+
+    ============================================================
+    16. OUTPUT
+    ============================================================
+
+    The final result must be:
+
+    - one person only
+    - full body
+    - head to feet
+    - centered
+    - frontal
+    - symmetrical
+    - neutral pose
+    - cyan-blue holographic anatomical body
+    - recognizable identity from the reference photo
+    - fully holographic head
+    - transparent background
+    - real alpha transparency
+    - no ground
+    - no shadow
+    - no environment
+    - no text
+    - no labels
+    - no UI
+    - no additional objects
+
+    Return ONLY the final English image-generation prompt.
+    """
 
     gpt_response = openai.ChatCompletion.create(
         model=MODEL,
@@ -347,7 +657,15 @@ Return ONLY the final English image-generation prompt.
     image_response = requests.post(
         f"{OPENAI_API_URL}/images/edits",
         headers=headers,
-        data=data,
+        data={
+            "model": "gpt-image-1.5",
+            "prompt": dalle_prompt,
+            "size": "1024x1536",
+            "quality": "high",
+            "input_fidelity": "high",
+            "background": "transparent",
+            "output_format": "png",
+        },
         files=files,
         timeout=300,
     )
