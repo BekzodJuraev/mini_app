@@ -576,8 +576,8 @@ def generate_direct_dalle_avatar(
                     f"{json.dumps(user_data_payload, ensure_ascii=False, default=str)}"
                 ),
             },
-        ],
-        temperature=0.3,
+        ]
+
     )
 
     dalle_prompt = (
@@ -710,3 +710,179 @@ def generate_direct_dalle_avatar(
         raise RuntimeError("Generated image is empty")
 
     return image_bytes
+
+
+# import base64
+# import json
+# import mimetypes
+# import os
+# import requests
+# from config import KEY
+#
+# OPENAI_API_KEY = KEY
+#
+#
+# BASE_PROMPT = """1. CANVAS (identical for both genders)
+#
+# Size 2000 x 2666 px
+# Aspect ratio 3 : 4
+# Format PNG or WebP - MUST have a real alpha channel
+# Background Fully transparent. No backdrop, no ground shadow,
+# no vignette, no border.
+#
+# --------------------------------------------------------------------
+# 2. FRAMING (this is what makes the images interchangeable)
+#
+# The figure is full height and centred exactly.
+#
+# MALE FEMALE
+# Crown from top edge 0.76 % 0.72 % (~20 px)
+# Soles from bottom 0.80 % 0.77 % (~21 px)
+# Figure height 98.44 % 98.52 % of canvas height
+# Centre X 50.0 % 50.0 % (x = 1000 px)
+# Head width ~25.2 % ~26.1 % of figure width
+#
+# Figure width is free (42-59 % of canvas) - the canvas is about twice
+# as wide as the body, side margins absorb different arm positions.
+#
+# Tolerances actually present in the existing set:
+# crown 0.45-1.16 %, soles 0.38-1.13 %, centre X 49.88-50.05 %.
+#
+# --------------------------------------------------------------------
+# 3. POSE (identical in every image)
+#
+# - Standing, front-facing, symmetrical, head level, facing camera
+# - Arms straight down, held slightly away from the torso
+# - Legs straight, feet flat and close together
+# - Full body in frame: crown to soles, nothing cropped
+# - Neutral expression, mouth closed, eyes open looking forward
+#
+# --------------------------------------------------------------------
+# 4. STYLE AND COLOUR
+#
+# - Semi-transparent anatomical "hologram" / X-ray render. Internal
+# organs, skeleton and vasculature visible through the skin.
+# - Hue 205-235 degrees (cyan through blue)
+# - Saturation 40-98 %, brightness 40-88 %
+# - Dominant colours: #003078 #004890 #0048A8 #001860 #0060C0 #0078D8
+# Deep navy base, mid-blue mass, cyan highlights and rim light.
+# - Edges glow softly - NOT a hard cutout. 1-19 % of pixels are
+# semi-transparent at the silhouette.
+# - When one system is emphasised, render that system in contrasting
+# red / orange and keep the rest of the body blue.
+#
+# --------------------------------------------------------------------
+# 5. FACE
+#
+# Face box, as a percentage of the image's own width/height:
+#
+# left top width height
+# MALE 43.05 % 5.33 % 14.35 % 11.58 %
+# FEMALE 43.41 % 8.00 % 13.60 % 10.92 %
+#
+# The female value differs because the hair volume pushes the crown
+# lower in frame - do not use one shared number.
+#
+# If the face is generated separately to be composited onto a faceless
+# body, deliver it as an RGBA cutout covering only that box, with a
+# feathered edge, toned to the same blue palette above. A photo-toned
+# face will look pasted on, especially over the darker system avatars.
+#
+# --------------------------------------------------------------------
+# 6. CONSISTENCY - the requirement most likely to be missed
+#
+# All variants of one gender must be the SAME body, SAME pose, SAME
+# camera, pixel-registered. Only the highlighted organ / system /
+# condition may differ between images.
+#
+# Practically: generate ONE base body per gender, then re-render that
+# same body with different systems emphasised. Do not prompt each
+# variant independently - if the pose or framing drifts even slightly,
+# the figure visibly jumps when the app swaps images on screen."""
+#
+#
+# def build_full_prompt(user_data_payload: dict, gender: str = "female") -> str:
+#     """
+#     Собирает финальный промпт: неизменный BASE_PROMPT (Design System) +
+#     сырой user_data как JSON. Модель сама интерпретирует, какие поля
+#     в нём есть и что подсветить - никакого ручного маппинга полей тут нет.
+#     """
+#     if user_data_payload:
+#         user_data_json = json.dumps(user_data_payload, ensure_ascii=False, indent=2,default=str)
+#     else:
+#         user_data_json = "{}"
+#
+#     dynamic_block = f"""
+#
+# --------------------------------------------------------------------
+# 7. DYNAMIC HEALTH HIGHLIGHTS (raw user_data for this request)
+#
+# - Gender for this render: {gender.upper()}.
+# - Below is the user's raw health data as JSON. Interpret it yourself
+#   and highlight the relevant body region(s) / organ(s) / system(s) in
+#   glowing contrasting colour (red / orange / purple as fits the
+#   condition), keeping the rest of the body in the base cyan-blue.
+# - If the JSON is empty or contains no active issues, keep the entire
+#   body uniform cyan-blue with no highlights.
+# - Do NOT invent or infer conditions that are not present in the data.
+# - Everything in sections 1-6 above still applies unchanged.
+#
+# user_data:
+# {user_data_json}"""
+#
+#     return BASE_PROMPT + dynamic_block
+#
+#
+# def generate_direct_dalle_avatar(
+#     user_data_payload: dict,
+#     gender: str = "female",
+#     profile_photo=None,
+# ) -> bytes:
+#     if not profile_photo:
+#         raise ValueError("Profile photo is required")
+#
+#     full_prompt = build_full_prompt(user_data_payload, gender=gender)
+#
+#     profile_photo.open("rb")
+#     try:
+#         photo_bytes = profile_photo.read()
+#         photo_name = profile_photo.name
+#     finally:
+#         profile_photo.close()
+#
+#     mime_type, _ = mimetypes.guess_type(photo_name)
+#     mime_type = mime_type or "image/jpeg"
+#
+#     files = {
+#         "image[]": (photo_name, photo_bytes, mime_type),
+#     }
+#
+#     data = {
+#         "model": "gpt-image-1.5",
+#         "prompt": full_prompt.strip(),
+#         "n": "1",
+#         "size": "1024x1536",
+#         "quality": "high",
+#         "input_fidelity": "high",
+#         "background": "transparent",
+#         "output_format": "png",
+#     }
+#
+#     response = requests.post(
+#         "https://api.openai.com/v1/images/edits",
+#         headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+#         data=data,
+#         files=files,
+#         timeout=180,
+#     )
+#
+#     if response.status_code != 200:
+#         raise RuntimeError(
+#             f"Image API failed ({response.status_code}): {response.text}"
+#         )
+#
+#     res_json = response.json()
+#
+#     image_base64 = res_json["data"][0]["b64_json"]
+#
+#     return base64.b64decode(image_base64)
