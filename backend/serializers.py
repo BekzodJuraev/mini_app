@@ -637,7 +637,7 @@ class ProfileUpdateSer(serializers.ModelSerializer):
 
     class Meta:
         model=Profile
-        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit','notification_female','medical_history']
+        fields=['login','name','lastname','middle_name','gender','date_birth','photo','place_of_residence','email','nickname','timezone','notification_drugs','notification_health','notification_calories','notification_habit','notification_female','medical_history','height','weight']
 
     def update(self, instance, validated_data):
 
