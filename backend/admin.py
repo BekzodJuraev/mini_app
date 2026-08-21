@@ -25,7 +25,7 @@ class CriticalAdmin(nested_admin.NestedModelAdmin):
 
     fieldsets = (
         ("Основные настройки", {
-            'fields': ('system',)
+            'fields': ('system','sub_section')
         }),
         ("Контент", {
             'fields': ('title', 'description','example_answer')

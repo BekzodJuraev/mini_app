@@ -353,6 +353,12 @@ class Critical_analysis(models.Model):
     SYSTEM_CHOICES = [
         ('reproductive', 'Половая система - мужчина'),
     ]
+    SUBSECTION_CHOICES = [
+        ('hormonal_profile', 'Гормональный профиль'),
+        ('functionality', 'Функциональность'),
+        ('prostate_and_oncorisks', 'Простата и онкориски'),
+        ('critical_tests', 'Критические анализы'),
+    ]
     system = models.CharField(
         max_length=50,
         choices=SYSTEM_CHOICES,
@@ -360,7 +366,12 @@ class Critical_analysis(models.Model):
         verbose_name="Система"
     )
 
-
+    sub_section = models.CharField(
+        max_length=50,
+        choices=SUBSECTION_CHOICES,
+        default='others',
+        verbose_name="Под Система"
+    )
     title = models.CharField(max_length=255, verbose_name="Название")
     description = models.TextField(blank=True, verbose_name="Описание")
     example_answer = models.TextField(

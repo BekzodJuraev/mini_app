@@ -99,7 +99,7 @@ class NotificationFemaleSer(serializers.ModelSerializer):
 class CriticalAnalsisSer(serializers.ModelSerializer):
     class Meta:
         model=Critical_analysis
-        fields = ['id','title','description']
+        fields = ['id','title','description','system','sub_section']
 class MaleSystemSer(serializers.ModelSerializer):
     class Meta:
         model = MenHealthProfile
