@@ -15,6 +15,7 @@ urlpatterns=[
  path('api/profile/female/system',views.FemaleSystemView.as_view()),
  path('api/profile/female/notification',views.FemaleRemindersView.as_view()),
  path('api/profile/female/notification/<int:pk>',views.FemaleRemindersView.as_view()),
+ path("api/profile/female/pregnancy/status",views.PregnancyStatusAPIView.as_view()),
 
  #Опросник female
  path('api/profile/female/dailylog/mood', views.DailyMoodView.as_view()),

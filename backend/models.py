@@ -236,6 +236,17 @@ class Profile(models.Model):
     notification_female=models.BooleanField(default=True)
     food_percentage=models.FloatField(default=100)
 
+    is_pregnant = models.BooleanField(
+        default=False,
+        verbose_name="Беременность"
+    )
+
+    pregnancy_start_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Дата начала беременности"
+    )
+
 
 
     #половая систем male
@@ -338,6 +349,7 @@ class DailyLog(models.Model):
     mood = models.JSONField(default=dict)
     activities = models.JSONField(default=dict)
     pregnancy = models.JSONField(default=dict)
+
 
 
     class Meta:

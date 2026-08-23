@@ -4235,45 +4235,174 @@ class CalendarMonthAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        year = int(request.query_params.get('year', date.today().year))
-        month = int(request.query_params.get('month', date.today().month))
+        year = int(
+            request.query_params.get(
+                "year",
+                date.today().year
+            )
+        )
 
-        periods = CyclePeriod.objects.filter(profile=request.user.profile).order_by('start_date')
+        month = int(
+            request.query_params.get(
+                "month",
+                date.today().month
+            )
+        )
+
+        profile = request.user.profile
+
+        # ==========================================
+        # 1. РЕЖИМ БЕРЕМЕННОСТИ
+        # ==========================================
+
+        if profile.is_pregnant:
+            return Response(
+                {
+                    "year": year,
+                    "month": month,
+                    "pregnancy": True,
+                    "pregnancy_start_date": (
+                        str(profile.pregnancy_start_date)
+                        if profile.pregnancy_start_date
+                        else None
+                    ),
+                    "status_text": "Беременность отмечена",
+                    "red_days": [],
+                    "green_days": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # ==========================================
+        # 2. ОБЫЧНЫЙ РЕЖИМ ЦИКЛА
+        # ==========================================
+
+        periods = list(
+            CyclePeriod.objects
+            .filter(profile=profile)
+            .order_by("start_date")
+        )
 
         red_days = set()
         green_days = set()
 
-        # 1. Собираем КРАСНЫЕ дни (все зафиксированные периоды)
+        # ==========================================
+        # 3. КРАСНЫЕ ДНИ
+        # По фактически введенным пользователем датам
+        # ==========================================
+
         for period in periods:
+            if not period.end_date:
+                continue
+
             curr = period.start_date
-            end = period.end_date or date.today()
+            end = period.end_date
+
             while curr <= end:
-                if curr.year == year and curr.month == month:
-                    red_days.add(curr.strftime('%Y-%m-%d'))
+                if (
+                    curr.year == year
+                    and curr.month == month
+                ):
+                    red_days.add(
+                        curr.strftime("%Y-%m-%d")
+                    )
+
                 curr += timedelta(days=1)
 
-            # 2. Собираем ЗЕЛЕНЫЕ дни для КАЖДОГО цикла
-            # Овуляция = старт цикла + 14 дней (или за 14 дней до следующего)
-            ovulation_day = period.start_date + timedelta(days=14)
+        # ==========================================
+        # 4. СРЕДНЯЯ ДЛИНА ЦИКЛА
+        # ==========================================
 
-            # Фертильное окно: 5 дней ДО овуляции + день овуляции + 1 день ПОСЛЕ
-            fertility_start = ovulation_day - timedelta(days=5)
-            fertility_end = ovulation_day + timedelta(days=1)
+        cycle_lengths = []
 
-            fertile_curr = fertility_start
-            while fertile_curr <= fertility_end:
-                if fertile_curr.year == year and fertile_curr.month == month:
-                    # Добавляем в зеленые, только если это не красный день
-                    if fertile_curr.strftime('%Y-%m-%d') not in red_days:
-                        green_days.add(fertile_curr.strftime('%Y-%m-%d'))
-                fertile_curr += timedelta(days=1)
+        for i in range(1, len(periods)):
+            cycle_length = (
+                periods[i].start_date
+                - periods[i - 1].start_date
+            ).days
 
-        return Response({
-            "year": year,
-            "month": month,
-            "red_days": sorted(list(red_days)),
-            "green_days": sorted(list(green_days))
-        }, status=status.HTTP_200_OK)
+            cycle_lengths.append(cycle_length)
+
+        if cycle_lengths:
+            average_cycle_length = round(
+                sum(cycle_lengths)
+                / len(cycle_lengths)
+            )
+        else:
+            average_cycle_length = 28
+
+        # ==========================================
+        # 5. ПОСЛЕДНЯЯ МЕНСТРУАЦИЯ
+        # ==========================================
+
+        if periods:
+            last_period = periods[-1]
+
+            # ==========================================
+            # 6. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+            # ==========================================
+
+            next_period = (
+                last_period.start_date
+                + timedelta(days=average_cycle_length)
+            )
+
+            # ==========================================
+            # 7. ОВУЛЯЦИЯ
+            # ==========================================
+
+            ovulation_day = (
+                next_period
+                - timedelta(days=14)
+            )
+
+            # ==========================================
+            # 8. ФЕРТИЛЬНЫЕ ДНИ
+            # 5 дней до + день овуляции + 1 день после
+            # ==========================================
+
+            fertility_start = (
+                ovulation_day
+                - timedelta(days=5)
+            )
+
+            fertility_end = (
+                ovulation_day
+                + timedelta(days=1)
+            )
+
+            curr = fertility_start
+
+            while curr <= fertility_end:
+                if (
+                    curr.year == year
+                    and curr.month == month
+                ):
+                    day = curr.strftime("%Y-%m-%d")
+
+                    # Не показываем зеленый день
+                    # одновременно с менструацией
+                    if day not in red_days:
+                        green_days.add(day)
+
+                curr += timedelta(days=1)
+
+        # ==========================================
+        # 9. ОТВЕТ
+        # ==========================================
+
+        return Response(
+            {
+                "year": year,
+                "month": month,
+                "pregnancy": False,
+                "pregnancy_start_date": None,
+                "status_text": None,
+                "red_days": sorted(red_days),
+                "green_days": sorted(green_days),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class DailyLogView(APIView):
     permission_classes = [IsAuthenticated]
@@ -4414,15 +4543,33 @@ class DailyPregnancyView(APIView):
     @swagger_auto_schema(
         request_body=PergenancyFemaleSer, responses={200: PergenancyFemaleSer}
     )
+
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        save_daily_survey(
-            profile=request.user.profile,
-            json_field_name="pregnancy",
-            validated_data=serializer.validated_data,
+        profile = request.user.profile
+        data = serializer.validated_data.copy()
+        json_field_name = "pregnancy"
+        created_at = data.pop('created_at')
+
+        # 1. Ищем или создаем DailyLog за указанную дату
+        daily_log, _ = DailyLog.objects.get_or_create(
+            profile=profile,
+            created_at=created_at
         )
+
+        # 2. Сохраняем данные опросника в JSON-поле
+        setattr(daily_log, json_field_name, data)
+        daily_log.save()
+
+        # 3. Обновляем глобальные поля в Profile
+        start_pregnancy_answer = data.get('start_pergenangcy', '')
+
+        if start_pregnancy_answer.lower() == 'да':
+            profile.is_pregnant = True
+            profile.pregnancy_start_date = created_at
+            profile.save(update_fields=['is_pregnant', 'pregnancy_start_date'])
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -4538,94 +4685,210 @@ def get_female_reminders(profile) -> dict:
     today = timezone.now().date()
 
     # ==========================================
-    # 1. АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ (Цикл / Фертильность)
+    # 1. АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ
     # ==========================================
-    last_cycle = (
-        CyclePeriod.objects.filter(profile=profile)
-        .order_by("-start_date")
-        .first()
+
+    if profile.is_pregnant:
+        period_data = {
+            "title": "Дни менструации",
+            "days_left": None,
+            "status_text": "Беременность отмечена",
+            "next_date": None,
+        }
+
+        fertility_data = {
+            "title": "Дни фертильности",
+            "days_left": None,
+            "status_text": "Беременность отмечена",
+            "next_date": None,
+        }
+
+    else:
+        # ==========================================
+        # 2. ЦИКЛЫ
+        # ==========================================
+
+        periods = list(
+            CyclePeriod.objects
+            .filter(profile=profile)
+            .order_by("start_date")
+        )
+
+        # ==========================================
+        # Если нет данных о циклах
+        # ==========================================
+
+        if not periods:
+            period_data = {
+                "title": "Дни менструации",
+                "days_left": None,
+                "status_text": "Нет данных о циклах",
+                "next_date": None,
+            }
+
+            fertility_data = {
+                "title": "Дни фертильности",
+                "days_left": None,
+                "status_text": "Нет данных о циклах",
+                "next_date": None,
+            }
+
+        else:
+            # ==========================================
+            # 3. СРЕДНЯЯ ДЛИНА ЦИКЛА
+            # ==========================================
+
+            cycle_lengths = []
+
+            for i in range(1, len(periods)):
+                cycle_length = (
+                    periods[i].start_date
+                    - periods[i - 1].start_date
+                ).days
+
+                cycle_lengths.append(cycle_length)
+
+            if cycle_lengths:
+                average_cycle_length = round(
+                    sum(cycle_lengths)
+                    / len(cycle_lengths)
+                )
+            else:
+                average_cycle_length = 28
+
+            # ==========================================
+            # 4. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+            # ==========================================
+
+            last_period = periods[-1]
+
+            next_period_date = (
+                last_period.start_date
+                + timedelta(days=average_cycle_length)
+            )
+
+            days_to_period = (
+                next_period_date - today
+            ).days
+
+            if days_to_period > 0:
+                period_text = (
+                    f"До начала менструации осталось: "
+                    f"{days_to_period} д"
+                )
+                period_days = days_to_period
+
+            elif days_to_period == 0:
+                period_text = (
+                    "Сегодня предполагаемый день менструации"
+                )
+                period_days = 0
+
+            else:
+                period_text = (
+                    f"Задержка {abs(days_to_period)} д"
+                )
+                period_days = 0
+
+            period_data = {
+                "title": "Дни менструации",
+                "days_left": period_days,
+                "status_text": period_text,
+                "next_date": str(next_period_date),
+            }
+
+            # ==========================================
+            # 5. ОВУЛЯЦИЯ
+            # ==========================================
+
+            ovulation_date = (
+                next_period_date
+                - timedelta(days=14)
+            )
+
+            # ==========================================
+            # 6. ФЕРТИЛЬНОЕ ОКНО
+            # ==========================================
+
+            fertile_start_date = (
+                ovulation_date
+                - timedelta(days=5)
+            )
+
+            fertile_end_date = (
+                ovulation_date
+                + timedelta(days=1)
+            )
+
+            # ==========================================
+            # 7. СТАТУС ФЕРТИЛЬНОСТИ
+            # ==========================================
+
+            if today < fertile_start_date:
+
+                fertility_days = (
+                    fertile_start_date - today
+                ).days
+
+                fertility_text = (
+                    f"До начала фертильности осталось: "
+                    f"{fertility_days} д"
+                )
+
+            elif fertile_start_date <= today <= fertile_end_date:
+
+                fertility_days = 0
+
+                fertility_text = (
+                    "Сейчас фертильный период!"
+                )
+
+            else:
+                # Фертильное окно прошло.
+                # Рассчитываем следующее.
+
+                next_cycle_period = (
+                    next_period_date
+                    + timedelta(days=average_cycle_length)
+                )
+
+                next_ovulation_date = (
+                    next_cycle_period
+                    - timedelta(days=14)
+                )
+
+                next_fertile_start = (
+                    next_ovulation_date
+                    - timedelta(days=5)
+                )
+
+                fertility_days = (
+                    next_fertile_start - today
+                ).days
+
+                fertility_text = (
+                    f"До начала фертильности осталось: "
+                    f"{fertility_days} д"
+                )
+
+            fertility_data = {
+                "title": "Дни фертильности",
+                "days_left": fertility_days,
+                "status_text": fertility_text,
+                "next_date": str(fertile_start_date),
+            }
+
+    # ==========================================
+    # 8. ПОЛЬЗОВАТЕЛЬСКИЕ НАПОМИНАНИЯ
+    # ==========================================
+
+    custom_notifications = (
+        NotificationFemale.objects
+        .filter(profile=profile)
     )
 
-    if not last_cycle:
-        period_data = {
-            "title": "Дни менструации",
-            "days_left": None,
-            "status_text": "Нет данных о циклах",
-            "next_date": None,
-        }
-        fertility_data = {
-            "title": "Дни фертильности",
-            "days_left": None,
-            "status_text": "Нет данных о циклах",
-            "next_date": None,
-        }
-    else:
-        # Средняя длина цикла
-        cycles = list(
-            CyclePeriod.objects.filter(profile=profile).order_by("-start_date")[:4]
-        )
-        if len(cycles) >= 2:
-            diffs = [
-                (cycles[i].start_date - cycles[i + 1].start_date).days
-                for i in range(len(cycles) - 1)
-            ]
-            avg_cycle_length = sum(diffs) // len(diffs)
-        else:
-            avg_cycle_length = 28
-
-        # Менструация
-        next_period_date = last_cycle.start_date + timedelta(days=avg_cycle_length)
-        days_to_period = (next_period_date - today).days
-
-        if days_to_period > 0:
-            period_text = f"До начала менструации осталось: {days_to_period} д"
-            period_days = days_to_period
-        elif days_to_period == 0:
-            period_text = "Сегодня предполагаемый день менструации"
-            period_days = 0
-        else:
-            period_text = f"Задержка {abs(days_to_period)} д"
-            period_days = 0
-
-        period_data = {
-            "title": "Дни менструации",
-            "days_left": period_days,
-            "status_text": period_text,
-            "next_date": str(next_period_date),
-        }
-
-        # Фертильность
-        fertile_start_date = next_period_date - timedelta(days=19)
-        fertile_end_date = next_period_date - timedelta(days=13)
-        days_to_fertility = (fertile_start_date - today).days
-
-        if days_to_fertility > 0:
-            fertility_text = f"До начала фертильности осталось: {days_to_fertility} д"
-            fertility_days = days_to_fertility
-        elif fertile_start_date <= today <= fertile_end_date:
-            fertility_text = "Сейчас фертильный период!"
-            fertility_days = 0
-        else:
-            next_fertile_start = (
-                next_period_date + timedelta(days=avg_cycle_length) - timedelta(days=19)
-            )
-            fertility_days = (next_fertile_start - today).days
-            fertility_text = f"До начала фертильности осталось: {fertility_days} д"
-
-        fertility_data = {
-            "title": "Дни фертильности",
-            "days_left": fertility_days,
-            "status_text": fertility_text,
-            "next_date": str(fertile_start_date),
-        }
-
-    # ==========================================
-    # 2. ПОЛЬЗОВАТЕЛЬСКИЕ НАПОМИНАНИЯ (NotificationFemale)
-    # Забираем ВСЕ записи профиля без фильтрации по дате
-    # ==========================================
-    custom_notifications = NotificationFemale.objects.filter(profile=profile)
-
     custom_list = []
+
     for item in custom_notifications:
         custom_list.append({
             "id": item.id,
@@ -4636,14 +4899,15 @@ def get_female_reminders(profile) -> dict:
         })
 
     # ==========================================
-    # 3. ИТОГОВЫЙ ОТВЕТ
+    # 9. ИТОГОВЫЙ ОТВЕТ
     # ==========================================
+
     return {
         "auto_reminders": {
             "period": period_data,
             "fertility": fertility_data,
         },
-        "custom_reminders": custom_list
+        "custom_reminders": custom_list,
     }
 
 
@@ -4807,6 +5071,60 @@ class DirectAvatarGenerateView(APIView):
             {
                 "message": "Avatar generated and saved successfully",
                 "avatar_url": profile.avatar_image.url,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PregnancyStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = request.user.profile
+
+        if profile.is_pregnant:
+            # ==========================================
+            # ОТМЕНА БЕРЕМЕННОСТИ
+            # ==========================================
+
+            profile.is_pregnant = False
+            profile.pregnancy_start_date = None
+
+            profile.save(
+                update_fields=[
+                    "is_pregnant",
+                    "pregnancy_start_date",
+                ]
+            )
+
+        else:
+            # ==========================================
+            # ОТМЕТИТЬ БЕРЕМЕННОСТЬ
+            # ==========================================
+
+            profile.is_pregnant = True
+            profile.pregnancy_start_date = timezone.now().date()
+
+            profile.save(
+                update_fields=[
+                    "is_pregnant",
+                    "pregnancy_start_date",
+                ]
+            )
+
+        return Response(
+            {
+                "is_pregnant": profile.is_pregnant,
+                "pregnancy_start_date": (
+                    str(profile.pregnancy_start_date)
+                    if profile.pregnancy_start_date
+                    else None
+                ),
+                "status_text": (
+                    "Беременность отмечена"
+                    if profile.is_pregnant
+                    else "Беременность отменена"
+                ),
             },
             status=status.HTTP_200_OK,
         )
