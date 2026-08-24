@@ -135,7 +135,7 @@ from .generate_avatar import (
     generate_direct_dalle_avatar
 )
 
-
+from .generate_system import generate_system_avatars
 
 class LeavePetFamilyView(APIView):
     permission_classes = [IsAuthenticated]
@@ -5076,6 +5076,74 @@ class DirectAvatarGenerateView(APIView):
         )
 
 
+class DirectsystemAvatarGenerateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = request.user.profile
+
+        # ======================================================
+        # 1. Check profile photo
+        # ======================================================
+        if not profile.photo:
+            return Response(
+                {
+                    "error": "Profile photo is required"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ======================================================
+        # 2. Generate avatars (Синхронно для дебага)
+        # ======================================================
+        # Если тут будет ошибка, она сразу вывалится с трейсбеком
+        avatars = generate_system_avatars(profile)
+
+        # ==================================================
+        # 3. Save generated avatars
+        # ==================================================
+        fields = {
+            "cardiovascular": "avatar_CARDIOVASCULAR",
+            "digestive": "avatar_DIGESTIVE",
+            "endocrine": "avatar_ENDOCRINE",
+            "musculoskeletal": "avatar_MUSCULOSKELETAL",
+            "respiratory": "avatar_RESPIRATORY",
+            "reproductive": "avatar_REPRODUCTIVE",
+        }
+
+        for system_name, field_name in fields.items():
+            image_bytes = avatars[system_name]
+
+            file_name = f"avatar_{system_name}_{profile.id}.png"
+
+            getattr(profile, field_name).save(
+                file_name,
+                ContentFile(image_bytes),
+                save=False,
+            )
+
+        profile.save(
+            update_fields=[
+                "avatar_CARDIOVASCULAR",
+                "avatar_DIGESTIVE",
+                "avatar_ENDOCRINE",
+                "avatar_MUSCULOSKELETAL",
+                "avatar_RESPIRATORY",
+                "avatar_REPRODUCTIVE",
+            ]
+        )
+
+       # print(f"System avatars generated successfully for profile {profile.id}")
+
+        # ======================================================
+        # 4. Return immediately (После завершения)
+        # ======================================================
+        return Response(
+            {
+                "message": "Avatar generation completed successfully"
+            },
+            status=status.HTTP_200_OK,
+        )
 class PregnancyStatusAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

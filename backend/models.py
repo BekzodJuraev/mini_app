@@ -250,6 +250,12 @@ class Profile(models.Model):
 
 
     #половая систем male
+    avatar_CARDIOVASCULAR = models.ImageField(blank=True, upload_to='avatars/')
+    avatar_DIGESTIVE = models.ImageField(blank=True, upload_to='avatars/')
+    avatar_ENDOCRINE = models.ImageField(blank=True, upload_to='avatars/')
+    avatar_MUSCULOSKELETAL  = models.ImageField(blank=True, upload_to='avatars/')
+    avatar_RESPIRATORY = models.ImageField(blank=True, upload_to='avatars/')
+    avatar_REPRODUCTIVE  = models.ImageField(blank=True, upload_to='avatars/')
 
 
 
