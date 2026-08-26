@@ -372,9 +372,6 @@ class Critical_analysis(models.Model):
         ('reproductive', 'Половая система - мужчина'),
     ]
     SUBSECTION_CHOICES = [
-        ('hormonal_profile', 'Гормональный профиль'),
-        ('functionality', 'Функциональность'),
-        ('prostate_and_oncorisks', 'Простата и онкориски'),
         ('critical_tests', 'Критические анализы'),
     ]
     system = models.CharField(
@@ -388,7 +385,7 @@ class Critical_analysis(models.Model):
         max_length=50,
         choices=SUBSECTION_CHOICES,
         default='others',
-        verbose_name="Под Система"
+        verbose_name="Подсистема"
     )
     title = models.CharField(max_length=255, verbose_name="Название")
     description = models.TextField(blank=True, verbose_name="Описание")
@@ -401,8 +398,9 @@ class Critical_analysis(models.Model):
         return self.title
 
     class Meta:
-        verbose_name="Kритические анализы"
-        verbose_name_plural = "Kритические анализы"
+
+        verbose_name="Тесты Kритические анализы"
+        verbose_name_plural = "Тесты Kритические анализы"
 
 
 
