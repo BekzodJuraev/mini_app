@@ -1098,27 +1098,37 @@ class RegisterFirstAPIView(APIView):
 
         return Response({'message': 'Registration successful', 'token': token.key}, status=status.HTTP_201_CREATED)
 
+
 class LoginAPIView(APIView):
     serializer_class = LoginSer
-    @swagger_auto_schema(
-        responses={status.HTTP_200_OK: LoginSer()}
-    )
 
-    def post(self,request):
+    @swagger_auto_schema(
+        request_body=LoginSer,
+        responses={status.HTTP_200_OK: '{"message": "Login successful", "token": "..."}'}
+    )
+    def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            username=serializer.validated_data.get('login')
+            username = serializer.validated_data.get('login')
             password = serializer.validated_data.get('password')
+            telegram_id = serializer.validated_data.get('telegram_id')
 
             user = authenticate(username=username, password=password)
             if user is not None:
+
+                profile = user.profile
+                profile.telegram_id = telegram_id
+                profile.save(update_fields=['telegram_id'])
+
                 token, created = Token.objects.get_or_create(user=user)
                 response_data = {'message': 'Login successful', 'token': token.key}
 
                 return Response(response_data, status=status.HTTP_200_OK)
             else:
                 return Response({'message': 'Пользователь не зарегистрирован'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response({'message': 'Invalid form data'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({'message': 'Invalid form data', 'errors': serializer.errors},
+                        status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -1197,7 +1207,10 @@ class LogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Delete the token to logout the user
+        profile = request.user.profile
+        profile.telegram_id = None
+        profile.save(update_fields=['telegram_id'])
+
         request.user.auth_token.delete()
         return Response({"message": "Successfully logged out."}, status=status.HTTP_200_OK)
 
@@ -4274,7 +4287,7 @@ class CalendarMonthAPIView(APIView):
             )
 
         # ==========================================
-        # 2. ОБЫЧНЫЙ РЕЖИМ ЦИКЛА
+        # 2. ЦИКЛЫ
         # ==========================================
 
         periods = list(
@@ -4287,8 +4300,7 @@ class CalendarMonthAPIView(APIView):
         green_days = set()
 
         # ==========================================
-        # 3. КРАСНЫЕ ДНИ
-        # По фактически введенным пользователем датам
+        # 3. ФАКТИЧЕСКИЕ КРАСНЫЕ ДНИ
         # ==========================================
 
         for period in periods:
@@ -4332,24 +4344,108 @@ class CalendarMonthAPIView(APIView):
             average_cycle_length = 28
 
         # ==========================================
-        # 5. ПОСЛЕДНЯЯ МЕНСТРУАЦИЯ
+        # 5. ЕСЛИ ЕСТЬ ХОТЯ БЫ ОДНА МЕНСТРУАЦИЯ
         # ==========================================
 
         if periods:
             last_period = periods[-1]
 
             # ==========================================
-            # 6. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+            # 6. ПРОГНОЗИРУЕМ БУДУЩИЕ ЦИКЛЫ
             # ==========================================
+
+            predicted_period_start = (
+                last_period.start_date
+            )
+
+            # Количество дней, на которое нужно
+            # посмотреть вперёд.
+            #
+            # Берём начало запрошенного месяца
+            # и конец запрошенного месяца.
+            # Добавляем запас, чтобы найти
+            # прогнозируемую менструацию.
+            # ==========================================
+
+            target_date = date(year, month, 1)
+
+            # Прогнозируем циклы вперёд,
+            # пока не достигнем нужного месяца.
+            while predicted_period_start <= target_date:
+                predicted_period_start += timedelta(
+                    days=average_cycle_length
+                )
+
+            # ==========================================
+            # 7. ПРОГНОЗИРУЕМАЯ МЕНСТРУАЦИЯ
+            # ==========================================
+
+            # predicted_period_start сейчас содержит
+            # ближайшее предполагаемое начало цикла
+            # после начала запрошенного месяца.
+            #
+            # Но если прогноз уже попал в предыдущий
+            # месяц и продолжается в текущий — учитываем его.
+
+            predicted_period_start -= timedelta(
+                days=average_cycle_length
+            )
+
+            # ==========================================
+            # 8. ДОБАВЛЯЕМ ПРОГНОЗИРУЕМЫЕ
+            # КРАСНЫЕ ДНИ
+            # ==========================================
+
+            # Продолжаем прогнозировать циклы,
+            # пока не выйдем за пределы месяца.
+            while predicted_period_start <= date(
+                year,
+                month,
+                28
+            ):
+                predicted_period_end = (
+                    predicted_period_start
+                    + timedelta(days=4)
+                )
+
+                curr = predicted_period_start
+
+                while curr <= predicted_period_end:
+                    if (
+                        curr.year == year
+                        and curr.month == month
+                    ):
+                        day = curr.strftime("%Y-%m-%d")
+
+                        # Если день уже фактически
+                        # отмечен как менструация,
+                        # повторно ничего не делаем.
+                        red_days.add(day)
+
+                    curr += timedelta(days=1)
+
+                predicted_period_start += timedelta(
+                    days=average_cycle_length
+                )
+
+            # ==========================================
+            # 9. ОВУЛЯЦИЯ
+            # ==========================================
+
+            # Берём первый прогнозируемый цикл,
+            # который относится к нужному месяцу
+            # или находится рядом с ним.
 
             next_period = (
                 last_period.start_date
                 + timedelta(days=average_cycle_length)
             )
 
-            # ==========================================
-            # 7. ОВУЛЯЦИЯ
-            # ==========================================
+            # Продвигаем прогноз до нужного месяца
+            while next_period < date(year, month, 1):
+                next_period += timedelta(
+                    days=average_cycle_length
+                )
 
             ovulation_day = (
                 next_period
@@ -4357,8 +4453,7 @@ class CalendarMonthAPIView(APIView):
             )
 
             # ==========================================
-            # 8. ФЕРТИЛЬНЫЕ ДНИ
-            # 5 дней до + день овуляции + 1 день после
+            # 10. ФЕРТИЛЬНЫЕ ДНИ
             # ==========================================
 
             fertility_start = (
@@ -4380,15 +4475,13 @@ class CalendarMonthAPIView(APIView):
                 ):
                     day = curr.strftime("%Y-%m-%d")
 
-                    # Не показываем зеленый день
-                    # одновременно с менструацией
                     if day not in red_days:
                         green_days.add(day)
 
                 curr += timedelta(days=1)
 
         # ==========================================
-        # 9. ОТВЕТ
+        # 11. ОТВЕТ
         # ==========================================
 
         return Response(

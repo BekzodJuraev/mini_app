@@ -612,7 +612,7 @@ class RelationshipBabySer(serializers.ModelSerializer):
 
 
 class LoginSer(serializers.Serializer):
-    #telegram_id=serializers.CharField(required=True,write_only=True)
+    telegram_id=serializers.CharField(required=True,write_only=True)
     login=serializers.CharField(required=True)
     password=serializers.CharField(required=True)
 
