@@ -3375,7 +3375,7 @@ class CaroiesListView(APIView):
     @translate_api_response(fields=['foods.meals.detail.еда'])
     def get(self, request):
         profile = request.user.profile
-        query=Calories.objects.filter(profile=profile,saved=True).exclude(detail=[]).order_by('-id')
+        query=Calories.objects.filter(profile=profile,saved=True).exclude(detail=[]).order_by('-created_at')
 
         dic = defaultdict(lambda: {
             'meals': [],
@@ -4287,7 +4287,7 @@ class CalendarMonthAPIView(APIView):
             )
 
         # ==========================================
-        # 2. ЦИКЛЫ
+        # 2. ПОЛУЧАЕМ ЦИКЛЫ
         # ==========================================
 
         periods = list(
@@ -4301,6 +4301,9 @@ class CalendarMonthAPIView(APIView):
 
         # ==========================================
         # 3. ФАКТИЧЕСКИЕ КРАСНЫЕ ДНИ
+        #
+        # Только start_date -> end_date.
+        # Никаких дней после end_date.
         # ==========================================
 
         for period in periods:
@@ -4308,9 +4311,8 @@ class CalendarMonthAPIView(APIView):
                 continue
 
             curr = period.start_date
-            end = period.end_date
 
-            while curr <= end:
+            while curr <= period.end_date:
                 if (
                     curr.year == year
                     and curr.month == month
@@ -4322,7 +4324,25 @@ class CalendarMonthAPIView(APIView):
                 curr += timedelta(days=1)
 
         # ==========================================
-        # 4. СРЕДНЯЯ ДЛИНА ЦИКЛА
+        # 4. ЕСЛИ НЕТ ЦИКЛОВ
+        # ==========================================
+
+        if not periods:
+            return Response(
+                {
+                    "year": year,
+                    "month": month,
+                    "pregnancy": False,
+                    "pregnancy_start_date": None,
+                    "status_text": None,
+                    "red_days": [],
+                    "green_days": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # ==========================================
+        # 5. СРЕДНЯЯ ДЛИНА ЦИКЛА
         # ==========================================
 
         cycle_lengths = []
@@ -4333,7 +4353,8 @@ class CalendarMonthAPIView(APIView):
                 - periods[i - 1].start_date
             ).days
 
-            cycle_lengths.append(cycle_length)
+            if cycle_length > 0:
+                cycle_lengths.append(cycle_length)
 
         if cycle_lengths:
             average_cycle_length = round(
@@ -4344,141 +4365,94 @@ class CalendarMonthAPIView(APIView):
             average_cycle_length = 28
 
         # ==========================================
-        # 5. ЕСЛИ ЕСТЬ ХОТЯ БЫ ОДНА МЕНСТРУАЦИЯ
+        # 6. ПОСЛЕДНИЙ ЦИКЛ
         # ==========================================
 
-        if periods:
-            last_period = periods[-1]
+        last_period = periods[-1]
 
-            # ==========================================
-            # 6. ПРОГНОЗИРУЕМ БУДУЩИЕ ЦИКЛЫ
-            # ==========================================
+        # ==========================================
+        # 7. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+        # ==========================================
 
-            predicted_period_start = (
-                last_period.start_date
-            )
+        next_period = (
+            last_period.start_date
+            + timedelta(days=average_cycle_length)
+        )
 
-            # Количество дней, на которое нужно
-            # посмотреть вперёд.
-            #
-            # Берём начало запрошенного месяца
-            # и конец запрошенного месяца.
-            # Добавляем запас, чтобы найти
-            # прогнозируемую менструацию.
-            # ==========================================
+        # ==========================================
+        # 8. ПРОГНОЗ КРАСНЫХ ДНЕЙ
+        #
+        # ВАЖНО:
+        # Если последняя менструация закончилась,
+        # после end_date никаких красных дней
+        # текущего цикла не добавляем.
+        #
+        # Красными прогнозируем только следующую
+        # предполагаемую менструацию.
+        # ==========================================
 
-            target_date = date(year, month, 1)
+        if last_period.end_date:
+            period_duration = (
+                last_period.end_date
+                - last_period.start_date
+            ).days + 1
+        else:
+            period_duration = 5
 
-            # Прогнозируем циклы вперёд,
-            # пока не достигнем нужного месяца.
-            while predicted_period_start <= target_date:
-                predicted_period_start += timedelta(
-                    days=average_cycle_length
-                )
+        predicted_period_end = (
+            next_period
+            + timedelta(days=period_duration - 1)
+        )
 
-            # ==========================================
-            # 7. ПРОГНОЗИРУЕМАЯ МЕНСТРУАЦИЯ
-            # ==========================================
+        curr = next_period
 
-            # predicted_period_start сейчас содержит
-            # ближайшее предполагаемое начало цикла
-            # после начала запрошенного месяца.
-            #
-            # Но если прогноз уже попал в предыдущий
-            # месяц и продолжается в текущий — учитываем его.
-
-            predicted_period_start -= timedelta(
-                days=average_cycle_length
-            )
-
-            # ==========================================
-            # 8. ДОБАВЛЯЕМ ПРОГНОЗИРУЕМЫЕ
-            # КРАСНЫЕ ДНИ
-            # ==========================================
-
-            # Продолжаем прогнозировать циклы,
-            # пока не выйдем за пределы месяца.
-            while predicted_period_start <= date(
-                year,
-                month,
-                28
+        while curr <= predicted_period_end:
+            if (
+                curr.year == year
+                and curr.month == month
             ):
-                predicted_period_end = (
-                    predicted_period_start
-                    + timedelta(days=4)
+                red_days.add(
+                    curr.strftime("%Y-%m-%d")
                 )
 
-                curr = predicted_period_start
+            curr += timedelta(days=1)
 
-                while curr <= predicted_period_end:
-                    if (
-                        curr.year == year
-                        and curr.month == month
-                    ):
-                        day = curr.strftime("%Y-%m-%d")
+        # ==========================================
+        # 9. ОВУЛЯЦИЯ
+        # ==========================================
 
-                        # Если день уже фактически
-                        # отмечен как менструация,
-                        # повторно ничего не делаем.
-                        red_days.add(day)
+        ovulation_day = (
+            next_period
+            - timedelta(days=14)
+        )
 
-                    curr += timedelta(days=1)
+        # ==========================================
+        # 10. ФЕРТИЛЬНЫЕ ДНИ
+        # ==========================================
 
-                predicted_period_start += timedelta(
-                    days=average_cycle_length
-                )
+        fertility_start = (
+            ovulation_day
+            - timedelta(days=5)
+        )
 
-            # ==========================================
-            # 9. ОВУЛЯЦИЯ
-            # ==========================================
+        fertility_end = (
+            ovulation_day
+            + timedelta(days=1)
+        )
 
-            # Берём первый прогнозируемый цикл,
-            # который относится к нужному месяцу
-            # или находится рядом с ним.
+        curr = fertility_start
 
-            next_period = (
-                last_period.start_date
-                + timedelta(days=average_cycle_length)
-            )
+        while curr <= fertility_end:
+            if (
+                curr.year == year
+                and curr.month == month
+            ):
+                day = curr.strftime("%Y-%m-%d")
 
-            # Продвигаем прогноз до нужного месяца
-            while next_period < date(year, month, 1):
-                next_period += timedelta(
-                    days=average_cycle_length
-                )
+                if day not in red_days:
+                    green_days.add(day)
 
-            ovulation_day = (
-                next_period
-                - timedelta(days=14)
-            )
-
-            # ==========================================
-            # 10. ФЕРТИЛЬНЫЕ ДНИ
-            # ==========================================
-
-            fertility_start = (
-                ovulation_day
-                - timedelta(days=5)
-            )
-
-            fertility_end = (
-                ovulation_day
-                + timedelta(days=1)
-            )
-
-            curr = fertility_start
-
-            while curr <= fertility_end:
-                if (
-                    curr.year == year
-                    and curr.month == month
-                ):
-                    day = curr.strftime("%Y-%m-%d")
-
-                    if day not in red_days:
-                        green_days.add(day)
-
-                curr += timedelta(days=1)
+            curr += timedelta(days=1)
 
         # ==========================================
         # 11. ОТВЕТ
