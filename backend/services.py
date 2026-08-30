@@ -36,11 +36,9 @@ def schedule_all_morning_reminders():
         task_habit_remind = f"habit_remind_{profile.telegram_id}"
         task_habit_check = f"habit_check_{profile.telegram_id}"
 
-        # Сначала всегда чистим старые таски на сегодня, чтобы не дублировать
         Schedule.objects.filter(name=task_habit_remind).delete()
         Schedule.objects.filter(name=task_habit_check).delete()
 
-        # Делаем schedule ТОЛЬКО если уведомления включены
         if profile.notification_habit:
             schedule('backend.tasks.send_habit_confirmation', profile.telegram_id, name=task_habit_remind,
                      schedule_type=Schedule.ONCE, next_run=get_utc_run_time(12, 5))
@@ -56,7 +54,7 @@ def schedule_all_morning_reminders():
             schedule('backend.tasks.send_morning_food_reminder', profile.telegram_id, name=task_calories,
                      schedule_type=Schedule.ONCE, next_run=get_utc_run_time(8, 0))
 
-        # --- НОВЫЙ БЛОК: НАПОМИНАНИЯ О ЗДОРОВЬЕ (ДАВЛЕНИЕ В 18:02) ---
+        # --- БЛОК: НАПОМИНАНИЯ О ЗДОРОВЬЕ ---
         task_health = f"health_morning_{profile.telegram_id}"
         Schedule.objects.filter(name=task_health).delete()
 
@@ -64,19 +62,45 @@ def schedule_all_morning_reminders():
             schedule('backend.tasks.send_health_reminder', profile.telegram_id, name=task_health,
                      schedule_type=Schedule.ONCE, next_run=get_utc_run_time(8, 0))
 
-        # --- БЛОК: ЛЕКАРСТВА ---
-        # Если лекарства вообще выключены в профиле, сразу переходим к следующему пользователю
-        if not profile.notification_drugs:
-            # Нам всё равно нужно почистить старые задачи по лекарствам, если они были в базе
-            user_drugs = Drugs.objects.filter(profile=profile)
-            for drug in user_drugs:
-                for notif in drug.notifications_drugs.all():
-                    Schedule.objects.filter(name=f"drug_{notif.id}_{today}").delete()
-                    Schedule.objects.filter(name=f"check_drug_{notif.id}_{today}").delete()
-            continue  # Пропускаем и идем к следующему профилю
+        # --- БЛОК: ЖЕНСКИЙ КАЛЕНДАРЬ ---
+        # Сначала очищаем старые задачи на сегодня для этого пользователя
+        female_notifs = NotificationFemale.objects.filter(profile=profile)
+        for f_notif in female_notifs:
+            Schedule.objects.filter(name=f"female_notif_{f_notif.id}_{today}").delete()
 
-        # Если notification_drugs == True, то спокойно крутим цикл и планируем
+        if getattr(profile, 'notification_female', False):
+            for f_notif in female_notifs:
+                # Если стоит галочка "за 3 дня", вычитаем 3 дня от указанной даты
+                if f_notif.three_days_before:
+                    target_date = f_notif.created_at - timedelta(days=3)
+                else:
+                    target_date = f_notif.created_at
+
+                # Если день отправки — сегодня, планируем на 09:00 утра
+                if target_date == today:
+                    task_female = f"female_notif_{f_notif.id}_{today}"
+                    schedule(
+                        'backend.tasks.send_female_health_reminder',
+                        profile.telegram_id,
+                        f_notif.title,
+                        f_notif.description,
+                        name=task_female,
+                        schedule_type=Schedule.ONCE,
+                        next_run=get_utc_run_time(8, 0)
+                    )
+
+        # --- БЛОК: ЛЕКАРСТВА ---
         user_drugs = Drugs.objects.filter(profile=profile)
+
+        # Очищаем старые задачи по лекарствам
+        for drug in user_drugs:
+            for notif in drug.notifications_drugs.all():
+                Schedule.objects.filter(name=f"drug_{notif.id}_{today}").delete()
+                Schedule.objects.filter(name=f"check_drug_{notif.id}_{today}").delete()
+
+        if not profile.notification_drugs:
+            continue
+
         for drug in user_drugs:
             notifications = drug.notifications_drugs.all()
             cat = str(drug.catigories)
@@ -88,9 +112,6 @@ def schedule_all_morning_reminders():
             for notif in notifications:
                 task_d = f"drug_{notif.id}_{today}"
                 task_c = f"check_drug_{notif.id}_{today}"
-
-                Schedule.objects.filter(name=task_d).delete()
-                Schedule.objects.filter(name=task_c).delete()
 
                 try:
                     h, m = map(int, notif.time.split(':'))

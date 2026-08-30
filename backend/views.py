@@ -551,51 +551,34 @@ def get_chat_history(profile):
 
 
 def get_user_and_pet_context(profile):
-
-
+    from datetime import timedelta
     from django.db.models import Count, Q
     from django.utils import timezone
-    from datetime import timedelta
-    from .models import Calories, Rentgen, Tracking_Habit, Drugs, Pet
+    from .models import Calories, Drugs, Pet, Rentgen, Tracking_Habit
 
-    # Жестко сжимаем отрезок для питания и калорий до 3 дней ради экономии бюджета
     strict_short_date = timezone.now().date() - timedelta(days=3)
-
-    # Лимит на количество членов семьи (защита от роста O(N) при большой семье,
-    # обрезка по размеру JSON/Text-полей убрана по решению — поля идут целиком)
     MAX_FAMILY_MEMBERS = 5
 
-    # Вспомогательная функция для сборки лекарств (работает универсально)
     def get_object_drugs(obj):
-        # У Profile related_name='drugs', у Pet related_name='pet_drugs'
-        relation_name = 'pet_drugs' if isinstance(obj, Pet) else 'drugs'
+        relation_name = "pet_drugs" if isinstance(obj, Pet) else "drugs"
         if not hasattr(obj, relation_name):
             return []
 
-        drugs_queryset = getattr(obj, relation_name).all().order_by('-created_at')[:10]
-
-        # Получаем сегодняшнюю дату для проверки чеков
+        drugs_queryset = getattr(obj, relation_name).all().order_by(
+            "-created_at"
+        )[:10]
         today = timezone.now().date()
 
         rows = []
         for d in drugs_queryset:
-            # Проверяем, есть ли чек приема на сегодня.
-            # Предполагаем, что у твоего лекарства есть связь с уведомлениями (например, related_name='notifications' или у Notification_drugs есть FK на Drug)
-            # Здесь мы ищем, существует ли чек со значением is_taken=True на сегодняшнюю дату:
-
             is_taken_today = False
-            if hasattr(d, 'notifications'):  # подставь сюда правильное related_name от Drug к Notification_drugs
+            if hasattr(d, "notifications"):
                 is_taken_today = Check_Drugs.objects.filter(
                     notification__in=d.notifications.all(),
-                    # или notification__drug=d в зависимости от твоей архитектуры
                     date=today,
-                    is_taken=True
+                    is_taken=True,
                 ).exists()
-            elif hasattr(d, 'checks'):  # Если у тебя Check_Drugs или Notification привязаны как-то иначе
-                # Альтернативный вариант связи
-                pass
 
-            # Переводим bool статус в понятную для ИИ строку
             status_taken = "Принято" if is_taken_today else "Еще не принято"
 
             rows.append([
@@ -605,7 +588,7 @@ def get_user_and_pet_context(profile):
                 d.day,
                 d.intake,
                 str(d.interval) if d.interval else None,
-                status_taken  # Добавляем статус приема в массив данных
+                status_taken,
             ])
 
         if not rows:
@@ -619,32 +602,35 @@ def get_user_and_pet_context(profile):
                 "duration_days",
                 "intake_instructions",
                 "interval",
-                "status_taken_today"  # Новое поле в заголовках
+                "status_taken_today",
             ],
-            "rows": rows
+            "rows": rows,
         }
 
     def build_habits_block(habits_qs):
-        """
-        Табличный формат привычек питомца с заменой good/bad
-        на понятные для ИИ текстовые значения.
-        """
         rows = [
             [
                 h.name_habit,
-                ("полезная привычка" if h.type == "good" else "вредная привычка"),
+                (
+                    "полезная привычка"
+                    if h.type == "good"
+                    else "вредная привычка"
+                ),
                 h.lenght,
-                h.completed_days_count
+                h.completed_days_count,
             ]
             for h in habits_qs
         ]
         if not rows:
             return []
-        return {"fields": ["name", "type", "streak_days", "completed_days"], "rows": rows}
+        return {
+            "fields": ["name", "type", "streak_days", "completed_days"],
+            "rows": rows,
+        }
 
     # === 1. ЦЕЛИ ПОЛЬЗОВАТЕЛЯ (КБЖУ + Вода) ===
     user_nutrition_goals = {}
-    if hasattr(profile, 'nutrition_goal') and profile.nutrition_goal:
+    if hasattr(profile, "nutrition_goal") and profile.nutrition_goal:
         goal = profile.nutrition_goal
         user_nutrition_goals = {
             "target_calories": goal.calories,
@@ -653,9 +639,11 @@ def get_user_and_pet_context(profile):
             "target_carbs": goal.carbs,
             "target_fiber": goal.fiber,
         }
-    user_nutrition_goals["target_water_liters"] = getattr(profile, 'water_goal', None)
+    user_nutrition_goals["target_water_liters"] = getattr(
+        profile, "water_goal", None
+    )
 
-    # === 2. ДАННЫЕ О СЕМЬЕ И ИХ ЛЕКАРСТВАХ (с лимитом на размер семьи) ===
+    # === 2. ДАННЫЕ О СЕМЬЕ ===
     family_data = []
     family_members = set()
     if profile.family:
@@ -665,13 +653,17 @@ def get_user_and_pet_context(profile):
         family_members.add(member)
 
     for member in list(family_members)[:MAX_FAMILY_MEMBERS]:
-        m_tests = list(member.tests.exclude(message=None).order_by('-created_at')[:3])
+        m_tests = list(
+            member.tests.exclude(message=None).order_by("-created_at")[:3]
+        )
         m_tests_history = [f"{t.name}: {t.message}" for t in m_tests]
 
         m_habits_with_counts = member.habit.all().annotate(
             completed_days_count=Count(
-                'habit_tracking',
-                filter=Q(habit_tracking__profile=member, habit_tracking__check_is=True)
+                "habit_tracking",
+                filter=Q(
+                    habit_tracking__profile=member, habit_tracking__check_is=True
+                ),
             )
         )
         m_habits = build_habits_block(m_habits_with_counts)
@@ -679,7 +671,11 @@ def get_user_and_pet_context(profile):
         family_data.append({
             "name": member.name,
             "gender": member.gender,
-            "birth_date": member.date_birth.strftime('%Y-%m-%d') if member.date_birth else None,
+            "birth_date": (
+                member.date_birth.strftime("%Y-%m-%d")
+                if member.date_birth
+                else None
+            ),
             "height": member.height,
             "weight": member.weight,
             "medical_history_anamnesis": member.medical_history or {},
@@ -689,45 +685,44 @@ def get_user_and_pet_context(profile):
             "recent_medical_tests": m_tests_history,
         })
 
-    # === 3. ДАННЫЕ О ПИТОМЦАХ (ЧИСТЫЙ FOREIGN KEY БЕЗ ЛИШНИХ АННОТАЦИЙ) ===
+    # === 3. ДАННЫЕ О ПИТОМЦАХ ===
     pets_data = []
-
     for pet in profile.pet.all():
-        # Подробные медицинские тесты питомца (топ-3)
-        pet_tests = list(pet.tests_pet.exclude(message=None).order_by('-created_at')[:3])
+        pet_tests = list(
+            pet.tests_pet.exclude(message=None).order_by("-created_at")[:3]
+        )
         pet_tests_history = [f"{pt.name}: {pt.message}" for pt in pet_tests]
 
-        # Питание питомца (сжато до 3 дней)
         pet_calories_short = pet.pet_calories.filter(
-            created_at__gte=strict_short_date,
-            saved=True
-        ).order_by('-created_at')
+            created_at__gte=strict_short_date, saved=True
+        ).order_by("-created_at")
 
         pet_food_history = [
-            {"date": pc.created_at.strftime('%Y-%m-%d'), "detail": pc.detail}
-            for pc in pet_calories_short if pc.detail
+            {"date": pc.created_at.strftime("%Y-%m-%d"), "detail": pc.detail}
+            for pc in pet_calories_short
+            if pc.detail
         ]
 
-        # Цели питания питомца
         pet_nutrition_goals = {}
-        if hasattr(pet, 'nutrition_goal_pet') and pet.nutrition_goal_pet:
+        if hasattr(pet, "nutrition_goal_pet") and pet.nutrition_goal_pet:
             p_goal = pet.nutrition_goal_pet
             pet_nutrition_goals = {
                 "target_calories": p_goal.calories,
                 "target_proteins": p_goal.proteins,
                 "target_fats": p_goal.fats,
                 "target_carbs": p_goal.carbs,
-                "target_fiber": p_goal.fiber
+                "target_fiber": p_goal.fiber,
             }
 
-        # Привычки питомца со стажем выполнения трекера
-        # (связь habit для Pet используется как есть — без изменений)
-        pet_habits_with_counts = pet.habit.all().annotate(
-            completed_days_count=Count(
-                'habit_tracking',
-                filter=Q(habit_tracking__check_is=True)
+        pet_habits_with_counts = (
+            pet.habit.all().annotate(
+                completed_days_count=Count(
+                    "habit_tracking", filter=Q(habit_tracking__check_is=True)
+                )
             )
-        ) if hasattr(pet, 'habit') else []
+            if hasattr(pet, "habit")
+            else []
+        )
 
         pet_habits_list = build_habits_block(pet_habits_with_counts)
 
@@ -735,46 +730,72 @@ def get_user_and_pet_context(profile):
             "name": pet.klichka,
             "type": pet.pet,
             "gender": pet.gender,
-            "birth_date": pet.age.strftime('%Y-%m-%d') if pet.age else None,
+            "birth_date": (
+                pet.age.strftime("%Y-%m-%d") if pet.age else None
+            ),
             "medical_history_anamnesis": pet.medical_history or {},
             "health_system_metrics": pet.health_system or {},
             "active_drugs_list": get_object_drugs(pet),
             "habits_list": pet_habits_list,
             "last_medical_tests_details": pet_tests_history,
             "nutrition_history_last_3_days": pet_food_history,
-            "nutrition_goals": pet_nutrition_goals
+            "nutrition_goals": pet_nutrition_goals,
         })
 
-    # === 4. ДИНАМИЧЕСКИЕ ЗАПИСИ ПОЛЬЗОВАТЕЛЯ (Урезанные лимиты) ===
-    human_tests = list(profile.tests.exclude(message=None).order_by('-created_at')[:3])
-    human_tests_history = [f"{t.name}: {t.message}" for t in human_tests]
+    # === 4. ДИНАМИЧЕСКИЕ ЗАПИСИ ПОЛЬЗОВАТЕЛЯ ===
+    human_tests = list(
+        profile.tests.exclude(message=None)
+        .order_by("-created_at", "-id")[:3]  # -id гарантирует точную сортировку, если даты совпадают
+    )
 
-    rentgen_records = list(profile.rentgen.exclude(answer=None).order_by('-created_at')[:3])
+    human_tests_history = [
+        f"[{t.created_at.strftime('%Y-%m-%d %H:%M')}] {t.name}: {t.message}"
+        for t in human_tests
+    ]
+
+    rentgen_records = list(
+        profile.rentgen.exclude(answer=None).order_by("-created_at")[:3]
+    )
     rentgen_history = [f"{r.message}: {r.answer}" for r in rentgen_records]
 
-    pressure_records = list(profile.pressure_history.order_by('-created_at')[:3])
-    pressure_history = [f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records]
+    pressure_records = list(
+        profile.pressure_history.order_by("-created_at")[:3]
+    )
+    pressure_history = [
+        f"{p.pressure_top}/{p.pressure_bottom}" for p in pressure_records
+    ]
 
     habits_with_counts = profile.habit.all().annotate(
         completed_days_count=Count(
-            'habit_tracking',
-            filter=Q(habit_tracking__profile=profile, habit_tracking__check_is=True)
+            "habit_tracking",
+            filter=Q(
+                habit_tracking__profile=profile, habit_tracking__check_is=True
+            ),
         )
     )
     habits_list = build_habits_block(habits_with_counts)
 
-    daily_checks = list(profile.daily_check.exclude(message=None).order_by('-created_at', '-id')[:3])
+    daily_checks = list(
+        profile.daily_check.exclude(message=None).order_by(
+            "-created_at", "-id"
+        )[:3]
+    )
     daily_checks.reverse()
     daily_checks_history = [
-        {"date": check.created_at.strftime('%Y-%m-%d') if check.created_at else "Неизвестно", "report": check.message}
+        {
+            "date": (
+                check.created_at.strftime("%Y-%m-%d")
+                if check.created_at
+                else "Неизвестно"
+            ),
+            "report": check.message,
+        }
         for check in daily_checks
     ]
 
     calories_short_days = Calories.objects.filter(
-        profile=profile,
-        created_at__date__gte=strict_short_date,
-        saved=True
-    ).order_by('-created_at')
+        profile=profile, created_at__date__gte=strict_short_date, saved=True
+    ).order_by("-created_at")
 
     human_food_history = []
     total_water_short_days = 0.0
@@ -782,25 +803,88 @@ def get_user_and_pet_context(profile):
     for c in calories_short_days:
         if c.detail:
             human_food_history.append({
-                "date": c.created_at.strftime('%Y-%m-%d'),
-                "detail": c.detail
+                "date": c.created_at.strftime("%Y-%m-%d"),
+                "detail": c.detail,
             })
         if c.water_intake:
             total_water_short_days += c.water_intake
 
-    # === 5. СБОРКА ИТОГОВОГО ВЫХОДА (Структурировано под Prompt Caching) ===
+    # === 5. ДАННЫЕ О ЖЕНСКОМ ЗДОРОВЬЕ И ЦИКЛЕ ===
+    women_health_data = {}
+    if getattr(profile, "gender", "").lower() in ["female", "ж", "женский"]:
+        # Данные о периодах менструации (последние 3 периода)
+        cycle_periods = list(
+            profile.periods.all().order_by("-start_date")[:3]
+        )
+        periods_history = [
+            {
+                "start_date": p.start_date.strftime("%Y-%m-%d"),
+                "end_date": (
+                    p.end_date.strftime("%Y-%m-%d") if p.end_date else "Текущий"
+                ),
+            }
+            for p in cycle_periods
+        ]
+
+        # Логи самочувствия и симптомов (последние 5 логов)
+        daily_logs = list(
+            profile.daily_logs.all().order_by("-created_at")[:5]
+        )
+        logs_history = [
+            {
+                "date": log.created_at.strftime("%Y-%m-%d"),
+                "note": log.note,
+                "pain": log.pain or {},
+                "mood": log.mood or {},
+                "activities": log.activities or {},
+                "pregnancy_symptoms": log.pregnancy or {},
+            }
+            for log in daily_logs
+        ]
+
+        # Напоминания по женскому календарю
+        notifications = list(
+            profile.notificationfemale.all().order_by("-created_at")[:3]
+        )
+        notifs_history = [
+            {
+                "title": n.title,
+                "description": n.description,
+                "date": n.created_at.strftime("%Y-%m-%d"),
+                "three_days_before": n.three_days_before,
+            }
+            for n in notifications
+        ]
+
+        women_health_data = {
+            "is_pregnant": getattr(profile, "is_pregnant", False),
+            "pregnancy_start_date": (
+                profile.pregnancy_start_date.strftime("%Y-%m-%d")
+                if getattr(profile, "pregnancy_start_date", None)
+                else None
+            ),
+            "recent_cycle_periods": periods_history,
+            "recent_daily_symptom_logs": logs_history,
+            "female_calendar_notifications": notifs_history,
+        }
+
+    # === 6. ИТОГОВЫЙ СБОР КЛИЕНТСКИХ ДАННЫХ ===
     return {
         "user_info": {
             "name": profile.name,
             "gender": profile.gender,
-            "birth_date": profile.date_birth.strftime('%Y-%m-%d') if profile.date_birth else None,
+            "birth_date": (
+                profile.date_birth.strftime("%Y-%m-%d")
+                if profile.date_birth
+                else None
+            ),
             "height": profile.height,
             "weight": profile.weight,
             "place_of_residence": profile.place_of_residence,
             "medical_history_anamnesis": profile.medical_history or {},
             "health_indicators_score": profile.health_system or {},
             "calculated_life_expectancy": profile.life_expectancy,
-            "active_drugs_list": get_object_drugs(profile)
+            "active_drugs_list": get_object_drugs(profile),
         },
         "user_nutrition_and_water_goals": user_nutrition_goals,
         "user_family_members": family_data,
@@ -812,8 +896,9 @@ def get_user_and_pet_context(profile):
         "user_habits": habits_list,
         "user_nutrition_history_recent_days": {
             "food_records": human_food_history,
-            "total_water_intake_liters_recent_days": total_water_short_days
-        }
+            "total_water_intake_liters_recent_days": total_water_short_days,
+        },
+        "user_women_health": women_health_data,
     }
 
 def build_context(profile, sections):
@@ -1202,16 +1287,35 @@ class VerifyResetCode(APIView):
             {"error": "Invalid or expired code."},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from django_q.models import Schedule
+
+
 class LogoutAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         profile = request.user.profile
+        tg_id = profile.telegram_id
+
+        # 1. Если telegram_id был привязан, удаляем все отложенные задачи из django-q
+        if tg_id:
+            Schedule.objects.filter(name__icontains=str(tg_id)).delete()
+
+        # 2. Очищаем telegram_id у профиля
         profile.telegram_id = None
         profile.save(update_fields=['telegram_id'])
 
+        # 3. Удаляем токен авторизации
         request.user.auth_token.delete()
+
         return Response({"message": "Successfully logged out."}, status=status.HTTP_200_OK)
 
 class ProfileAPIView(APIView):
@@ -1356,9 +1460,7 @@ class ChatAPIView(APIView):
             sections = detect_context(message)
             #print(sections)
 
-            # ==============================================================
-            # ВЕТКА: Управление дневником питания и воды (CRUD через Tools)
-            # ==============================================================
+
             if "manage_nutrition_diary" in sections:
                 # 1. Запускаем специализированный обработчик с NUTRITION_TOOLS
                 response_data = nutrition_chat_system(
@@ -1367,7 +1469,7 @@ class ChatAPIView(APIView):
                     history=history
                 )
 
-                # 2. Сохраняем диалог в базу
+
                 Chat.objects.create(
                     profile=profile,
                     question=message,
@@ -1384,6 +1486,7 @@ class ChatAPIView(APIView):
             # ==============================================================
             else:
                 context_data = build_context(profile, sections)
+
 
                 response_data = chat_system(
                     message=message,
@@ -4119,6 +4222,7 @@ class MaleSystemView(APIView):
 
 
     @swagger_auto_schema(responses={status.HTTP_200_OK: MaleSystemSer()})
+    @translate_api_response(fields=['hormone_profile', 'hormone_function','hormone_prostate'])
     def get(self, request):
         profile = request.user.profile
         today = timezone.now().date()
@@ -4302,17 +4406,19 @@ class CalendarMonthAPIView(APIView):
         # ==========================================
         # 3. ФАКТИЧЕСКИЕ КРАСНЫЕ ДНИ
         #
-        # Только start_date -> end_date.
-        # Никаких дней после end_date.
+        # Только реально введённые пользователем
+        # start_date -> end_date.
         # ==========================================
 
         for period in periods:
+
             if not period.end_date:
                 continue
 
             curr = period.start_date
 
             while curr <= period.end_date:
+
                 if (
                     curr.year == year
                     and curr.month == month
@@ -4324,7 +4430,7 @@ class CalendarMonthAPIView(APIView):
                 curr += timedelta(days=1)
 
         # ==========================================
-        # 4. ЕСЛИ НЕТ ЦИКЛОВ
+        # 4. ЕСЛИ НЕТ ДАННЫХ О ЦИКЛАХ
         # ==========================================
 
         if not periods:
@@ -4343,11 +4449,18 @@ class CalendarMonthAPIView(APIView):
 
         # ==========================================
         # 5. СРЕДНЯЯ ДЛИНА ЦИКЛА
+        #
+        # Длина цикла =
+        # начало текущего цикла -
+        # начало предыдущего цикла
+        #
+        # Если данных нет → 28 дней.
         # ==========================================
 
         cycle_lengths = []
 
         for i in range(1, len(periods)):
+
             cycle_length = (
                 periods[i].start_date
                 - periods[i - 1].start_date
@@ -4365,97 +4478,173 @@ class CalendarMonthAPIView(APIView):
             average_cycle_length = 28
 
         # ==========================================
-        # 6. ПОСЛЕДНИЙ ЦИКЛ
+        # 6. ПОСЛЕДНЯЯ МЕНСТРУАЦИЯ
         # ==========================================
 
         last_period = periods[-1]
 
         # ==========================================
-        # 7. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+        # 7. ДЛИТЕЛЬНОСТЬ ПОСЛЕДНЕЙ МЕНСТРУАЦИИ
+        #
+        # Используем её для прогнозируемой
+        # продолжительности следующей менструации.
+        #
+        # Если end_date ещё нет → 5 дней.
         # ==========================================
 
-        next_period = (
+        if last_period.end_date:
+
+            period_duration = (
+                last_period.end_date
+                - last_period.start_date
+            ).days + 1
+
+        else:
+            period_duration = 5
+
+        # ==========================================
+        # 8. ГРАНИЦЫ ЗАПРОШЕННОГО МЕСЯЦА
+        # ==========================================
+
+        month_start = date(
+            year,
+            month,
+            1
+        )
+
+        if month == 12:
+
+            month_end = (
+                date(year + 1, 1, 1)
+                - timedelta(days=1)
+            )
+
+        else:
+
+            month_end = (
+                date(year, month + 1, 1)
+                - timedelta(days=1)
+            )
+
+        # ==========================================
+        # 9. ПРОГНОЗ ВСЕХ БУДУЩИХ ЦИКЛОВ
+        #
+        # Важно:
+        #
+        # Фертильное окно начинается за 19 дней
+        # до предполагаемой менструации:
+        #
+        # 5 дней до овуляции
+        # + день овуляции
+        # + 1 день после
+        #
+        # Овуляция = менструация - 14 дней
+        #
+        # Значит самое раннее начало фертильного
+        # окна = менструация - 19 дней.
+        #
+        # Поэтому прогнозируем циклы ещё на 19 дней
+        # после конца выбранного месяца.
+        # ==========================================
+
+        prediction_limit = (
+            month_end
+            + timedelta(days=19)
+        )
+
+        # ==========================================
+        # 10. ПЕРВАЯ ПРОГНОЗИРУЕМАЯ МЕНСТРУАЦИЯ
+        # ==========================================
+
+        predicted_period_start = (
             last_period.start_date
             + timedelta(days=average_cycle_length)
         )
 
         # ==========================================
-        # 8. ПРОГНОЗ КРАСНЫХ ДНЕЙ
-        #
-        # ВАЖНО:
-        # Если последняя менструация закончилась,
-        # после end_date никаких красных дней
-        # текущего цикла не добавляем.
-        #
-        # Красными прогнозируем только следующую
-        # предполагаемую менструацию.
+        # 11. ЦИКЛЫ ВПЕРЁД
         # ==========================================
 
-        if last_period.end_date:
-            period_duration = (
-                last_period.end_date
-                - last_period.start_date
-            ).days + 1
-        else:
-            period_duration = 5
+        while predicted_period_start <= prediction_limit:
 
-        predicted_period_end = (
-            next_period
-            + timedelta(days=period_duration - 1)
-        )
+            # ==========================================
+            # 12. ПРОГНОЗ МЕНСТРУАЦИИ
+            # ==========================================
 
-        curr = next_period
+            predicted_period_end = (
+                predicted_period_start
+                + timedelta(days=period_duration - 1)
+            )
 
-        while curr <= predicted_period_end:
-            if (
-                curr.year == year
-                and curr.month == month
-            ):
-                red_days.add(
-                    curr.strftime("%Y-%m-%d")
-                )
+            curr = predicted_period_start
 
-            curr += timedelta(days=1)
+            while curr <= predicted_period_end:
+
+                if (
+                    month_start <= curr <= month_end
+                ):
+                    red_days.add(
+                        curr.strftime("%Y-%m-%d")
+                    )
+
+                curr += timedelta(days=1)
+
+            # ==========================================
+            # 13. ОВУЛЯЦИЯ
+            #
+            # Следующая менструация - 14 дней
+            # ==========================================
+
+            ovulation_day = (
+                predicted_period_start
+                - timedelta(days=14)
+            )
+
+            # ==========================================
+            # 14. ФЕРТИЛЬНОЕ ОКНО
+            #
+            # 5 дней до овуляции
+            # + день овуляции
+            # + 1 день после
+            # ==========================================
+
+            fertility_start = (
+                ovulation_day
+                - timedelta(days=5)
+            )
+
+            fertility_end = (
+                ovulation_day
+                + timedelta(days=1)
+            )
+
+            curr = fertility_start
+
+            while curr <= fertility_end:
+
+                if (
+                    month_start <= curr <= month_end
+                ):
+                    day = curr.strftime("%Y-%m-%d")
+
+                    # Если день уже является
+                    # менструацией, зелёным его
+                    # не показываем.
+                    if day not in red_days:
+                        green_days.add(day)
+
+                curr += timedelta(days=1)
+
+            # ==========================================
+            # 15. ПЕРЕХОД К СЛЕДУЮЩЕМУ ЦИКЛУ
+            # ==========================================
+
+            predicted_period_start += timedelta(
+                days=average_cycle_length
+            )
 
         # ==========================================
-        # 9. ОВУЛЯЦИЯ
-        # ==========================================
-
-        ovulation_day = (
-            next_period
-            - timedelta(days=14)
-        )
-
-        # ==========================================
-        # 10. ФЕРТИЛЬНЫЕ ДНИ
-        # ==========================================
-
-        fertility_start = (
-            ovulation_day
-            - timedelta(days=5)
-        )
-
-        fertility_end = (
-            ovulation_day
-            + timedelta(days=1)
-        )
-
-        curr = fertility_start
-
-        while curr <= fertility_end:
-            if (
-                curr.year == year
-                and curr.month == month
-            ):
-                day = curr.strftime("%Y-%m-%d")
-
-                if day not in red_days:
-                    green_days.add(day)
-
-            curr += timedelta(days=1)
-
-        # ==========================================
-        # 11. ОТВЕТ
+        # 16. ОТВЕТ
         # ==========================================
 
         return Response(
@@ -4709,6 +4898,7 @@ class FemaleSystemView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(responses={status.HTTP_200_OK: FemaleSystemSer()})
+    @translate_api_response(fields=['report', 'recommendation'])
     def get(self, request):
         profile = request.user.profile
         today = timezone.now().date()
@@ -4752,7 +4942,7 @@ def get_female_reminders(profile) -> dict:
     today = timezone.now().date()
 
     # ==========================================
-    # 1. АВТОМАТИЧЕСКИЕ НАПОМИНАНИЯ
+    # 1. РЕЖИМ БЕРЕМЕННОСТИ
     # ==========================================
 
     if profile.is_pregnant:
@@ -4771,8 +4961,9 @@ def get_female_reminders(profile) -> dict:
         }
 
     else:
+
         # ==========================================
-        # 2. ЦИКЛЫ
+        # 2. ПОЛУЧАЕМ ЦИКЛЫ
         # ==========================================
 
         periods = list(
@@ -4782,10 +4973,11 @@ def get_female_reminders(profile) -> dict:
         )
 
         # ==========================================
-        # Если нет данных о циклах
+        # 3. НЕТ ДАННЫХ О ЦИКЛАХ
         # ==========================================
 
         if not periods:
+
             period_data = {
                 "title": "Дни менструации",
                 "days_left": None,
@@ -4801,19 +4993,28 @@ def get_female_reminders(profile) -> dict:
             }
 
         else:
+
             # ==========================================
-            # 3. СРЕДНЯЯ ДЛИНА ЦИКЛА
+            # 4. СРЕДНЯЯ ДЛИНА ЦИКЛА
+            #
+            # Длина цикла =
+            # начало текущей менструации -
+            # начало предыдущей
+            #
+            # Если данных недостаточно → 28 дней
             # ==========================================
 
             cycle_lengths = []
 
             for i in range(1, len(periods)):
+
                 cycle_length = (
                     periods[i].start_date
                     - periods[i - 1].start_date
                 ).days
 
-                cycle_lengths.append(cycle_length)
+                if cycle_length > 0:
+                    cycle_lengths.append(cycle_length)
 
             if cycle_lengths:
                 average_cycle_length = round(
@@ -4824,10 +5025,14 @@ def get_female_reminders(profile) -> dict:
                 average_cycle_length = 28
 
             # ==========================================
-            # 4. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+            # 5. ПОСЛЕДНЯЯ МЕНСТРУАЦИЯ
             # ==========================================
 
             last_period = periods[-1]
+
+            # ==========================================
+            # 6. СЛЕДУЮЩАЯ МЕНСТРУАЦИЯ
+            # ==========================================
 
             next_period_date = (
                 last_period.start_date
@@ -4838,24 +5043,34 @@ def get_female_reminders(profile) -> dict:
                 next_period_date - today
             ).days
 
+            # ==========================================
+            # 7. НАПОМИНАНИЕ О МЕНСТРУАЦИИ
+            # ==========================================
+
             if days_to_period > 0:
+
+                period_days = days_to_period
+
                 period_text = (
                     f"До начала менструации осталось: "
                     f"{days_to_period} д"
                 )
-                period_days = days_to_period
 
             elif days_to_period == 0:
+
+                period_days = 0
+
                 period_text = (
                     "Сегодня предполагаемый день менструации"
                 )
-                period_days = 0
 
             else:
+
+                period_days = 0
+
                 period_text = (
                     f"Задержка {abs(days_to_period)} д"
                 )
-                period_days = 0
 
             period_data = {
                 "title": "Дни менструации",
@@ -4865,44 +5080,117 @@ def get_female_reminders(profile) -> dict:
             }
 
             # ==========================================
-            # 5. ОВУЛЯЦИЯ
+            # 8. ДЛИТЕЛЬНОСТЬ МЕНСТРУАЦИИ
+            #
+            # Используем последнюю фактическую
+            # длительность.
+            #
+            # Если end_date нет → 5 дней.
             # ==========================================
 
-            ovulation_date = (
-                next_period_date
-                - timedelta(days=14)
-            )
+            if last_period.end_date:
+
+                period_duration = (
+                    last_period.end_date
+                    - last_period.start_date
+                ).days + 1
+
+            else:
+
+                period_duration = 5
 
             # ==========================================
-            # 6. ФЕРТИЛЬНОЕ ОКНО
+            # 9. ПОИСК БЛИЖАЙШЕГО ФЕРТИЛЬНОГО ОКНА
+            #
+            # Не ограничиваемся только одним циклом.
+            #
+            # Для каждого будущего цикла:
+            #
+            # Менструация
+            #       ↓
+            # Овуляция = менструация - 14 дней
+            #       ↓
+            # Фертильность =
+            # овуляция - 5 дней
+            # до
+            # овуляция + 1 день
+            #
+            # Ищем первое окно, которое:
+            # - ещё не закончилось
             # ==========================================
 
-            fertile_start_date = (
-                ovulation_date
-                - timedelta(days=5)
-            )
+            predicted_period_start = next_period_date
 
-            fertile_end_date = (
-                ovulation_date
-                + timedelta(days=1)
-            )
+            nearest_fertile_start = None
+            nearest_fertile_end = None
 
-            # ==========================================
-            # 7. СТАТУС ФЕРТИЛЬНОСТИ
-            # ==========================================
+            # Защита от бесконечного цикла.
+            # Теоретически достаточно одного ближайшего
+            # будущего окна, но оставляем ограничение.
+            for _ in range(100):
 
-            if today < fertile_start_date:
+                # ==========================================
+                # ОВУЛЯЦИЯ
+                # ==========================================
 
-                fertility_days = (
-                    fertile_start_date - today
-                ).days
-
-                fertility_text = (
-                    f"До начала фертильности осталось: "
-                    f"{fertility_days} д"
+                ovulation_date = (
+                    predicted_period_start
+                    - timedelta(days=14)
                 )
 
-            elif fertile_start_date <= today <= fertile_end_date:
+                # ==========================================
+                # ФЕРТИЛЬНОЕ ОКНО
+                # ==========================================
+
+                fertile_start_date = (
+                    ovulation_date
+                    - timedelta(days=5)
+                )
+
+                fertile_end_date = (
+                    ovulation_date
+                    + timedelta(days=1)
+                )
+
+                # ==========================================
+                # НАШЛИ АКТУАЛЬНОЕ/БУДУЩЕЕ ОКНО
+                # ==========================================
+
+                if fertile_end_date >= today:
+
+                    nearest_fertile_start = fertile_start_date
+                    nearest_fertile_end = fertile_end_date
+
+                    break
+
+                # ==========================================
+                # ПЕРЕХОД К СЛЕДУЮЩЕМУ ЦИКЛУ
+                # ==========================================
+
+                predicted_period_start += timedelta(
+                    days=average_cycle_length
+                )
+
+            # ==========================================
+            # 10. НАПОМИНАНИЕ О ФЕРТИЛЬНОСТИ
+            # ==========================================
+
+            if nearest_fertile_start is None:
+
+                fertility_data = {
+                    "title": "Дни фертильности",
+                    "days_left": None,
+                    "status_text": "Нет данных о фертильности",
+                    "next_date": None,
+                }
+
+            elif (
+                nearest_fertile_start
+                <= today
+                <= nearest_fertile_end
+            ):
+
+                # Сейчас фертильный период
 
                 fertility_days = 0
 
@@ -4910,43 +5198,47 @@ def get_female_reminders(profile) -> dict:
                     "Сейчас фертильный период!"
                 )
 
+                fertility_data = {
+                    "title": "Дни фертильности",
+                    "days_left": fertility_days,
+                    "status_text": fertility_text,
+                    "next_date": str(
+                        nearest_fertile_start
+                    ),
+                }
+
             else:
-                # Фертильное окно прошло.
-                # Рассчитываем следующее.
 
-                next_cycle_period = (
-                    next_period_date
-                    + timedelta(days=average_cycle_length)
+                # ==========================================
+                # Фертильное окно ещё впереди
+                #
+                # Здесь days_left гарантированно >= 0
+                # ==========================================
+
+                fertility_days = max(
+                    0,
+                    (
+                        nearest_fertile_start
+                        - today
+                    ).days
                 )
-
-                next_ovulation_date = (
-                    next_cycle_period
-                    - timedelta(days=14)
-                )
-
-                next_fertile_start = (
-                    next_ovulation_date
-                    - timedelta(days=5)
-                )
-
-                fertility_days = (
-                    next_fertile_start - today
-                ).days
 
                 fertility_text = (
                     f"До начала фертильности осталось: "
                     f"{fertility_days} д"
                 )
 
-            fertility_data = {
-                "title": "Дни фертильности",
-                "days_left": fertility_days,
-                "status_text": fertility_text,
-                "next_date": str(fertile_start_date),
-            }
+                fertility_data = {
+                    "title": "Дни фертильности",
+                    "days_left": fertility_days,
+                    "status_text": fertility_text,
+                    "next_date": str(
+                        nearest_fertile_start
+                    ),
+                }
 
     # ==========================================
-    # 8. ПОЛЬЗОВАТЕЛЬСКИЕ НАПОМИНАНИЯ
+    # 11. ПОЛЬЗОВАТЕЛЬСКИЕ НАПОМИНАНИЯ
     # ==========================================
 
     custom_notifications = (
@@ -4957,16 +5249,19 @@ def get_female_reminders(profile) -> dict:
     custom_list = []
 
     for item in custom_notifications:
-        custom_list.append({
-            "id": item.id,
-            "title": item.title,
-            "description": item.description,
-            "created_at": str(item.created_at),
-            "three_days_before": item.three_days_before,
-        })
+
+        custom_list.append(
+            {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "created_at": str(item.created_at),
+                "three_days_before": item.three_days_before,
+            }
+        )
 
     # ==========================================
-    # 9. ИТОГОВЫЙ ОТВЕТ
+    # 12. ИТОГОВЫЙ ОТВЕТ
     # ==========================================
 
     return {

@@ -79,3 +79,11 @@ def send_health_reminder(user_id):
 
     )
     send_user_notification(user_id, text)
+
+def send_female_health_reminder(user_id, title, description, **kwargs):
+    """Напоминание по женскому календарю (по макету)"""
+    text = (
+        f"🔔 *{title}*\n\n"
+        f"💊 {description}"
+    )
+    send_user_notification(user_id, text)

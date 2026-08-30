@@ -740,7 +740,6 @@ def chat_system(message, context_data, history=None):
 
     return clean_answer
 def detect_context(message):
-    # Убрали взаимоисключающие инструкции и добавили жесткое правило множественного выбора
     INTENT_PROMPT = """
 Ты — точный классификатор намерений пользователя. Твоя задача — определить, какие категории данных необходимы для полноценного ответа на входящий запрос.
 
@@ -753,37 +752,40 @@ def detect_context(message):
 - user_daily_checkups_recent_days (ежедневные чекапы, самочувствие)
 - user_nutrition_history_recent_days (история калорий, съеденная пища)
 - user_nutrition_and_water_goals (цели по калориям, БЖУ и воде)
+- user_women_health (женское здоровье: менструальный календарь, цикл, задержки, фазы, овуляция, задержка, симптомы ПМС, логи боли/настроения, беременность)
 - user_pets (данные о питомцах, их здоровье, калориях, лекарствах)
 - manage_nutrition_diary (команды на добавление, удаление или изменение еды/воды: "добавь чай 250 мл", "я выпил 500мл воды", "убери бургер", "измени граммовку каши на 200г")
 - user_family_members (информация о членах семьи, детях)
 
 ПРАВИЛА ОТВЕТА:
-1. Если запрос сложный и затрагивает несколько тем (например, вопрос про шкалу здоровья ребенка или питомца, анализы и питание), ты ОБЯЗАН перечислить ВСЕ подходящие категории через запятую без пробелов.
-2. Верни СТРОГО только список категорий. Никаких лишних слов, вступлений, точек в конце или объяснений.
+1. Если запрос сложный и затрагивает несколько тем, перечисли ВСЕ подходящие категории через запятую без пробелов.
+2. Если контекст из базы НЕ требуется (простое приветствие, светский разговор, абстрактный вопрос), верни СТРОГО слово: none
+3. Верни СТРОГО только список категорий или none. Никаких лишних слов, вступлений, точек в конце или объяснений.
 
 Примеры:
 user_info,user_medical_tests,user_family_members
+user_women_health,user_daily_checkups_recent_days
 user_pets,user_nutrition_history_recent_days
-user_habits
+none
 """
 
-    # Вызов к модели (используем старый метод .create, как в твоем коде, но под новый синтаксис объектов ответа)
     response = openai.ChatCompletion.create(
         model="gpt-5.4-mini",
-        temperature=0,  # Оставляем строго 0 для стабильности классификации
+        temperature=0,
         messages=[
             {"role": "system", "content": INTENT_PROMPT},
             {"role": "user", "content": message},
         ],
     )
 
-    # ИСПРАВЛЕНО: Чтение ответа по новому стандарту (через атрибуты .choices[0].message.content)
-    # Если твой клиент openai < 1.0.0, верни старый синтаксис: response["choices"][0]["message"]["content"]
     raw_content = response.choices[0].message.content
+    clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip().lower()
 
-    # Чистим строку и бьем в массив по запятой
-    clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip()
-    return [x.strip() for x in clean_content.split(",") if x.strip()]
+    # Защита от пустых ответов и категории 'none'
+    if not clean_content or clean_content == "none":
+        return []
+
+    return [x.strip() for x in clean_content.split(",") if x.strip() and x.strip() != "none"]
 def evaluate_food_healthiness(detail: str, is_pet: bool = False) -> str:
     """
     Универсальная функция для оценки полезности пищи через LLM.
