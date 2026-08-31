@@ -12,6 +12,7 @@ from .tranlater import translate_api_response,translate_health_keys_api
 from django.db.models import Avg
 from drf_yasg import openapi
 from config import EMAIL_HOST_USER
+from .avatar_generator import generate_avatars_for_profile
 import random
 from django.core.mail import send_mail
 from django.core.cache import cache
@@ -5558,3 +5559,63 @@ class PregnancyStatusAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class AvatarGenerationAPIView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Возвращает список сгенерированных аватаров текущего пользователя."""
+        profile = request.user.profile
+        avatars = profile.generated_avatars or []
+
+        return Response(
+            {
+                "count": len(avatars),
+                "avatars": avatars
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def post(self, request):
+        """Запускает генерацию аватаров на основе фото и пола из профиля."""
+        profile = request.user.profile
+
+        # Проверка 1: Загружено ли фото профиля
+        if not profile.photo:
+            return Response(
+                {"error": "У профиля отсутствует фотография (profile.photo)"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Проверка 2: Указан ли пол (male / female)
+        if not profile.gender or str(profile.gender).lower() not in ["male", "female"]:
+            return Response(
+                {"error": "Пол пользователя не указан или неверен. Ожидается 'male' или 'female'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Запускаем генерацию
+        try:
+            generated_urls = generate_avatars_for_profile(profile, request=request)
+
+            if not generated_urls:
+                return Response(
+                    {"error": "Не удалось обнаружить лицо на фотографии или отсутствуют шаблоны."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return Response(
+                {
+                    "message": "Аватары успешно сгенерированы",
+                    "count": len(generated_urls),
+                    "avatars": generated_urls
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Ошибка при генерации: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

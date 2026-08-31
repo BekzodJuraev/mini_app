@@ -235,6 +235,7 @@ class Profile(models.Model):
     notification_habit = models.BooleanField(default=True)
     notification_female=models.BooleanField(default=True)
     food_percentage=models.FloatField(default=100)
+    generated_avatars = models.JSONField(default=list, blank=True)
 
     is_pregnant = models.BooleanField(
         default=False,
