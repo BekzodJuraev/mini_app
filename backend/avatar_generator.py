@@ -128,3 +128,5 @@ def generate_avatars_for_profile(profile, request=None):
     profile.save(update_fields=["generated_avatars"])
 
     return avatar_urls
+
+#asd
