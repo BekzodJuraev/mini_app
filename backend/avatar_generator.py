@@ -32,56 +32,43 @@ def get_swapper():
     return _SWAPPER
 
 
-def apply_blue_hologram_tone(swapped_img, original_template, face_bbox):
-    """Корректирует тон пересаженного лица под синее свечение шаблона с безопасным ROI."""
-    h, w, _ = swapped_img.shape
-    x1, y1, x2, y2 = map(int, face_bbox)
+def make_background_white(image):
+    """
+    Удаляет темный/цветной фон у шаблона и заменяет его на чистый белый (255, 255, 255).
+    """
+    # Если изображение имеет альфа-канал (PNG с прозрачностью)
+    if image.shape[2] == 4:
+        alpha = image[:, :, 3]
+        bgr = image[:, :, :3]
+        white_bg = np.ones_like(bgr, dtype=np.uint8) * 255
+        alpha_factor = alpha[:, :, np.newaxis] / 255.0
+        result = (bgr * alpha_factor + white_bg * (1 - alpha_factor)).astype(np.uint8)
+        return result
 
-    # Зажимаем границы, чтобы не выйти за пределы изображения
-    x1, y1 = max(0, x1 - 10), max(0, y1 - 10)
-    x2, y2 = min(w, x2 + 10), min(h, y2 + 10)
+    # Для 3-канальных BGR изображений: выделяем объект и отсекаем темный/голографический фон
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Вырезаем ROI
-    face_roi = swapped_img[y1:y2, x1:x2]
-    template_roi = original_template[y1:y2, x1:x2]
+    # Создаем маску заднего фона (все, что слишком темное или фоновое)
+    _, mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
 
-    # Если ROI получился пустым или размеры не совпадают
-    if face_roi.size == 0 or face_roi.shape != template_roi.shape:
-        return swapped_img
+    # Очищаем шум маски
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.GaussianBlur(mask, (5, 5), 0)
 
-    hsv_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2HSV)
-    hsv_template = cv2.cvtColor(template_roi, cv2.COLOR_BGR2HSV)
+    # Создаем белый холст
+    white_bg = np.full_like(image, 255, dtype=np.uint8)
 
-    # Коррекция тона и насыщенности
-    hsv_face[:, :, 0] = hsv_template[:, :, 0]
-    hsv_face[:, :, 1] = cv2.addWeighted(
-        hsv_face[:, :, 1], 0.3, hsv_template[:, :, 1], 0.7, 0
-    )
+    # Смешиваем передний план и белый фон
+    alpha = (mask / 255.0)[:, :, np.newaxis]
+    white_result = (image * alpha + white_bg * (1.0 - alpha)).astype(np.uint8)
 
-    corrected_roi = cv2.cvtColor(hsv_face, cv2.COLOR_HSV2BGR)
-    mask = np.full(corrected_roi.shape, 255, dtype=np.uint8)
-
-    # Центр бесшовного наложения
-    center_x = int((x1 + x2) / 2)
-    center_y = int((y1 + y2) / 2)
-
-    # Проверка безопасного центра для seamlessClone
-    if center_x <= 0 or center_y <= 0 or center_x >= w or center_y >= h:
-        return swapped_img
-
-    try:
-        return cv2.seamlessClone(
-            corrected_roi, swapped_img, mask, (center_x, center_y), cv2.NORMAL_CLONE
-        )
-    except cv2.error:
-        # Если бесшовное клонирование упало по геометрии — возвращаем соединенный ROI напрямую
-        swapped_img[y1:y2, x1:x2] = corrected_roi
-        return swapped_img
+    return white_result
 
 
 def is_system_avatar(filename: str) -> bool:
     """
-    Фильтр для системных шаблонов (7 шт):
+    Фильтр для системных шаблонов:
     Отбирает файлы, заканчивающиеся на '-old.png' или имеющие префикс 'image-'.
     """
     fn = filename.lower()
@@ -135,12 +122,18 @@ def generate_avatars_for_profile(profile, request=None):
     for filename in os.listdir(templates_dir):
         if filename.lower().endswith((".png", ".jpg", ".jpeg")):
             template_path = os.path.join(templates_dir, filename)
-            template_img = cv2.imread(template_path)
+
+            # Читаем шаблон (с поддержкой альфа-канала, если это PNG)
+            template_img = cv2.imread(template_path, cv2.IMREAD_UNCHANGED)
 
             if template_img is None:
                 continue
 
-            template_faces = app.get(template_img)
+            # 1. Заменяем фон шаблона на чистый белый
+            white_template = make_background_white(template_img)
+
+            # 2. Ищем лицо на шаблоне с белым фоном
+            template_faces = app.get(white_template)
             if not template_faces:
                 continue
 
@@ -149,23 +142,23 @@ def generate_avatars_for_profile(profile, request=None):
                 key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
             )
 
-            # Face Swap и постобработка цвета
-            res = swapper.get(template_img, template_face, user_face, paste_back=True)
-            final_res = apply_blue_hologram_tone(res, template_img, template_face.bbox)
+            # 3. Делаем Face Swap на шаблон с БЕЛЫМ фоном
+            final_res = swapper.get(white_template, template_face, user_face, paste_back=True)
 
+            # Сохраняем итоговое изображение
             out_file_path = os.path.join(abs_output_dir, filename)
             cv2.imwrite(out_file_path, final_res)
 
             # Ссылка на сгенерированный файл
             file_url = f"{settings.MEDIA_URL}result_avatar/{folder_name}/{filename}"
 
-            # Распределение по спискам в зависимости от типа шаблона
+            # Распределение по спискам
             if is_system_avatar(filename):
                 system_avatar_urls.append(file_url)
             else:
                 general_avatar_urls.append(file_url)
 
-    # Сохраняем результат в два поля модели Profile
+    # Сохраняем результат в Django-модель
     profile.generated_avatars = general_avatar_urls
     profile.system_avatars = system_avatar_urls
     profile.save(update_fields=["generated_avatars", "system_avatars"])
