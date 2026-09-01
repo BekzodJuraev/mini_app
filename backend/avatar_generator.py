@@ -5,11 +5,31 @@ import insightface
 from insightface.app import FaceAnalysis
 from django.conf import settings
 
-app = FaceAnalysis(name="buffalo_l")
-app.prepare(ctx_id=-1, det_size=(640, 640))
+# Глобальные переменные для хранения инстансов моделей (Singleton)
+_APP = None
+_SWAPPER = None
 
-swapper_path = os.path.join(settings.BASE_DIR, "inswapper_128.onnx")
-swapper = insightface.model_zoo.get_model(swapper_path, download=False)
+
+def get_face_app():
+    """Загружает FaceAnalysis только при первом вызове функции генерации."""
+    global _APP
+    if _APP is None:
+        _APP = FaceAnalysis(
+            name="buffalo_l", providers=["CPUExecutionProvider"]
+        )
+        _APP.prepare(ctx_id=-1, det_size=(640, 640))
+    return _APP
+
+
+def get_swapper():
+    """Загружает inswapper_128.onnx только при первом вызове функции генерации."""
+    global _SWAPPER
+    if _SWAPPER is None:
+        swapper_path = os.path.join(settings.BASE_DIR, "inswapper_128.onnx")
+        if not os.path.exists(swapper_path):
+            raise FileNotFoundError(f"Файл модели не найден по пути: {swapper_path}")
+        _SWAPPER = insightface.model_zoo.get_model(swapper_path, download=False)
+    return _SWAPPER
 
 
 def apply_blue_hologram_tone(swapped_img, original_template, face_bbox):
@@ -84,6 +104,10 @@ def generate_avatars_for_profile(profile, request=None):
     if user_img is None:
         return False
 
+    # Получаем инстансы моделей (загрузятся в ОЗУ только на этой строчке)
+    app = get_face_app()
+    swapper = get_swapper()
+
     user_faces = app.get(user_img)
     if not user_faces:
         return False
@@ -128,5 +152,3 @@ def generate_avatars_for_profile(profile, request=None):
     profile.save(update_fields=["generated_avatars"])
 
     return avatar_urls
-
-#asd

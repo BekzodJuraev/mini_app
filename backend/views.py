@@ -14,6 +14,7 @@ from drf_yasg import openapi
 from config import EMAIL_HOST_USER
 from .avatar_generator import generate_avatars_for_profile
 import random
+from django import db
 from django.core.mail import send_mail
 from django.core.cache import cache
 from .serializers import (
@@ -126,7 +127,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis,get_main_avatar_url
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -5560,7 +5561,19 @@ class PregnancyStatusAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
+def _run_avatar_generation(profile_id):
+    """Фоновая функция для потока."""
+    from .models import Profile
 
+    try:
+        profile = Profile.objects.get(id=profile_id)
+        generate_avatars_for_profile(profile)
+    except Exception as e:
+        # Здесь логируем ошибку при необходимости
+        print(f"Error during async avatar generation for profile {profile_id}: {e}")
+    finally:
+        # Обязательно закрываем соединения с БД в фоновом потоке
+        db.connections.close_all()
 class AvatarGenerationAPIView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -5579,43 +5592,73 @@ class AvatarGenerationAPIView(APIView):
         )
 
     def post(self, request):
-        """Запускает генерацию аватаров на основе фото и пола из профиля."""
+        """Запускает генерацию аватаров в отдельном потоке."""
         profile = request.user.profile
 
         # Проверка 1: Загружено ли фото профиля
         if not profile.photo:
             return Response(
                 {"error": "У профиля отсутствует фотография (profile.photo)"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Проверка 2: Указан ли пол (male / female)
-        if not profile.gender or str(profile.gender).lower() not in ["male", "female"]:
-            return Response(
-                {"error": "Пол пользователя не указан или неверен. Ожидается 'male' или 'female'."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Запускаем генерацию
-        try:
-            generated_urls = generate_avatars_for_profile(profile, request=request)
-
-            if not generated_urls:
-                return Response(
-                    {"error": "Не удалось обнаружить лицо на фотографии или отсутствуют шаблоны."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
+        if not profile.gender or str(profile.gender).lower() not in [
+            "male",
+            "female",
+        ]:
             return Response(
                 {
-                    "message": "Аватары успешно сгенерированы",
-                    "count": len(generated_urls),
-                    "avatars": generated_urls
+                    "error": (
+                        "Пол пользователя не указан или неверен. Ожидается"
+                        " 'male' или 'female'."
+                    )
                 },
-                status=status.HTTP_201_CREATED
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception as e:
+
+        # Запускаем фоновый поток
+        thread = Thread(
+            target=_run_avatar_generation,
+            args=(profile.id,),
+            daemon=True,
+        )
+        thread.start()
+
+        # Мгновенно возвращаем ответ клиенту
+        return Response(
+            {
+                "message": (
+                    "Процесс генерации аватаров запущен в фоновом режиме."
+                ),
+                "status": "processing",
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class ProfileMainAvatarAPIView(APIView):
+    """
+    Получение одного динамического аватара для главной страницы на основе AI-анализа.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+
+        # AI определяет 1 нужный URL из массива 17 аватаров
+        main_avatar_url = get_main_avatar_url(profile)
+
+        if not main_avatar_url:
             return Response(
-                {"error": f"Ошибка при генерации: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Аватары ещё не сгенерированы"},
+                status=status.HTTP_404_NOT_FOUND
             )
+
+        return Response(
+            {
+                "main_avatar": main_avatar_url
+            },
+            status=status.HTTP_200_OK
+        )

@@ -32,6 +32,7 @@ urlpatterns=[
  path('api/reset/code',views.VerifyResetCode.as_view(),name='reset_code'),
  path('api/logout',views.LogoutAPIView.as_view(),name='logout'),
  path('api/profile/main',views.ProfileAPIView.as_view(),name='profile_main'),
+ path('api/profile/main/avatar',views.ProfileMainAvatarAPIView.as_view(),name='profile_main'),
 
  path('api/profile/avatar', views.AvatarGenerationAPIView.as_view(), name='avatar'),
  #path('api/profile/avatar/system', views.DirectsystemAvatarGenerateView.as_view(), name='avatar_sys'),

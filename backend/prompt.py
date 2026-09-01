@@ -3136,3 +3136,63 @@ def get_female_health_analysis(user_data: dict) -> dict:
     result_dict = json.loads(result_text)
 
     return result_dict
+
+
+def get_main_avatar_url(profile) -> str:
+    """
+    Принимает profile, использует готовый profile.health_system и profile.generated_avatars,
+    отправляет контекст в OpenAI и возвращает один итоговый URL аватара.
+    """
+    avatars_list = profile.generated_avatars or []
+    if not avatars_list:
+        return None
+
+    SYSTEM_AVATAR_PROMPT = """
+Ты — медицинский AI-эксперт.
+Твоя задача: проанализировать показатели здоровья пользователя (health_system) и выбрать РОВНО ОДИН наиболее подходящий avatar_url из предоставленного списка доступных файлов (available_avatars).
+
+Правила:
+1. Внимательно изучи значения шкал здоровья (от 1 до 10). Низкие значения (1-3) показывают критические и проблемные зоны.
+2. Сравни найденные проблемы с именами файлов в `available_avatars` (например: critical, respiratory, digestive, stress, low-immunity и т.д.).
+3. Если у пользователя несколько проблем, выбери наиболее приоритетный аватар, отражающий самое критическое состояние.
+4. Если все показатели в норме, выбери файл с нормальным состоянием (normal).
+
+Отвечай СТРОГО в формате JSON без разметки markdown:
+{"selected_avatar": "<выбранный_url_из_списка>"}
+"""
+
+    # Передаем profile.health_system в готовом виде (dict или None)
+    health_data = getattr(profile, 'health_system', {}) or {}
+
+    prompt_payload = {
+        "health_system": health_data,
+        "available_avatars": avatars_list
+    }
+
+    try:
+        response = openai.ChatCompletion.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_AVATAR_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Данные для анализа: {json.dumps(prompt_payload, ensure_ascii=False)}",
+                },
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        selected_url = result.get("selected_avatar")
+
+        if selected_url in avatars_list:
+            return selected_url
+
+        return avatars_list[0]
+
+    except Exception as e:
+        print(f"Ошибка при AI-выборе аватара: {e}")
+        for url in avatars_list:
+            if "normal" in url.lower():
+                return url
+        return avatars_list[0]
