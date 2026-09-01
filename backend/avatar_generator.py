@@ -79,6 +79,15 @@ def apply_blue_hologram_tone(swapped_img, original_template, face_bbox):
         return swapped_img
 
 
+def is_system_avatar(filename: str) -> bool:
+    """
+    Фильтр для системных шаблонов (7 шт):
+    Отбирает файлы, заканчивающиеся на '-old.png' или имеющие префикс 'image-'.
+    """
+    fn = filename.lower()
+    return fn.endswith("-old.png") or fn.startswith("image-")
+
+
 def generate_avatars_for_profile(profile, request=None):
     if not profile.photo or not profile.gender:
         return False
@@ -93,7 +102,7 @@ def generate_avatars_for_profile(profile, request=None):
 
     templates_dir = os.path.join(settings.BASE_DIR, "templates_avatar", gender_folder)
 
-    # Формируем папки
+    # Формируем папки для результатов
     folder_name = str(profile.id)
     abs_output_dir = os.path.join(settings.MEDIA_ROOT, "result_avatar", folder_name)
 
@@ -104,7 +113,7 @@ def generate_avatars_for_profile(profile, request=None):
     if user_img is None:
         return False
 
-    # Получаем инстансы моделей (загрузятся в ОЗУ только на этой строчке)
+    # Получаем инстансы моделей (Singleton)
     app = get_face_app()
     swapper = get_swapper()
 
@@ -112,13 +121,16 @@ def generate_avatars_for_profile(profile, request=None):
     if not user_faces:
         return False
 
+    # Берем самое крупное лицо на фото
     user_face = max(
         user_faces,
         key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
     )
 
     os.makedirs(abs_output_dir, exist_ok=True)
-    avatar_urls = []
+
+    general_avatar_urls = []
+    system_avatar_urls = []
 
     for filename in os.listdir(templates_dir):
         if filename.lower().endswith((".png", ".jpg", ".jpeg")):
@@ -137,18 +149,28 @@ def generate_avatars_for_profile(profile, request=None):
                 key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
             )
 
+            # Face Swap и постобработка цвета
             res = swapper.get(template_img, template_face, user_face, paste_back=True)
             final_res = apply_blue_hologram_tone(res, template_img, template_face.bbox)
 
             out_file_path = os.path.join(abs_output_dir, filename)
             cv2.imwrite(out_file_path, final_res)
 
-            # Формируем правильный относительный URL через прямые слэши
+            # Ссылка на сгенерированный файл
             file_url = f"{settings.MEDIA_URL}result_avatar/{folder_name}/{filename}"
 
-            avatar_urls.append(file_url)
+            # Распределение по спискам в зависимости от типа шаблона
+            if is_system_avatar(filename):
+                system_avatar_urls.append(file_url)
+            else:
+                general_avatar_urls.append(file_url)
 
-    profile.generated_avatars = avatar_urls
-    profile.save(update_fields=["generated_avatars"])
+    # Сохраняем результат в два поля модели Profile
+    profile.generated_avatars = general_avatar_urls
+    profile.system_avatars = system_avatar_urls
+    profile.save(update_fields=["generated_avatars", "system_avatars"])
 
-    return avatar_urls
+    return {
+        "generated_avatars": general_avatar_urls,
+        "system_avatars": system_avatar_urls,
+    }

@@ -756,6 +756,7 @@ def detect_context(message):
 - user_pets (данные о питомцах, их здоровье, калориях, лекарствах)
 - manage_nutrition_diary (команды на добавление, удаление или изменение еды/воды: "добавь чай 250 мл", "я выпил 500мл воды", "убери бургер", "измени граммовку каши на 200г")
 - user_family_members (информация о членах семьи, детях)
+- user_avatar (вопросы про текущий аватар пользователя, изображение профиля, скин, внешний вид аватара или причины выбора картинки состояния: "почему у меня такой аватар?", "что значит мой аватар?", "почему я выгляжу уставшим на аватарке?")
 
 ПРАВИЛА ОТВЕТА:
 1. Если запрос сложный и затрагивает несколько тем, перечисли ВСЕ подходящие категории через запятую без пробелов.
@@ -765,13 +766,12 @@ def detect_context(message):
 Примеры:
 user_info,user_medical_tests,user_family_members
 user_women_health,user_daily_checkups_recent_days
-user_pets,user_nutrition_history_recent_days
+user_avatar,user_info
 none
 """
 
     response = openai.ChatCompletion.create(
-        model="gpt-5.4-mini",
-        temperature=0,
+        model=MODEL,
         messages=[
             {"role": "system", "content": INTENT_PROMPT},
             {"role": "user", "content": message},
@@ -779,6 +779,7 @@ none
     )
 
     raw_content = response.choices[0].message.content
+
     clean_content = raw_content.replace("\n", " ").replace("\r", " ").strip().lower()
 
     # Защита от пустых ответов и категории 'none'

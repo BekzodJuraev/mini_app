@@ -561,6 +561,78 @@ def get_user_and_pet_context(profile):
     strict_short_date = timezone.now().date() - timedelta(days=3)
     MAX_FAMILY_MEMBERS = 5
 
+    def get_avatar_info(p):
+        """Расчет текущего аватара и текстовой причины по формуле приоритетов."""
+        health_data = getattr(p, "health_system", {}) or {}
+
+        def get_score(key: str, default: int = 10) -> int:
+            val = health_data.get(key, default)
+            if isinstance(val, dict):
+                return int(val.get("Общий показатель", default))
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                return default
+
+        tone = get_score("Общий тонус")
+        respiratory = get_score("Дыхательная система")
+        digestive = get_score("Пищеварительная система")
+        immune = get_score("Иммунная система")
+        cardio = get_score("Сердечно-сосудистая система")
+        nervous = get_score("Нервная система")
+        psychological = get_score("Психологическое состояние")
+
+        all_scores = [respiratory, digestive, immune, cardio, nervous, psychological, tone]
+
+        low_3_count = sum(1 for s in all_scores if s <= 3)
+        low_1_count = sum(1 for s in all_scores if s <= 1)
+        low_4_count = sum(1 for s in all_scores if s <= 4)
+
+        if low_3_count >= 2 or (low_1_count >= 1 and low_4_count >= 3):
+            reason = "Критическое состояние (несколько критически низких показателей здоровья)."
+            status_name = "Критический аватар (critical)"
+        elif 1 <= respiratory <= 3:
+            reason = f"Проблема с дыхательной системой (баллы: {respiratory} из 10)."
+            status_name = "Проблема дыхательной системы (respiratory)"
+        elif 1 <= digestive <= 3:
+            reason = f"Проблемы с пищеварением (баллы: {digestive} из 10)."
+            status_name = "Проблемы пищеварения (digestive)"
+        elif 1 <= immune <= 3:
+            reason = f"Снижение иммунитета (баллы: {immune} из 10)."
+            status_name = "Снижение иммунитета (low-immunity)"
+        elif (1 <= cardio <= 4) and (nervous <= 5 or psychological <= 5):
+            reason = f"Стресс или повышенное давление (Сердечно-сосудистая: {cardio}, Нервная: {nervous}, Психологическое: {psychological})."
+            status_name = "Стресс / Давление (stress)"
+        elif (4 <= tone <= 6) and (nervous <= 5 or psychological <= 5):
+            reason = f"Недостаток сна (Общий тонус: {tone}, Нервная система: {nervous}, Психологическое: {psychological})."
+            status_name = "Недостаток сна (sleep-deprivation)"
+        elif 1 <= tone <= 3:
+            reason = f"Переутомление организма (Общий тонус: {tone} из 10)."
+            status_name = "Переутомление (exhaustion)"
+        elif (4 <= tone <= 6) and all(s >= 7 for s in [respiratory, digestive, immune, cardio, nervous, psychological]):
+            reason = f"Небольшая усталость (Общий тонус: {tone}, а остальные органы в норме)."
+            status_name = "Небольшая усталость (mild-fatigue)"
+        elif getattr(p, "is_recovering", False):
+            reason = "Процесс восстановления организма (рост показателей здоровья)."
+            status_name = "Процесс восстановления (recovery)"
+        else:
+            reason = "Обычное состояние (все ключевые шкалы в норме: 7–10 баллов)."
+            status_name = "Обычное состояние (normal)"
+
+        return {
+            "current_avatar_status": status_name,
+            "algorithm_selection_reason": reason,
+            "health_scores_used": {
+                "tone": tone,
+                "respiratory": respiratory,
+                "digestive": digestive,
+                "immune": immune,
+                "cardio": cardio,
+                "nervous": nervous,
+                "psychological": psychological,
+            }
+        }
+
     def get_object_drugs(obj):
         relation_name = "pet_drugs" if isinstance(obj, Pet) else "drugs"
         if not hasattr(obj, relation_name):
@@ -747,7 +819,7 @@ def get_user_and_pet_context(profile):
     # === 4. ДИНАМИЧЕСКИЕ ЗАПИСИ ПОЛЬЗОВАТЕЛЯ ===
     human_tests = list(
         profile.tests.exclude(message=None)
-        .order_by("-created_at", "-id")[:3]  # -id гарантирует точную сортировку, если даты совпадают
+        .order_by("-created_at", "-id")[:3]
     )
 
     human_tests_history = [
@@ -814,7 +886,6 @@ def get_user_and_pet_context(profile):
     # === 5. ДАННЫЕ О ЖЕНСКОМ ЗДОРОВЬЕ И ЦИКЛЕ ===
     women_health_data = {}
     if getattr(profile, "gender", "").lower() in ["female", "ж", "женский"]:
-        # Данные о периодах менструации (последние 3 периода)
         cycle_periods = list(
             profile.periods.all().order_by("-start_date")[:3]
         )
@@ -828,7 +899,6 @@ def get_user_and_pet_context(profile):
             for p in cycle_periods
         ]
 
-        # Логи самочувствия и симптомов (последние 5 логов)
         daily_logs = list(
             profile.daily_logs.all().order_by("-created_at")[:5]
         )
@@ -844,7 +914,6 @@ def get_user_and_pet_context(profile):
             for log in daily_logs
         ]
 
-        # Напоминания по женскому календарю
         notifications = list(
             profile.notificationfemale.all().order_by("-created_at")[:3]
         )
@@ -888,6 +957,7 @@ def get_user_and_pet_context(profile):
             "calculated_life_expectancy": profile.life_expectancy,
             "active_drugs_list": get_object_drugs(profile),
         },
+        "user_avatar": get_avatar_info(profile),
         "user_nutrition_and_water_goals": user_nutrition_goals,
         "user_family_members": family_data,
         "user_pets": pets_data,
@@ -902,7 +972,6 @@ def get_user_and_pet_context(profile):
         },
         "user_women_health": women_health_data,
     }
-
 def build_context(profile, sections):
 
     full = get_user_and_pet_context(profile)
@@ -1463,6 +1532,7 @@ class ChatAPIView(APIView):
             #print(sections)
 
 
+
             if "manage_nutrition_diary" in sections:
                 # 1. Запускаем специализированный обработчик с NUTRITION_TOOLS
                 response_data = nutrition_chat_system(
@@ -1488,6 +1558,8 @@ class ChatAPIView(APIView):
             # ==============================================================
             else:
                 context_data = build_context(profile, sections)
+                #print(context_data)
+
 
 
                 response_data = chat_system(
@@ -5579,14 +5651,19 @@ class AvatarGenerationAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Возвращает список сгенерированных аватаров текущего пользователя."""
+        """Возвращает разделенный список сгенерированных и системных аватаров текущего пользователя."""
         profile = request.user.profile
-        avatars = profile.generated_avatars or []
+
+        generated_avatars = profile.generated_avatars or []
+        system_avatars = profile.system_avatars or []
 
         return Response(
             {
-                "count": len(avatars),
-                "avatars": avatars
+                "total_count": len(generated_avatars) + len(system_avatars),
+                "generated_avatars_count": len(generated_avatars),
+                "system_avatars_count": len(system_avatars),
+                "generated_avatars": generated_avatars,
+                "system_avatars": system_avatars,
             },
             status=status.HTTP_200_OK
         )
@@ -5637,9 +5714,101 @@ class AvatarGenerationAPIView(APIView):
         )
 
 
+def select_main_avatar_by_scores(profile) -> str | None:
+    """
+    Выбирает 1 аватар из 10 общих (generated_avatars) на основе профиля
+    и JSON-структуры profile.health_system.
+    """
+    generated_avatars = getattr(profile, "generated_avatars", []) or []
+    if not generated_avatars:
+        return None
+
+    health_data = getattr(profile, "health_system", {}) or {}
+
+    # Вспомогательная функция для безопасного извлечения (число или dict)
+    def get_score(key: str, default: int = 10) -> int:
+        val = health_data.get(key, default)
+        if isinstance(val, dict):
+            return int(val.get("Общий показатель", default))
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
+    # Извлекаем значения шкал
+    tone = get_score("Общий тонус")
+    respiratory = get_score("Дыхательная система")
+    digestive = get_score("Пищеварительная система")
+    immune = get_score("Иммунная система")
+    cardio = get_score("Сердечно-сосудистая система")
+    nervous = get_score("Нервная система")
+    psychological = get_score("Психологическое состояние")
+
+    is_recovering = getattr(profile, "is_recovering", False)
+
+    all_scores = [
+        respiratory, digestive, immune, cardio,
+        nervous, psychological, tone
+    ]
+
+    # --- ПРАВИЛА И ИЕРАРХИЯ ПРИОРИТЕТА ---
+
+    # 1. Критическое состояние
+    low_3_count = sum(1 for s in all_scores if s <= 3)
+    low_1_count = sum(1 for s in all_scores if s <= 1)
+    low_4_count = sum(1 for s in all_scores if s <= 4)
+
+    if low_3_count >= 2 or (low_1_count >= 1 and low_4_count >= 3):
+        target_key = "critical"
+
+    # 2. Проблема дыхательной системы (1–3)
+    elif 1 <= respiratory <= 3:
+        target_key = "respiratory"
+
+    # 3. Проблемы с пищеварением (1–3)
+    elif 1 <= digestive <= 3:
+        target_key = "digestive"
+
+    # 4. Снижение иммунитета (1–3)
+    elif 1 <= immune <= 3:
+        target_key = "low-immunity"
+
+    # 5. Стресс / повышенное давление
+    elif (1 <= cardio <= 4) and (nervous <= 5 or psychological <= 5):
+        target_key = "stress"
+
+    # 6. Недостаток сна
+    elif (4 <= tone <= 6) and (nervous <= 5 or psychological <= 5):
+        target_key = "sleep-deprivation"
+
+    # 7. Переутомление (1–3)
+    elif 1 <= tone <= 3:
+        target_key = "exhaustion"
+
+    # 8. Небольшая усталость
+    elif (4 <= tone <= 6) and all(s >= 7 for s in [respiratory, digestive, immune, cardio, nervous, psychological]):
+        target_key = "mild-fatigue"
+
+    # 9. Процесс восстановления
+    elif is_recovering:
+        target_key = "recovery"
+
+    # 10. Обычное состояние (все 7–10)
+    else:
+        target_key = "normal"
+
+    # Сопоставление с файлом
+    for url in generated_avatars:
+        if target_key in url.lower():
+            return url
+
+    # Фолбэк
+    normal_avatar = next((url for url in generated_avatars if "normal" in url.lower()), None)
+    return normal_avatar or generated_avatars[0]
+
 class ProfileMainAvatarAPIView(APIView):
     """
-    Получение одного динамического аватара для главной страницы на основе AI-анализа.
+    Получение одного главного аватара на основе расчета баллов здоровья (без AI).
     """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -5647,8 +5816,8 @@ class ProfileMainAvatarAPIView(APIView):
     def get(self, request):
         profile = request.user.profile
 
-        # AI определяет 1 нужный URL из массива 17 аватаров
-        main_avatar_url = get_main_avatar_url(profile)
+        # Выбираем 1 аватар из 10 на основе формулы приоритетов
+        main_avatar_url = select_main_avatar_by_scores(profile)
 
         if not main_avatar_url:
             return Response(
@@ -5662,3 +5831,4 @@ class ProfileMainAvatarAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )
+

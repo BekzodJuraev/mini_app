@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from .update import update_life_expectancy_decorator,health_recommendations_decorator,environmental_risk_decorator,monthly_report_only_tests_decorator,pet_risk_analysis_decorator,health_recommendations_start_decorator
 from django.db import models
-
+from .validators import validate_face_photo
 # 1. Система здоровья (например, Пищеварительная)
 class Test(models.Model):
     ROLE_CHOICES = [
@@ -194,7 +194,13 @@ class Profile(models.Model):
     gender=models.CharField(max_length=200, null=True, blank=True,default=None)
     place_of_residence=models.CharField(max_length=200, null=True, blank=True,default=None)
     date_birth=models.DateField(null=True,blank=True,default=None)
-    photo = models.ImageField(blank=True, upload_to='pictures/')
+
+    photo = models.ImageField(
+        upload_to='pictures/',
+        validators=[validate_face_photo],  # <-- АВТОМАЧЕСКИ РАБОТАЕТ В DRF
+        null=True,
+        blank=True
+    )
     balance=models.IntegerField(default=0)
     health_system=models.JSONField(null=True,default=None)
     life_expectancy=models.IntegerField(null=True,default=None,blank=True)
@@ -235,6 +241,7 @@ class Profile(models.Model):
     notification_female=models.BooleanField(default=True)
     food_percentage=models.FloatField(default=100)
     generated_avatars = models.JSONField(default=list, blank=True)
+    system_avatars = models.JSONField(default=list, blank=True)
 
     is_pregnant = models.BooleanField(
         default=False,
