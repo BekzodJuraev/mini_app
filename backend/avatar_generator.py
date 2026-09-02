@@ -32,40 +32,6 @@ def get_swapper():
     return _SWAPPER
 
 
-def make_background_white(image):
-    """
-    Удаляет темный/цветной фон у шаблона и заменяет его на чистый белый (255, 255, 255).
-    """
-    # Если изображение имеет альфа-канал (PNG с прозрачностью)
-    if image.shape[2] == 4:
-        alpha = image[:, :, 3]
-        bgr = image[:, :, :3]
-        white_bg = np.ones_like(bgr, dtype=np.uint8) * 255
-        alpha_factor = alpha[:, :, np.newaxis] / 255.0
-        result = (bgr * alpha_factor + white_bg * (1 - alpha_factor)).astype(np.uint8)
-        return result
-
-    # Для 3-канальных BGR изображений: выделяем объект и отсекаем темный/голографический фон
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Создаем маску заднего фона (все, что слишком темное или фоновое)
-    _, mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
-
-    # Очищаем шум маски
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.GaussianBlur(mask, (5, 5), 0)
-
-    # Создаем белый холст
-    white_bg = np.full_like(image, 255, dtype=np.uint8)
-
-    # Смешиваем передний план и белый фон
-    alpha = (mask / 255.0)[:, :, np.newaxis]
-    white_result = (image * alpha + white_bg * (1.0 - alpha)).astype(np.uint8)
-
-    return white_result
-
-
 def is_system_avatar(filename: str) -> bool:
     """
     Фильтр для системных шаблонов:
@@ -123,17 +89,25 @@ def generate_avatars_for_profile(profile, request=None):
         if filename.lower().endswith((".png", ".jpg", ".jpeg")):
             template_path = os.path.join(templates_dir, filename)
 
-            # Читаем шаблон (с поддержкой альфа-канала, если это PNG)
+            # Читаем шаблон С СОХРАНЕНИЕМ Альфа-канала (прозрачности)
             template_img = cv2.imread(template_path, cv2.IMREAD_UNCHANGED)
 
             if template_img is None:
                 continue
 
-            # 1. Заменяем фон шаблона на чистый белый
-            white_template = make_background_white(template_img)
+            # Проверяем, есть ли прозрачность (4 канала BGRA)
+            has_alpha = len(template_img.shape) == 3 and template_img.shape[2] == 4
 
-            # 2. Ищем лицо на шаблоне с белым фоном
-            template_faces = app.get(white_template)
+            if has_alpha:
+                # Отделяем карту прозрачности (Alpha) от цветов (BGR)
+                alpha_channel = template_img[:, :, 3]
+                bgr_template = template_img[:, :, :3]
+            else:
+                alpha_channel = None
+                bgr_template = template_img
+
+            # Ищем лицо только на цветах (BGR)
+            template_faces = app.get(bgr_template)
             if not template_faces:
                 continue
 
@@ -142,11 +116,23 @@ def generate_avatars_for_profile(profile, request=None):
                 key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
             )
 
-            # 3. Делаем Face Swap на шаблон с БЕЛЫМ фоном
-            final_res = swapper.get(white_template, template_face, user_face, paste_back=True)
+            # Делаем Face Swap
+            swapped_bgr = swapper.get(bgr_template, template_face, user_face, paste_back=True)
 
-            # Сохраняем итоговое изображение
+            # Возвращаем альфа-канал прозрачности обратно в PNG
+            if has_alpha and alpha_channel is not None:
+                final_res = cv2.merge([
+                    swapped_bgr[:, :, 0],
+                    swapped_bgr[:, :, 1],
+                    swapped_bgr[:, :, 2],
+                    alpha_channel
+                ])
+            else:
+                final_res = swapped_bgr
+
             out_file_path = os.path.join(abs_output_dir, filename)
+
+            # Сохраняем итоговый PNG без фона
             cv2.imwrite(out_file_path, final_res)
 
             # Ссылка на сгенерированный файл
