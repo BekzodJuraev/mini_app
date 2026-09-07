@@ -501,7 +501,7 @@ class Tests(models.Model):
     read = models.BooleanField(default=False)
     message = models.TextField(null=True, default=None)
 
-    created_at = models.DateField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 @update_life_expectancy_decorator
 class BloodPressure(models.Model):
     profile = models.ForeignKey(

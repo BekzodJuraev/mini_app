@@ -2363,77 +2363,97 @@ class MonthlyStatisticsView(APIView):
         profile = request.user.profile
         today = localtime(now()).date()
 
-        # 1. Параметры месяца (можно передавать через ?month=12&year=2025)
-        year = int(request.query_params.get('year', today.year))
-        month = int(request.query_params.get('month', today.month))
+        # 1. Параметры месяца (с валидацией аргументов)
+        try:
+            year = int(request.query_params.get("year", today.year))
+            month = int(request.query_params.get("month", today.month))
+            start_of_month = today.replace(year=year, month=month, day=1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_of_month = today.replace(year=year, month=month, day=last_day)
+        except ValueError:
+            return Response(
+                {"error": "Неверный формат года или месяца"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        start_of_month = today.replace(year=year, month=month, day=1)
-        last_day = calendar.monthrange(year, month)[1]
-        end_of_month = today.replace(year=year, month=month, day=last_day)
-
-        # 2. Цели пользователя
-        goal = getattr(profile, 'nutrition_goal', None)
-        if not goal or goal.calories == 0:
-            return Response({"error": "Цель не установлена"}, status=200)
+        # 2. Безопасное получение цели
+        goal = getattr(profile, "nutrition_goal", None)
+        has_goal = goal is not None and getattr(goal, "calories", 0) > 0
 
         # 3. Выборка данных
         queryset = Calories.objects.filter(
             profile=profile,
             created_at__range=[start_of_month, end_of_month],
-            saved=True
-        ).values('created_at', 'total')
+            saved=True,
+        ).values("created_at", "total")
 
-        # 4. Группировка всех нутриентов по дням
-        # Используем лямбда-функцию, чтобы структура БЖУ создавалась для каждого нового дня
-        daily_data = defaultdict(lambda: {
-            "calories": 0.0, "belok": 0.0, "jir": 0.0, "uglevod": 0.0, "klechatka": 0.0
-        })
+        # 4. Группировка
+        daily_data = defaultdict(
+            lambda: {
+                "calories": 0.0,
+                "belok": 0.0,
+                "jir": 0.0,
+                "uglevod": 0.0,
+                "klechatka": 0.0,
+            }
+        )
 
         for entry in queryset:
-            day = entry['created_at']
-            t = entry['total'] or {}
+            day = entry["created_at"]
+            t = entry["total"] or {}
 
-            daily_data[day]["calories"] += float(t.get('ккал', 0))
-            daily_data[day]["belok"] += float(t.get('белок', 0))
-            daily_data[day]["jir"] += float(t.get('жир', 0))
-            daily_data[day]["uglevod"] += float(t.get('углеводы', 0))
-            daily_data[day]["klechatka"] += float(t.get('клетчатка', 0))
+            daily_data[day]["calories"] += float(t.get("ккал", 0))
+            daily_data[day]["belok"] += float(t.get("белок", 0))
+            daily_data[day]["jir"] += float(t.get("жир", 0))
+            daily_data[day]["uglevod"] += float(t.get("углеводы", 0))
+            daily_data[day]["klechatka"] += float(t.get("клетчатка", 0))
 
-        # 5. Формируем детальный ответ по дням и считаем общий средний %
+        # 5. Сборка результатов
         total_monthly_percent = 0
         daily_details = {}
 
         for day, stats in daily_data.items():
-            # Процент выполнения за конкретный день
-            raw_percent = (stats["calories"] / goal.calories) * 100
-            day_percent = min(round(raw_percent, 1), 100.0)
-
-            # Сохраняем детали дня (для нижней части изображение_5.png)
-            daily_details[day.strftime('%Y-%m-%d')] = {
-                "fact": stats,
-                "goal": {
+            # Если цель есть — считаем %, иначе None
+            if has_goal:
+                raw_percent = (stats["calories"] / goal.calories) * 100
+                day_percent = min(round(raw_percent, 1), 100.0)
+                goal_data = {
                     "calories": goal.calories,
-                    "belok": goal.proteins,
-                    "jir": goal.fats,
-                    "uglevod": goal.carbs,
-                    "klechatka": goal.fiber
-                },
-                "percentage": day_percent
+                    "belok": getattr(goal, "proteins", 0),
+                    "jir": getattr(goal, "fats", 0),
+                    "uglevod": getattr(goal, "carbs", 0),
+                    "klechatka": getattr(goal, "fiber", 0),
+                }
+            else:
+                day_percent = None
+                goal_data = None
+
+            daily_details[day.strftime("%Y-%m-%d")] = {
+                "fact": stats,
+                "goal": goal_data,
+                "percentage": day_percent,
             }
 
-            # Для общего итога месяца суммируем, ограничивая 100% (как в ТЗ)
-            total_monthly_percent += min(day_percent, 100)
+            if day_percent is not None:
+                total_monthly_percent += day_percent
 
-        # Средний процент за месяц
+        # Средний процент за месяц (только если была цель)
         days_tracked = len(daily_data)
-        average_monthly_percent = round(total_monthly_percent / days_tracked, 1) if days_tracked > 0 else 0
+        average_monthly_percent = (
+            round(total_monthly_percent / days_tracked, 1)
+            if (has_goal and days_tracked > 0)
+            else None
+        )
 
-        return Response({
-            "average_monthly_percent": average_monthly_percent,  # Для топ-бара
-            "monthly_label": start_of_month.strftime('%B %Y'),
-            "daily_details": daily_details,  # Объект, где ключи - даты
-            "marked_days": list(daily_details.keys())  # Список дат с данными
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "average_monthly_percent": average_monthly_percent,
+                "monthly_label": start_of_month.strftime("%B %Y"),
+                "daily_details": daily_details,
+                "marked_days": list(daily_details.keys()),
+            },
+            status=status.HTTP_200_OK,
+        )
 class MonthlyStatisticsPetView(APIView):
     permission_classes = [IsAuthenticated]
 
