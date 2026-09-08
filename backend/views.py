@@ -5734,10 +5734,12 @@ class AvatarGenerationAPIView(APIView):
         )
 
 
-def select_main_avatar_by_scores(profile) -> str | None:
+def select_main_avatar_by_scores(
+        profile,
+        previous_health_system: dict | None = None
+) -> str | None:
     """
-    Выбирает 1 аватар из 10 общих (generated_avatars) на основе профиля
-    и JSON-структуры profile.health_system.
+    Выбирает 1 аватар из generated_avatars на основе обновленных правил и приоритетов.
     """
     generated_avatars = getattr(profile, "generated_avatars", []) or []
     if not generated_avatars:
@@ -5745,84 +5747,119 @@ def select_main_avatar_by_scores(profile) -> str | None:
 
     health_data = getattr(profile, "health_system", {}) or {}
 
-    # Вспомогательная функция для безопасного извлечения (число или dict)
-    def get_score(key: str, default: int = 10) -> int:
-        val = health_data.get(key, default)
+    # Вспомогательная функция для безопасного извлечения (Float)
+    def get_score(data: dict, key: str, default: float = 10.0) -> float:
+        val = data.get(key, default)
         if isinstance(val, dict):
-            return int(val.get("Общий показатель", default))
+            val = val.get("Общий показатель", default)
         try:
-            return int(val)
+            return float(val)
         except (ValueError, TypeError):
-            return default
+            return float(default)
 
-    # Извлекаем значения шкал
-    tone = get_score("Общий тонус")
-    respiratory = get_score("Дыхательная система")
-    digestive = get_score("Пищеварительная система")
-    immune = get_score("Иммунная система")
-    cardio = get_score("Сердечно-сосудистая система")
-    nervous = get_score("Нервная система")
-    psychological = get_score("Психологическое состояние")
-
-    is_recovering = getattr(profile, "is_recovering", False)
+    # Текущие показатели шкал
+    tone = get_score(health_data, "Общий тонус")
+    respiratory = get_score(health_data, "Дыхательная система")
+    digestive = get_score(health_data, "Пищеварительная система")
+    immune = get_score(health_data, "Иммунная система")
+    cardio = get_score(health_data, "Сердечно-сосудистая система")
+    nervous = get_score(health_data, "Нервная система")
+    psychological = get_score(health_data, "Психологическое состояние")
 
     all_scores = [
         respiratory, digestive, immune, cardio,
         nervous, psychological, tone
     ]
 
+    # --- РАСЧЕТ УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
+    is_recovery_condition = False
+    if previous_health_system:
+        # Считаем количество шкал < 4 раньше и сейчас
+        prev_scores = [
+            get_score(previous_health_system, k) for k in [
+                "Дыхательная система", "Пищеварительная система",
+                "Иммунная система", "Сердечно-сосудистая система",
+                "Нервная система", "Психологическое состояние", "Общий тонус"
+            ]
+        ]
+
+        prev_low_4_count = sum(1 for s in prev_scores if s < 4)
+        curr_low_4_count = sum(1 for s in all_scores if s < 4)
+
+        # Проверяем, выросла ли хотя бы одна проблемная шкала (которая была < 7 или < 4) минимум на 2 балла
+        keys = [
+            "Дыхательная система", "Пищеварительная система",
+            "Иммунная система", "Сердечно-сосудистая система",
+            "Нервная система", "Психологическое состояние", "Общий тонус"
+        ]
+
+        has_score_grown_by_2 = any(
+            (get_score(health_data, k) - get_score(previous_health_system, k)) >= 2.0
+            for k in keys
+            if get_score(previous_health_system, k) < 7.0
+        )
+
+        if has_score_grown_by_2 and curr_low_4_count < prev_low_4_count:
+            is_recovery_condition = True
+
     # --- ПРАВИЛА И ИЕРАРХИЯ ПРИОРИТЕТА ---
 
-    # 1. Критическое состояние
-    low_3_count = sum(1 for s in all_scores if s <= 3)
-    low_1_count = sum(1 for s in all_scores if s <= 1)
-    low_4_count = sum(1 for s in all_scores if s <= 4)
+    low_4_count = sum(1 for s in all_scores if s < 4)
+    low_1_count = sum(1 for s in all_scores if s == 1)
+    low_5_count = sum(1 for s in all_scores if s < 5)
 
-    if low_3_count >= 2 or (low_1_count >= 1 and low_4_count >= 3):
+    other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
+
+    # 1. Критическое состояние: >=2 шкал < 4 ИЛИ 1 шкала == 1 и еще >=2 шкалы < 5
+    if low_4_count >= 2 or (low_1_count >= 1 and low_5_count >= 3):
         target_key = "critical"
 
-    # 2. Проблема дыхательной системы (1–3)
-    elif 1 <= respiratory <= 3:
-        target_key = "respiratory"
-
-    # 3. Проблемы с пищеварением (1–3)
-    elif 1 <= digestive <= 3:
-        target_key = "digestive"
-
-    # 4. Снижение иммунитета (1–3)
-    elif 1 <= immune <= 3:
-        target_key = "low-immunity"
-
-    # 5. Стресс / повышенное давление
-    elif (1 <= cardio <= 4) and (nervous <= 5 or psychological <= 5):
-        target_key = "stress"
-
-    # 6. Недостаток сна
-    elif (4 <= tone <= 6) and (nervous <= 5 or psychological <= 5):
-        target_key = "sleep-deprivation"
-
-    # 7. Переутомление (1–3)
-    elif 1 <= tone <= 3:
-        target_key = "exhaustion"
-
-    # 8. Небольшая усталость
-    elif (4 <= tone <= 6) and all(s >= 7 for s in [respiratory, digestive, immune, cardio, nervous, psychological]):
-        target_key = "mild-fatigue"
-
-    # 9. Процесс восстановления
-    elif is_recovering:
+    # 2. Процесс восстановления
+    elif is_recovery_condition:
         target_key = "recovery"
 
-    # 10. Обычное состояние (все 7–10)
+    # 3. Проблема дыхательной системы (< 7)
+    elif respiratory < 7:
+        target_key = "respiratory"
+
+    # 4. Проблемы с пищеварением (< 7)
+    elif digestive < 7:
+        target_key = "digestive"
+
+    # 5. Снижение иммунитета (< 7)
+    elif immune < 7:
+        target_key = "low-immunity"
+
+    # 6. Стресс / повышенное давление (cardio < 7 И (nervous < 7 или psychological < 7))
+    elif cardio < 7 and (nervous < 7 or psychological < 7):
+        target_key = "stress"
+
+    # 7. Недостаток сна (tone 4..6.9 И (nervous < 7 или psychological < 7))
+    elif (4 <= tone <= 6.9) and (nervous < 7 or psychological < 7):
+        target_key = "sleep-deprivation"
+
+    # 8. Переутомление (tone < 4)
+    elif tone < 4:
+        target_key = "exhaustion"
+
+    # 9. Небольшая усталость (tone 7..8.9 И остальные шкалы >= 7)
+    elif (7 <= tone <= 8.9) and all(s >= 7 for s in other_scores):
+        target_key = "mild-fatigue"
+
+    # 10. Обычное состояние (tone >= 9 И остальные шкалы >= 7)
+    elif tone >= 9 and all(s >= 7 for s in other_scores):
+        target_key = "normal"
+
+    # Если ничего из правил не подошло по граничным условиям
     else:
         target_key = "normal"
 
-    # Сопоставление с файлом
+    # Поиск соответствующего URL
     for url in generated_avatars:
         if target_key in url.lower():
             return url
 
-    # Фолбэк
+    # Фолбэк на normal или первый аватар
     normal_avatar = next((url for url in generated_avatars if "normal" in url.lower()), None)
     return normal_avatar or generated_avatars[0]
 
