@@ -5715,6 +5715,10 @@ class AvatarGenerationAPIView(APIView):
             )
 
         # Запускаем фоновый поток
+        
+        profile.generated_avatars = []
+        profile.system_avatars = []
+        profile.save(update_fields=["generated_avatars", "system_avatars"])
         thread = Thread(
             target=_run_avatar_generation,
             args=(profile.id,),
