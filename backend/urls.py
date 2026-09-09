@@ -25,7 +25,7 @@ urlpatterns=[
 
 
 
-
+#Asd
  path('api/login',views.LoginAPIView.as_view(),name='login'),
  path('api/reset/email',views.RequestPasswordReset.as_view(),name='reset_email'),
  path('api/reset/set_password',views.SetPasswordView.as_view(),name='set_passowrd'),
