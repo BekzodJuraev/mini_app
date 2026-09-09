@@ -561,63 +561,129 @@ def get_user_and_pet_context(profile):
     strict_short_date = timezone.now().date() - timedelta(days=3)
     MAX_FAMILY_MEMBERS = 5
 
-    def get_avatar_info(p):
-        """Расчет текущего аватара и текстовой причины по формуле приоритетов."""
+    def get_avatar_info(p, previous_health_system: dict | None = None) -> dict:
+        """
+        Расчет текущего аватара и причины выбора на основе новой иерархии и порогов.
+        """
         health_data = getattr(p, "health_system", {}) or {}
 
-        def get_score(key: str, default: int = 10) -> int:
-            val = health_data.get(key, default)
+        # Вспомогательная функция для безопасного извлечения значений (float)
+        def get_score(data: dict, key: str, default: float = 10.0) -> float:
+            val = data.get(key, default)
             if isinstance(val, dict):
-                return int(val.get("Общий показатель", default))
+                val = val.get("Общий показатель", default)
             try:
-                return int(val)
+                return float(val)
             except (ValueError, TypeError):
-                return default
+                return float(default)
 
-        tone = get_score("Общий тонус")
-        respiratory = get_score("Дыхательная система")
-        digestive = get_score("Пищеварительная система")
-        immune = get_score("Иммунная система")
-        cardio = get_score("Сердечно-сосудистая система")
-        nervous = get_score("Нервная система")
-        psychological = get_score("Психологическое состояние")
+        # Вытаскиваем текущие шкалы
+        tone = get_score(health_data, "Общий тонус")
+        respiratory = get_score(health_data, "Дыхательная система")
+        digestive = get_score(health_data, "Пищеварительная система")
+        immune = get_score(health_data, "Иммунная система")
+        cardio = get_score(health_data, "Сердечно-сосудистая система")
+        nervous = get_score(health_data, "Нервная система")
+        psychological = get_score(health_data, "Психологическое состояние")
 
-        all_scores = [respiratory, digestive, immune, cardio, nervous, psychological, tone]
+        all_scores = [
+            respiratory, digestive, immune, cardio,
+            nervous, psychological, tone
+        ]
+        other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
 
-        low_3_count = sum(1 for s in all_scores if s <= 3)
-        low_1_count = sum(1 for s in all_scores if s <= 1)
-        low_4_count = sum(1 for s in all_scores if s <= 4)
+        # --- ПРОВЕРКА УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
+        is_recovery_condition = False
+        if previous_health_system:
+            prev_scores = [
+                get_score(previous_health_system, k) for k in [
+                    "Дыхательная система", "Пищеварительная система",
+                    "Иммунная система", "Сердечно-сосудистая система",
+                    "Нервная система", "Психологическое состояние", "Общий тонус"
+                ]
+            ]
 
-        if low_3_count >= 2 or (low_1_count >= 1 and low_4_count >= 3):
+            prev_low_4_count = sum(1 for s in prev_scores if s < 4.0)
+            curr_low_4_count = sum(1 for s in all_scores if s < 4.0)
+
+            # Проверяем рост проблемной шкалы (которая была < 7) минимум на 2 балла
+            keys = [
+                "Дыхательная система", "Пищеварительная система",
+                "Иммунная система", "Сердечно-сосудистая система",
+                "Нервная система", "Психологическое состояние", "Общий тонус"
+            ]
+
+            has_score_grown_by_2 = any(
+                (get_score(health_data, k) - get_score(previous_health_system, k)) >= 2.0
+                for k in keys
+                if get_score(previous_health_system, k) < 7.0
+            )
+
+            # Условие: выросла хотя бы на 2 балла И красных шкал (<4) стало меньше
+            if has_score_grown_by_2 and (curr_low_4_count < prev_low_4_count):
+                is_recovery_condition = True
+
+        # --- СЧЕТЧИКИ ДЛЯ КРИТИЧЕСКОГО СОСТОЯНИЯ ---
+        low_4_count = sum(1 for s in all_scores if s < 4.0)
+        low_1_count = sum(1 for s in all_scores if s == 1.0)
+        low_5_count = sum(1 for s in all_scores if s < 5.0)
+
+        # --- ИЕРАРХИЯ ПРИОРИТЕТОВ ---
+
+        # 1. Критическое состояние
+        if low_4_count >= 2 or (low_1_count >= 1 and low_5_count >= 3):
             reason = "Критическое состояние (несколько критически низких показателей здоровья)."
-            status_name = "Критический аватар (critical)"
-        elif 1 <= respiratory <= 3:
+            status_name = "Критическое состояние"
+
+        # 2. Процесс восстановления (Приоритет сразу после Критического)
+        elif is_recovery_condition:
+            reason = "Процесс восстановления организма (показатели выросли, а количество проблемных зон уменьшилось)."
+            status_name = "Процесс восстановления"
+
+        # 3. Проблема дыхательной системы (< 7)
+        elif respiratory < 7.0:
             reason = f"Проблема с дыхательной системой (баллы: {respiratory} из 10)."
-            status_name = "Проблема дыхательной системы (respiratory)"
-        elif 1 <= digestive <= 3:
+            status_name = "Проблема дыхательной системы"
+
+        # 4. Проблемы с пищеварением (< 7)
+        elif digestive < 7.0:
             reason = f"Проблемы с пищеварением (баллы: {digestive} из 10)."
-            status_name = "Проблемы пищеварения (digestive)"
-        elif 1 <= immune <= 3:
+            status_name = "Проблемы с пищеварением"
+
+        # 5. Снижение иммунитета (< 7)
+        elif immune < 7.0:
             reason = f"Снижение иммунитета (баллы: {immune} из 10)."
-            status_name = "Снижение иммунитета (low-immunity)"
-        elif (1 <= cardio <= 4) and (nervous <= 5 or psychological <= 5):
+            status_name = "Снижение иммунитета"
+
+        # 6. Стресс / повышенное давление (cardio < 7 И (nervous < 7 или psychological < 7))
+        elif cardio < 7.0 and (nervous < 7.0 or psychological < 7.0):
             reason = f"Стресс или повышенное давление (Сердечно-сосудистая: {cardio}, Нервная: {nervous}, Психологическое: {psychological})."
-            status_name = "Стресс / Давление (stress)"
-        elif (4 <= tone <= 6) and (nervous <= 5 or psychological <= 5):
+            status_name = "Стресс / повышенное давление"
+
+        # 7. Недостаток сна (tone 4..6.9 И (nervous < 7 или psychological < 7))
+        elif (4.0 <= tone <= 6.9) and (nervous < 7.0 or psychological < 7.0):
             reason = f"Недостаток сна (Общий тонус: {tone}, Нервная система: {nervous}, Психологическое: {psychological})."
-            status_name = "Недостаток сна (sleep-deprivation)"
-        elif 1 <= tone <= 3:
+            status_name = "Недостаток сна"
+
+        # 8. Переутомление (tone < 4)
+        elif tone < 4.0:
             reason = f"Переутомление организма (Общий тонус: {tone} из 10)."
-            status_name = "Переутомление (exhaustion)"
-        elif (4 <= tone <= 6) and all(s >= 7 for s in [respiratory, digestive, immune, cardio, nervous, psychological]):
-            reason = f"Небольшая усталость (Общий тонус: {tone}, а остальные органы в норме)."
-            status_name = "Небольшая усталость (mild-fatigue)"
-        elif getattr(p, "is_recovering", False):
-            reason = "Процесс восстановления организма (рост показателей здоровья)."
-            status_name = "Процесс восстановления (recovery)"
+            status_name = "Переутомление"
+
+        # 9. Небольшая усталость (tone 7..8.9 И остальные шкалы >= 7)
+        elif (7.0 <= tone <= 8.9) and all(s >= 7.0 for s in other_scores):
+            reason = f"Небольшая усталость (Общий тонус: {tone}, остальные органы в норме)."
+            status_name = "Небольшая усталость"
+
+        # 10. Обычное состояние (tone >= 9 И остальные шкалы >= 7)
+        elif tone >= 9.0 and all(s >= 7.0 for s in other_scores):
+            reason = "Обычное состояние (все ключевые шкалы в норме)."
+            status_name = "Обычное состояние"
+
+        # Фолбэк на случай граничных значений
         else:
-            reason = "Обычное состояние (все ключевые шкалы в норме: 7–10 баллов)."
-            status_name = "Обычное состояние (normal)"
+            reason = "Обычное состояние (показатели в пределах нормы)."
+            status_name = "Обычное состояние"
 
         return {
             "current_avatar_status": status_name,
@@ -630,7 +696,7 @@ def get_user_and_pet_context(profile):
                 "cardio": cardio,
                 "nervous": nervous,
                 "psychological": psychological,
-            }
+            },
         }
 
     def get_object_drugs(obj):
