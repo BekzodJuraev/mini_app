@@ -618,7 +618,7 @@ def get_user_and_pet_context(profile):
         low_1_count = sum(1 for s in all_scores if s == 1.0)
         low_5_count = sum(1 for s in all_scores if s < 5.0)
 
-        # --- ИЕРАРХИЯ ПРИОРИТЕТОВ С ИСПОЛЬЗОВАНИЕМ ДИЗАЙН-ОПИСАНИЙ (DESCRIPTION) ---
+        # --- ИЕРАРХИЯ ПРИОРИТЕТОВ (ВОССТАНОВЛЕНИЕ ПОДНЯТО НА ВЕРХНИЙ ПРИОРИТЕТ) ---
 
         if low_4_count >= 2 or (low_1_count >= 1 and low_5_count >= 3):
             status_name = "Критическое состояние"
@@ -5784,11 +5784,12 @@ class AvatarGenerationAPIView(APIView):
 
 
 def select_main_avatar_by_scores(
-        profile,
-        previous_health_system: dict | None = None
+    profile,
+    previous_health_system: dict | None = None
 ) -> str | None:
     """
-    Выбирает 1 аватар из generated_avatars на основе обновленных правил и приоритетов.
+    Выбирает 1 аватар из generated_avatars на основе обновленных правил,
+    порогов и иерархии приоритетов (recovery поднято на 2 место).
     """
     generated_avatars = getattr(profile, "generated_avatars", []) or []
     if not generated_avatars:
@@ -5796,7 +5797,6 @@ def select_main_avatar_by_scores(
 
     health_data = getattr(profile, "health_system", {}) or {}
 
-    # Вспомогательная функция для безопасного извлечения (Float)
     def get_score(data: dict, key: str, default: float = 10.0) -> float:
         val = data.get(key, default)
         if isinstance(val, dict):
@@ -5819,11 +5819,11 @@ def select_main_avatar_by_scores(
         respiratory, digestive, immune, cardio,
         nervous, psychological, tone
     ]
+    other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
 
     # --- РАСЧЕТ УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
     is_recovery_condition = False
     if previous_health_system:
-        # Считаем количество шкал < 4 раньше и сейчас
         prev_scores = [
             get_score(previous_health_system, k) for k in [
                 "Дыхательная система", "Пищеварительная система",
@@ -5832,10 +5832,9 @@ def select_main_avatar_by_scores(
             ]
         ]
 
-        prev_low_4_count = sum(1 for s in prev_scores if s < 4)
-        curr_low_4_count = sum(1 for s in all_scores if s < 4)
+        prev_low_4_count = sum(1 for s in prev_scores if s < 4.0)
+        curr_low_4_count = sum(1 for s in all_scores if s < 4.0)
 
-        # Проверяем, выросла ли хотя бы одна проблемная шкала (которая была < 7 или < 4) минимум на 2 балла
         keys = [
             "Дыхательная система", "Пищеварительная система",
             "Иммунная система", "Сердечно-сосудистая система",
@@ -5848,67 +5847,65 @@ def select_main_avatar_by_scores(
             if get_score(previous_health_system, k) < 7.0
         )
 
-        if has_score_grown_by_2 and curr_low_4_count < prev_low_4_count:
+        if has_score_grown_by_2 and (curr_low_4_count < prev_low_4_count):
             is_recovery_condition = True
 
-    # --- ПРАВИЛА И ИЕРАРХИЯ ПРИОРИТЕТА ---
+    # --- ПРАВИЛА И ИЕРАРХИЯ ПРИОРИТЕТОВ ---
 
-    low_4_count = sum(1 for s in all_scores if s < 4)
-    low_1_count = sum(1 for s in all_scores if s == 1)
-    low_5_count = sum(1 for s in all_scores if s < 5)
-
-    other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
+    low_4_count = sum(1 for s in all_scores if s < 4.0)
+    low_1_count = sum(1 for s in all_scores if s == 1.0)
+    low_5_count = sum(1 for s in all_scores if s < 5.0)
 
     # 1. Критическое состояние: >=2 шкал < 4 ИЛИ 1 шкала == 1 и еще >=2 шкалы < 5
     if low_4_count >= 2 or (low_1_count >= 1 and low_5_count >= 3):
         target_key = "critical"
 
-    # 2. Процесс восстановления
+    # 2. Процесс восстановления (высокий приоритет — срабатывает сразу после critical)
     elif is_recovery_condition:
         target_key = "recovery"
 
-    # 3. Проблема дыхательной системы (< 7)
-    elif respiratory < 7:
+    # 3. Проблема дыхательной системы (< 7.0)
+    elif respiratory < 7.0:
         target_key = "respiratory"
 
-    # 4. Проблемы с пищеварением (< 7)
-    elif digestive < 7:
+    # 4. Проблемы с пищеварением (< 7.0)
+    elif digestive < 7.0:
         target_key = "digestive"
 
-    # 5. Снижение иммунитета (< 7)
-    elif immune < 7:
+    # 5. Снижение иммунитета (< 7.0)
+    elif immune < 7.0:
         target_key = "low-immunity"
 
     # 6. Стресс / повышенное давление (cardio < 7 И (nervous < 7 или psychological < 7))
-    elif cardio < 7 and (nervous < 7 or psychological < 7):
+    elif cardio < 7.0 and (nervous < 7.0 or psychological < 7.0):
         target_key = "stress"
 
     # 7. Недостаток сна (tone 4..6.9 И (nervous < 7 или psychological < 7))
-    elif (4 <= tone <= 6.9) and (nervous < 7 or psychological < 7):
+    elif (4.0 <= tone <= 6.9) and (nervous < 7.0 or psychological < 7.0):
         target_key = "sleep-deprivation"
 
-    # 8. Переутомление (tone < 4)
-    elif tone < 4:
+    # 8. Переутомление (tone < 4.0)
+    elif tone < 4.0:
         target_key = "exhaustion"
 
-    # 9. Небольшая усталость (tone 7..8.9 И остальные шкалы >= 7)
-    elif (7 <= tone <= 8.9) and all(s >= 7 for s in other_scores):
+    # 9. Небольшая усталость (tone 7..8.9 И остальные шкалы >= 7.0)
+    elif (7.0 <= tone <= 8.9) and all(s >= 7.0 for s in other_scores):
         target_key = "mild-fatigue"
 
-    # 10. Обычное состояние (tone >= 9 И остальные шкалы >= 7)
-    elif tone >= 9 and all(s >= 7 for s in other_scores):
+    # 10. Обычное состояние (tone >= 9.0 И остальные шкалы >= 7.0)
+    elif tone >= 9.0 and all(s >= 7.0 for s in other_scores):
         target_key = "normal"
 
-    # Если ничего из правил не подошло по граничным условиям
+    # Фолбэк на normal при нетипичных комбинациях
     else:
         target_key = "normal"
 
-    # Поиск соответствующего URL
+    # Поиск соответствующего URL по ключевому слову
     for url in generated_avatars:
         if target_key in url.lower():
             return url
 
-    # Фолбэк на normal или первый аватар
+    # Фолбэк на normal или первый доступный аватар
     normal_avatar = next((url for url in generated_avatars if "normal" in url.lower()), None)
     return normal_avatar or generated_avatars[0]
 
