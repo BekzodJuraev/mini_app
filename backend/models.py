@@ -208,7 +208,7 @@ class Profile(models.Model):
     ref = models.UUIDField(default=uuid.uuid4, unique=True)
     height=models.IntegerField(default=0,blank=True)
     weight = models.FloatField(default=0, blank=True)
-    previous_health_system = models.JSONField(null=True,default=None)
+    previous_health_system = models.JSONField(null=True, default=None)
     medical_history = models.JSONField(default=dict, blank=True, verbose_name="Медицинская карта")
     family = models.ForeignKey("Profile", on_delete=models.CASCADE,
                                                related_name='family_family',

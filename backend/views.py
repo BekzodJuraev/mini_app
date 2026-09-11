@@ -1050,10 +1050,7 @@ def update_system(f):
                 profile.health_system = update_health
 
                 # Вычисляем новый аватар с учетом РЕАЛЬНОГО предыдущего состояния
-                new_avatar_url = select_main_avatar_by_scores(
-                    profile,
-                    previous_health_system=previous_state
-                )
+
 
                 # Сохраняем поля в модель
                 profile.save(update_fields=['health_system', 'previous_health_system'])
