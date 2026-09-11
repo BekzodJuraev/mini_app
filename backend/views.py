@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 import calendar
+import copy
 from django.core.files.base import ContentFile
 from .tranlater import translate_api_response,translate_health_keys_api
 from django.db.models import Avg
@@ -1031,30 +1032,36 @@ def build_context(profile, sections):
 
     return context
 def update_system(f):
-    def wrapper(self,request,*args,**kwargs):
+    def wrapper(self, request, *args, **kwargs):
         message = f(self, request, *args, **kwargs)
         if message.status_code == 200 and 'message' in message.data:
             profile = request.user.profile
-            #print(message.data['message'])
-
-
-
+            user_message = message.data['message']
 
             def update():
-                update_health = chat_update(profile.health_system, message.data['message'])
+                # 1. Снимаем глубокую копию ТЕКУЩЕГО состояния ДО обновления
+                previous_state = copy.deepcopy(profile.health_system or {})
+
+                # 2. Получаем обновленные данные от GPT-5.4-mini
+                update_health = chat_update(previous_state, user_message)
+
+                # 3. Фиксируем предыдущее и новое состояние в БД
+                profile.previous_health_system = previous_state
                 profile.health_system = update_health
 
+                # Вычисляем новый аватар с учетом РЕАЛЬНОГО предыдущего состояния
+                new_avatar_url = select_main_avatar_by_scores(
+                    profile,
+                    previous_health_system=previous_state
+                )
 
-                profile.save(update_fields=['health_system'])
+                # Сохраняем поля в модель
+                profile.save(update_fields=['health_system', 'previous_health_system'])
 
-            # asd
             Thread(target=update).start()
-
-
 
         return message
     return wrapper
-
 def pet_update_system(f):
     def wrapper(self,request, message_id,*args,**kwargs):
         pet = get_object_or_404(Pet, id=message_id, profile=request.user.profile)
@@ -5920,7 +5927,8 @@ class ProfileMainAvatarAPIView(APIView):
         profile = request.user.profile
 
         # Выбираем 1 аватар из 10 на основе формулы приоритетов
-        main_avatar_url = select_main_avatar_by_scores(profile)
+        main_avatar_url = select_main_avatar_by_scores(profile, previous_health_system=profile.previous_health_system)
+
 
         if not main_avatar_url:
             return Response(
