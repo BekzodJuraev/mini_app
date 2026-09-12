@@ -563,9 +563,9 @@ def get_user_and_pet_context(profile):
     MAX_FAMILY_MEMBERS = 5
 
     def get_avatar_info(p, previous_health_system: dict | None = None) -> dict:
+
         """
-        Расчет текущего аватара и лаконичной причины выбора на основе новой иерархии,
-        порогов и официальных description из дизайна.
+        Расчет текущего аватара и лаконичной причины выбора на основе обновленной иерархии.
         """
         health_data = getattr(p, "health_system", {}) or {}
 
@@ -578,6 +578,15 @@ def get_user_and_pet_context(profile):
             except (ValueError, TypeError):
                 return float(default)
 
+        # Полный список систем для отслеживания динамики
+        system_keys = [
+            "Дыхательная система", "Пищеварительная система", "Иммунная система",
+            "Сердечно-сосудистая система", "Нервная система", "Психологическое состояние",
+            "Общий тонус", "Зубочелюстная система", "Опорно-двигательный аппарат",
+            "Эндокринная система", "Половая система", "Выделительная система",
+            "Органы чувств", "Органы кроветворения"
+        ]
+
         tone = get_score(health_data, "Общий тонус")
         respiratory = get_score(health_data, "Дыхательная система")
         digestive = get_score(health_data, "Пищеварительная система")
@@ -586,49 +595,48 @@ def get_user_and_pet_context(profile):
         nervous = get_score(health_data, "Нервная система")
         psychological = get_score(health_data, "Психологическое состояние")
 
-        all_scores = [respiratory, digestive, immune, cardio, nervous, psychological, tone]
+        all_scores = [get_score(health_data, k) for k in system_keys]
         other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
 
-        # --- ПРОВЕРКА УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
+        # --- ГИБКАЯ ПРОВЕРКА УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
         is_recovery_condition = False
         if previous_health_system:
-            prev_scores = [
-                get_score(previous_health_system, k) for k in [
-                    "Дыхательная система", "Пищеварительная система",
-                    "Иммунная система", "Сердечно-сосудистая система",
-                    "Нервная система", "Психологическое состояние", "Общий тонус"
-                ]
-            ]
+            prev_scores = [get_score(previous_health_system, k) for k in system_keys]
+
             prev_low_4_count = sum(1 for s in prev_scores if s < 4.0)
             curr_low_4_count = sum(1 for s in all_scores if s < 4.0)
 
-            keys = [
-                "Дыхательная система", "Пищеварительная система",
-                "Иммунная система", "Сердечно-сосудистая система",
-                "Нервная система", "Психологическое состояние", "Общий тонус"
-            ]
-            has_score_grown_by_2 = any(
-                (get_score(health_data, k) - get_score(previous_health_system, k)) >= 2.0
-                for k in keys
-                if get_score(previous_health_system, k) < 7.0
+            # 1. Зафиксирован выход из красной зоны (<4.0)
+            left_red_zone = curr_low_4_count < prev_low_4_count
+
+            # 2. Рост хотя бы одного показателя на +1.5 балла и выше (из ослабленного состояния < 8.0)
+            has_significant_growth = any(
+                (get_score(health_data, k) - get_score(previous_health_system, k)) >= 1.5
+                for k in system_keys
+                if get_score(previous_health_system, k) < 8.0
             )
-            if has_score_grown_by_2 and (curr_low_4_count < prev_low_4_count):
+
+            # Восстановление срабатывает при ЛЮБОМ из двух факторов
+            if left_red_zone or has_significant_growth:
                 is_recovery_condition = True
 
         low_4_count = sum(1 for s in all_scores if s < 4.0)
         low_1_count = sum(1 for s in all_scores if s == 1.0)
         low_5_count = sum(1 for s in all_scores if s < 5.0)
 
-        # --- ИЕРАРХИЯ ПРИОРИТЕТОВ (ВОССТАНОВЛЕНИЕ ПОДНЯТО НА ВЕРХНИЙ ПРИОРИТЕТ) ---
+        # --- ИЕРАРХИЯ ПРИОРИТЕТОВ ---
 
+        # 1. Критическое состояние
         if low_4_count >= 2 or (low_1_count >= 1 and low_5_count >= 3):
             status_name = "Критическое состояние"
             reason = "Когда у пользователя есть выраженные красные показатели, сильные симптомы или сочетание нескольких факторов риска."
 
+        # 2. Восстановление (приоритет над усталостью и нормами)
         elif is_recovery_condition:
             status_name = "Процесс восстановления"
             reason = "Когда у пользователя показатели начали улучшаться после ухудшения, болезни, стресса, недосыпа или нагрузки."
 
+        # 3. Таргетированные органные проблемы (< 7.0)
         elif respiratory < 7.0:
             status_name = "Проблема дыхательной системы"
             reason = "Когда у пользователя есть признаки ухудшения дыхания или повышенные риски для дыхательной системы."
@@ -1003,7 +1011,7 @@ def get_user_and_pet_context(profile):
             "calculated_life_expectancy": profile.life_expectancy,
             "active_drugs_list": get_object_drugs(profile),
         },
-        "user_avatar": get_avatar_info(profile),
+        "user_avatar": get_avatar_info(profile, profile.previous_health_system),
         "user_nutrition_and_water_goals": user_nutrition_goals,
         "user_family_members": family_data,
         "user_pets": pets_data,
@@ -1556,45 +1564,33 @@ class ChatAPIViewQuestion(APIView):
 
 def update_system_chat(f):
     def wrapper(self, request, *args, **kwargs):
-        # 1. Выполняем метод post (создаются записи в БД и генерируется ответ для клиента)
-        response = f(self, request, *args, **kwargs)
+        message = f(self, request, *args, **kwargs)
 
-        # 2. Если ответ успешный, запускаем фоновый поток для GPT-5.4-mini
-        if response.status_code == 200:
-            # Извлекаем ТЕКСТ ПОЛЬЗОВАТЕЛЯ из входящих данных запроса
-            user_message = request.data.get("message")
+        # Проверяем флаг, выставленный во View (из detect_context)
+        should_update = getattr(request, 'should_update_health', False)
+        #print(should_update)
 
+        if should_update and message.status_code == 200 and 'message' in message.data:
+            profile = request.user.profile
+            user_message = message.data['message']
 
-            if user_message:
-                # Получаем профиль из request (запрос аутентифицирован)
-                profile = request.user.profile
+            def update():
+                # 1. Снимаем глубокую копию ТЕКУЩЕГО состояния ДО обновления
+                previous_state = copy.deepcopy(profile.health_system or {})
 
-                def update_async():
-                    # Берем копию текущего состояния
-                    previous_state = copy.deepcopy(profile.health_system or {})
+                # 2. Получаем обновленные данные от GPT
+                update_health = chat_update(previous_state, user_message)
 
-                    # Отправляем ВХОДЯЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ в chat_update
-                    updated_health = chat_update(previous_state, user_message)
+                # 3. Фиксируем состояния в БД
+                profile.previous_health_system = previous_state
+                profile.health_system = update_health
 
-                    # Обновляем профиль
-                    profile.previous_health_system = previous_state
-                    profile.health_system = updated_health
+                # Сохраняем обновленные поля в модель
+                profile.save(update_fields=['health_system', 'previous_health_system'])
 
-                    # Вычисляем новый аватар (при необходимости)
-                    # update_avatar(profile)
+            Thread(target=update).start()
 
-                    profile.save(
-                        update_fields=[
-                            "health_system",
-                            "previous_health_system",
-                        ]
-                    )
-
-                # Запускаем обновление в отдельном потоке, чтобы не задерживать ответ пользователю
-                Thread(target=update_async).start()
-
-        # Возвращаем исходный Response клиету без задержек
-        return response
+        return message
 
     return wrapper
 
@@ -1624,7 +1620,7 @@ class ChatAPIView(APIView):
 
             history = get_chat_history(profile)
             sections = detect_context(message)
-            #print(sections)
+            request.should_update_health = "health_update" in sections
 
 
 
@@ -5856,7 +5852,16 @@ def select_main_avatar_by_scores(
         except (ValueError, TypeError):
             return float(default)
 
-    # Текущие показатели шкал
+    # Список ключевых систем (включая зубы и все остальные шкалы)
+    system_keys = [
+        "Дыхательная система", "Пищеварительная система", "Иммунная система",
+        "Сердечно-сосудистая система", "Нервная система", "Психологическое состояние",
+        "Общий тонус", "Зубочелюстная система", "Опорно-двигательный аппарат",
+        "Эндокринная система", "Половая система", "Выделительная система",
+        "Органы чувств", "Органы кроветворения"
+    ]
+
+    # Вытаскиваем показатели для таргетированных правил
     tone = get_score(health_data, "Общий тонус")
     respiratory = get_score(health_data, "Дыхательная система")
     digestive = get_score(health_data, "Пищеварительная система")
@@ -5865,35 +5870,24 @@ def select_main_avatar_by_scores(
     nervous = get_score(health_data, "Нервная система")
     psychological = get_score(health_data, "Психологическое состояние")
 
-    all_scores = [
-        respiratory, digestive, immune, cardio,
-        nervous, psychological, tone
+    # Полные списки показателей для подсчета красных зон
+    all_scores = [get_score(health_data, k) for k in system_keys]
+    other_scores = [
+        respiratory, digestive, immune, cardio, nervous, psychological
     ]
-    other_scores = [respiratory, digestive, immune, cardio, nervous, psychological]
 
     # --- РАСЧЕТ УСЛОВИЯ ВОССТАНОВЛЕНИЯ ---
     is_recovery_condition = False
     if previous_health_system:
-        prev_scores = [
-            get_score(previous_health_system, k) for k in [
-                "Дыхательная система", "Пищеварительная система",
-                "Иммунная система", "Сердечно-сосудистая система",
-                "Нервная система", "Психологическое состояние", "Общий тонус"
-            ]
-        ]
+        prev_scores = [get_score(previous_health_system, k) for k in system_keys]
 
         prev_low_4_count = sum(1 for s in prev_scores if s < 4.0)
         curr_low_4_count = sum(1 for s in all_scores if s < 4.0)
 
-        keys = [
-            "Дыхательная система", "Пищеварительная система",
-            "Иммунная система", "Сердечно-сосудистая система",
-            "Нервная система", "Психологическое состояние", "Общий тонус"
-        ]
-
+        # Проверяем рост на >= 2.0 по ВСЕМ системам (включая Зубочелюстную)
         has_score_grown_by_2 = any(
             (get_score(health_data, k) - get_score(previous_health_system, k)) >= 2.0
-            for k in keys
+            for k in system_keys
             if get_score(previous_health_system, k) < 7.0
         )
 
