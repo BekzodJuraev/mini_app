@@ -1552,6 +1552,52 @@ class ChatAPIViewQuestion(APIView):
         serializer=ChatGETSerQuestion(query,many=True)
 
         return Response(serializer.data,status=status.HTTP_200_OK)
+
+
+def update_system_chat(f):
+    def wrapper(self, request, *args, **kwargs):
+        # 1. Выполняем метод post (создаются записи в БД и генерируется ответ для клиента)
+        response = f(self, request, *args, **kwargs)
+
+        # 2. Если ответ успешный, запускаем фоновый поток для GPT-5.4-mini
+        if response.status_code == 200:
+            # Извлекаем ТЕКСТ ПОЛЬЗОВАТЕЛЯ из входящих данных запроса
+            user_message = request.data.get("message")
+
+
+            if user_message:
+                # Получаем профиль из request (запрос аутентифицирован)
+                profile = request.user.profile
+
+                def update_async():
+                    # Берем копию текущего состояния
+                    previous_state = copy.deepcopy(profile.health_system or {})
+
+                    # Отправляем ВХОДЯЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ в chat_update
+                    updated_health = chat_update(previous_state, user_message)
+
+                    # Обновляем профиль
+                    profile.previous_health_system = previous_state
+                    profile.health_system = updated_health
+
+                    # Вычисляем новый аватар (при необходимости)
+                    # update_avatar(profile)
+
+                    profile.save(
+                        update_fields=[
+                            "health_system",
+                            "previous_health_system",
+                        ]
+                    )
+
+                # Запускаем обновление в отдельном потоке, чтобы не задерживать ответ пользователю
+                Thread(target=update_async).start()
+
+        # Возвращаем исходный Response клиету без задержек
+        return response
+
+    return wrapper
+
 class ChatAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ChatSer
@@ -1568,7 +1614,7 @@ class ChatAPIView(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: ChatSer()}
     )
-    @update_system
+    @update_system_chat
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
 
