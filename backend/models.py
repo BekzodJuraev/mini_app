@@ -181,6 +181,7 @@ class Choice(models.Model):
 
     def __str__(self):
         return self.text
+#asd
 @environmental_risk_decorator
 @update_life_expectancy_decorator
 @health_recommendations_start_decorator
