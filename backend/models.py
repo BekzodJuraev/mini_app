@@ -273,6 +273,50 @@ class Profile(models.Model):
     def __str__(self):
         return self.name
 
+
+from django.db import models
+
+
+class ChildMeasurement(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает заполнения'),
+        ('completed', 'Заполнено'),
+        ('missed', 'Данные не внесены'),
+    ]
+
+    child = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='measurements')
+    scheduled_date = models.DateField(verbose_name="Запланированная дата")
+    actual_date = models.DateField(null=True, blank=True, verbose_name="Фактическая дата")
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name="Статус"
+    )
+
+    # === JSON ПОЛЯ С DEFAULT=DICT ===
+    physical_development = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Физическое развитие"
+    )
+    vital_signs = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Витальные показатели"
+    )
+    regime_and_behavior = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Режим и поведение"
+    )
+
+    created_at = models.DateField(auto_now=True)
+
+    class Meta:
+        ordering = ['scheduled_date']
+
 class MenHealthProfile(models.Model):
     """Модель для хранения AI-анализа мужского здоровья."""
 
