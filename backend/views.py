@@ -104,7 +104,8 @@ from .serializers import (
     PergenancyFemaleSer,
     DailyLogCreateSer,
     FemaleSystemSer,
-    NotificationFemaleSer
+    NotificationFemaleSer,
+    ChildMeasurementListSerializer
 
 
 
@@ -124,7 +125,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -5980,4 +5981,106 @@ class ProfileMainAvatarAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-#asd
+from dateutil.relativedelta import relativedelta
+def calculate_next_measurement_date(birth_date: date, last_measurement_date: date) -> date:
+    """
+    Рассчитывает следующую дату измерения на основе возраста ребёнка
+    на момент последнего измерения согласно ТЗ.
+    """
+    if not birth_date or not last_measurement_date:
+        return date.today() + relativedelta(days=7)
+
+    # Возраст ребёнка в месяцах и годах на момент последнего измерения
+    age_in_months = (last_measurement_date.year - birth_date.year) * 12 + (
+                last_measurement_date.month - birth_date.month)
+    age_in_years = age_in_months / 12.0
+
+    # 0–3 месяца — каждые 7 дней
+    if age_in_months < 3:
+        return last_measurement_date + relativedelta(days=7)
+
+    # 3–12 месяцев — каждые 14 дней
+    elif 3 <= age_in_months < 12:
+        return last_measurement_date + relativedelta(days=14)
+
+    # 1–3 года — 1 раз в месяц
+    elif 1 <= age_in_years < 3:
+        return last_measurement_date + relativedelta(months=1)
+
+    # 3–7 лет — 1 раз в 3 месяца
+    elif 3 <= age_in_years < 7:
+        return last_measurement_date + relativedelta(months=3)
+
+    # 7–14 лет — 1 раз в 6 месяцев
+    elif 7 <= age_in_years < 14:
+        return last_measurement_date + relativedelta(months=6)
+
+    # 14–18 лет — 1 раз в год
+    else:
+        return last_measurement_date + relativedelta(years=1)
+
+class ChildMeasurementMainAPIView(APIView):
+    """
+    Главный GET-эндпоинт: возвращает текущий замер и историю зафиксированных дат
+    для авторизованного пользователя.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Получаем профиль ребёнка текущего авторизованного пользователя
+        child_profile = request.user.profile
+
+        # 1. Ищем текущую открытую запись (ожидает заполнения или просрочена)
+        active_measurement = (
+            ChildMeasurement.objects.filter(
+                child=child_profile, status__in=['pending', 'missed']
+            )
+            .order_by('scheduled_date')
+            .first()
+        )
+
+        # 2. Если открытой записи нет — создаем новую с помощью get_or_create
+        if not active_measurement:
+            last_completed = (
+                ChildMeasurement.objects.filter(
+                    child=child_profile, status='completed'
+                )
+                .order_by('-scheduled_date')
+                .first()
+            )
+
+            if last_completed:
+                target_date = calculate_next_measurement_date(
+                    birth_date=child_profile.date_birth,
+                    last_measurement_date=last_completed.scheduled_date,
+                )
+            else:
+                target_date = date.today()
+
+            active_measurement, _ = ChildMeasurement.objects.get_or_create(
+                child=child_profile,
+                scheduled_date=target_date,
+                status='pending',
+                defaults={
+                    'physical_development': {},
+                    'vital_signs': {},
+                    'regime_and_behavior': {},
+                },
+            )
+
+        # 3. Достаем историю прошлых завершенных замеров
+        history_measurements = ChildMeasurement.objects.filter(
+            child=child_profile, status='completed'
+        ).order_by('-scheduled_date')
+
+        return Response(
+            {
+                'active_measurement': ChildMeasurementListSerializer(
+                    active_measurement
+                ).data,
+                'history': ChildMeasurementListSerializer(
+                    history_measurements, many=True
+                ).data,
+            },
+            status=status.HTTP_200_OK,
+        )

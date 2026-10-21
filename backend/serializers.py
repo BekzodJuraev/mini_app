@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -1167,3 +1167,25 @@ class DailyLogCreateSer(serializers.ModelSerializer):
     class Meta:
         model = DailyLog
         fields = ['note','created_at']
+
+
+
+class ChildMeasurementListSerializer(serializers.ModelSerializer):
+    """
+    Компактный сериализатор для списка дат замера.
+    """
+    class Meta:
+        model = ChildMeasurement
+        fields = [
+            'id',
+            'scheduled_date',
+            'actual_date',
+            'status',
+            'created_at',
+        ]
+class PhysicalDevelopmentDataSerializer(serializers.Serializer):
+    height_cm = serializers.FloatField(required=False, allow_null=True)
+    weight_kg = serializers.FloatField(required=False, allow_null=True)
+    head_circ_cm = serializers.FloatField(required=False, allow_null=True)
+    chest_circ_cm = serializers.FloatField(required=False, allow_null=True)
+    bmi = serializers.FloatField(required=False, allow_null=True)

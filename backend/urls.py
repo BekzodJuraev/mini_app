@@ -71,10 +71,11 @@ urlpatterns=[
  path('api/habit/get',views.GetTrackingCount.as_view(),name='habit_count'),
  path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
 
-
+ path('api/baby/tracking',views.ChildMeasurementMainAPIView.as_view()),
 
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
+
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
  path('api/relationship/add_by_ref',views.AddRefamilyvView.as_view()),
  path('api/relationship/delete_from_family',views.DeleteFromFamilyView.as_view()),
