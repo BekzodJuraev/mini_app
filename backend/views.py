@@ -6147,7 +6147,9 @@ class PhysicalDevelopmentAPIView(APIView):
         data = measurement.physical_development or {}
         return Response(data, status=status.HTTP_200_OK)
 
-
+    @swagger_auto_schema(
+        responses={status.HTTP_201_CREATED: PhysicalDevelopmentDataSerializer}
+    )
     def post(self, request, pk):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)
@@ -6187,7 +6189,9 @@ class VitalSignsAPIView(APIView):
         data = measurement.vital_signs or {}
         return Response(data, status=status.HTTP_200_OK)
 
-
+    @swagger_auto_schema(
+        responses={status.HTTP_201_CREATED: VitalSignsDataSerializer}
+    )
     def post(self, request, pk):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)
@@ -6227,7 +6231,9 @@ class RegimeAndBehaviorAPIView(APIView):
         data = measurement.regime_and_behavior or {}
         return Response(data, status=status.HTTP_200_OK)
 
-
+    @swagger_auto_schema(
+        responses={status.HTTP_201_CREATED: RegimeAndBehaviorDataSerializer}
+    )
     def post(self, request, pk):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)

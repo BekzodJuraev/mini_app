@@ -1184,11 +1184,11 @@ class ChildMeasurementListSerializer(serializers.ModelSerializer):
             'created_at',
         ]
 class PhysicalDevelopmentDataSerializer(serializers.Serializer):
-    height_cm = serializers.FloatField(required=False, allow_null=True)
-    weight_kg = serializers.FloatField(required=False, allow_null=True)
-    head_circ_cm = serializers.FloatField(required=False, allow_null=True)
-    chest_circ_cm = serializers.FloatField(required=False, allow_null=True)
-    bmi = serializers.FloatField(required=False, allow_null=True)
+    height_cm = serializers.FloatField()
+    weight_kg = serializers.FloatField()
+    head_circ_cm = serializers.FloatField()
+    chest_circ_cm = serializers.FloatField()
+    bmi = serializers.FloatField()
 
 
 class VitalSignsDataSerializer(serializers.Serializer):
