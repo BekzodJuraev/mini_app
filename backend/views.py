@@ -6,6 +6,15 @@ from collections import defaultdict
 from django.contrib.auth import authenticate,login,logout
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.http import FileResponse
+import io
+import os
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import calendar
 import copy
 from django.core.files.base import ContentFile
@@ -105,7 +114,10 @@ from .serializers import (
     DailyLogCreateSer,
     FemaleSystemSer,
     NotificationFemaleSer,
-    ChildMeasurementListSerializer
+    ChildMeasurementListSerializer,
+    PhysicalDevelopmentDataSerializer,
+    VitalSignsDataSerializer,
+    RegimeAndBehaviorDataSerializer
 
 
 
@@ -6027,13 +6039,21 @@ class ChildMeasurementMainAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Получаем профиль ребёнка текущего авторизованного пользователя
         child_profile = request.user.profile
+        today = date.today()
+
+        # 0. Переводим все просроченные записи из pending в missed перед выборкой
+        ChildMeasurement.objects.filter(
+            child=child_profile,
+            status='pending',
+            scheduled_date__lt=today
+        ).update(status='missed')
 
         # 1. Ищем текущую открытую запись (ожидает заполнения или просрочена)
         active_measurement = (
             ChildMeasurement.objects.filter(
-                child=child_profile, status__in=['pending', 'missed']
+                child=child_profile,
+                status__in=['pending', 'missed']
             )
             .order_by('scheduled_date')
             .first()
@@ -6043,7 +6063,8 @@ class ChildMeasurementMainAPIView(APIView):
         if not active_measurement:
             last_completed = (
                 ChildMeasurement.objects.filter(
-                    child=child_profile, status='completed'
+                    child=child_profile,
+                    status='completed'
                 )
                 .order_by('-scheduled_date')
                 .first()
@@ -6051,36 +6072,424 @@ class ChildMeasurementMainAPIView(APIView):
 
             if last_completed:
                 target_date = calculate_next_measurement_date(
-                    birth_date=child_profile.date_birth,
+                    birth_date=getattr(child_profile, 'date_birth', None),
                     last_measurement_date=last_completed.scheduled_date,
                 )
             else:
-                target_date = date.today()
+                target_date = today
 
             active_measurement, _ = ChildMeasurement.objects.get_or_create(
                 child=child_profile,
                 scheduled_date=target_date,
-                status='pending',
                 defaults={
+                    'status': 'pending',
                     'physical_development': {},
                     'vital_signs': {},
                     'regime_and_behavior': {},
                 },
             )
 
-        # 3. Достаем историю прошлых завершенных замеров
+        # 3. Рассчитываем динамические даты для активного замера
+        raw_display_date = active_measurement.actual_date or active_measurement.scheduled_date
+        next_date = calculate_next_measurement_date(
+            birth_date=getattr(child_profile, 'date_birth', None),
+            last_measurement_date=active_measurement.scheduled_date or today,
+        )
+
+        active_data = ChildMeasurementListSerializer(active_measurement).data
+        active_data['display_date'] = raw_display_date.strftime('%d.%m.%Y') if raw_display_date else None
+        active_data['next_scheduled_date'] = next_date.strftime('%d.%m.%Y') if next_date else None
+
+        # 4. Достаем историю прошлых завершенных замеров
         history_measurements = ChildMeasurement.objects.filter(
-            child=child_profile, status='completed'
+            child=child_profile,
+            status='completed'
         ).order_by('-scheduled_date')
 
         return Response(
             {
-                'active_measurement': ChildMeasurementListSerializer(
-                    active_measurement
-                ).data,
+                'active_measurement': active_data,
                 'history': ChildMeasurementListSerializer(
                     history_measurements, many=True
                 ).data,
             },
             status=status.HTTP_200_OK,
+        )
+
+
+def ensure_next_measurement_exists(profile, current_measurement):
+    next_date = calculate_next_measurement_date(
+        birth_date=getattr(profile, 'date_birth', None),
+        last_measurement_date=current_measurement.scheduled_date or date.today(),
+    )
+
+    ChildMeasurement.objects.get_or_create(
+        child=profile,
+        scheduled_date=next_date,
+        defaults={
+            'status': 'pending',
+            'physical_development': {},
+            'vital_signs': {},
+            'regime_and_behavior': {},
+        },
+    )
+
+
+class PhysicalDevelopmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, profile):
+        return get_object_or_404(ChildMeasurement, pk=pk, child=profile)
+
+    def get(self, request, pk):
+        measurement = self.get_object(pk, request.user.profile)
+        # Отдаем словарь из базы или пустой {}
+        data = measurement.physical_development or {}
+        return Response(data, status=status.HTTP_200_OK)
+
+
+    def post(self, request, pk):
+        profile = request.user.profile
+        measurement = self.get_object(pk, profile)
+
+        if measurement.status == 'completed' and measurement.physical_development:
+            return Response(
+                {"detail": "Физическое развитие для этой даты уже зафиксировано и недоступно для изменения."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PhysicalDevelopmentDataSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        current_phys = measurement.physical_development or {}
+        current_phys.update(serializer.validated_data)
+        measurement.physical_development = current_phys
+
+        measurement.status = 'completed'
+        measurement.actual_date = date.today()
+        measurement.save()
+
+        ensure_next_measurement_exists(profile, measurement)
+
+        return Response(measurement.physical_development, status=status.HTTP_200_OK)
+
+
+class VitalSignsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, profile):
+        return get_object_or_404(ChildMeasurement, pk=pk, child=profile)
+
+    def get(self, request, pk):
+        measurement = self.get_object(pk, request.user.profile)
+        # Отдаем словарь из базы или пустой {}
+        data = measurement.vital_signs or {}
+        return Response(data, status=status.HTTP_200_OK)
+
+
+    def post(self, request, pk):
+        profile = request.user.profile
+        measurement = self.get_object(pk, profile)
+
+        if measurement.status == 'completed' and measurement.vital_signs:
+            return Response(
+                {"detail": "Витальные показатели для этой даты уже зафиксированы и недоступны для изменения."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = VitalSignsDataSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        current_vitals = measurement.vital_signs or {}
+        current_vitals.update(serializer.validated_data)
+        measurement.vital_signs = current_vitals
+
+        measurement.status = 'completed'
+        measurement.actual_date = date.today()
+        measurement.save()
+
+        ensure_next_measurement_exists(profile, measurement)
+
+        return Response(measurement.vital_signs, status=status.HTTP_200_OK)
+
+
+class RegimeAndBehaviorAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, profile):
+        return get_object_or_404(ChildMeasurement, pk=pk, child=profile)
+
+    def get(self, request, pk):
+        measurement = self.get_object(pk, request.user.profile)
+        # Отдаем словарь из базы или пустой {}
+        data = measurement.regime_and_behavior or {}
+        return Response(data, status=status.HTTP_200_OK)
+
+
+    def post(self, request, pk):
+        profile = request.user.profile
+        measurement = self.get_object(pk, profile)
+
+        if measurement.status == 'completed' and measurement.regime_and_behavior:
+            return Response(
+                {"detail": "Режим и поведение для этой даты уже зафиксированы и недоступны для изменения."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = RegimeAndBehaviorDataSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        current_regime = measurement.regime_and_behavior or {}
+        current_regime.update(serializer.validated_data)
+        measurement.regime_and_behavior = current_regime
+
+        measurement.status = 'completed'
+        measurement.actual_date = date.today()
+        measurement.save()
+
+        ensure_next_measurement_exists(profile, measurement)
+
+        return Response(measurement.regime_and_behavior, status=status.HTTP_200_OK)
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_REGULAR_PATH = os.path.join(BASE_DIR, 'fonts', 'DejaVuSans.ttf')
+FONT_BOLD_PATH = os.path.join(BASE_DIR, 'fonts', 'DejaVuSans-Bold.ttf')
+
+# Регистрируем шрифт один раз
+if os.path.exists(FONT_REGULAR_PATH) and os.path.exists(FONT_BOLD_PATH):
+    pdfmetrics.registerFont(TTFont('AppDejaVu', FONT_REGULAR_PATH))
+    pdfmetrics.registerFont(TTFont('AppDejaVu-Bold', FONT_BOLD_PATH))
+    FONT_NAME = 'AppDejaVu'
+    FONT_NAME_BOLD = 'AppDejaVu-Bold'
+else:
+    # Запасной фоллбэк (если случайно забыли положить файлы шрифтов)
+    FONT_NAME = 'Helvetica'
+    FONT_NAME_BOLD = 'Helvetica-Bold'
+
+
+class DownloadPDFReportAPIView(APIView):
+    """
+    GET: Выгрузка PDF-отчета, независимая от ОС.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        child_profile = request.user.profile
+
+        completed_measurements = ChildMeasurement.objects.filter(
+            child=child_profile,
+            status='completed'
+        ).order_by('actual_date', 'scheduled_date')
+
+        if not completed_measurements.exists():
+            return Response(
+                {"detail": "Нет зафиксированных данных для формирования отчёта."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=30
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Используем FONT_NAME и FONT_NAME_BOLD для всех стилей
+        title_style = ParagraphStyle(
+            'DocTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1E293B'),
+            spaceAfter=4,
+        )
+
+        subtitle_style = ParagraphStyle(
+            'DocSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor('#64748B'),
+            spaceAfter=15,
+        )
+
+        section_heading = ParagraphStyle(
+            'SectionHeading',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=11,
+            leading=14,
+            textColor=colors.HexColor('#0F172A'),
+            spaceBefore=12,
+            spaceAfter=6,
+        )
+
+        cell_header_style = ParagraphStyle(
+            'CellHeader',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=7.5,
+            leading=9,
+            textColor=colors.HexColor('#1E293B'),
+            alignment=1,
+        )
+
+        cell_body_style = ParagraphStyle(
+            'CellBody',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=7.5,
+            leading=9,
+            textColor=colors.HexColor('#334155'),
+            alignment=1,
+        )
+
+        # 1. Шапка
+        elements.append(Paragraph("Отчёт наблюдений ребёнка", title_style))
+        elements.append(Paragraph("Документ содержит все зафиксированные показатели ребёнка по датам.", subtitle_style))
+
+        # 2. Инфо о ребенке
+        first_rec = completed_measurements.first()
+        last_rec = completed_measurements.last()
+
+        start_dt = (first_rec.actual_date or first_rec.scheduled_date).strftime('%d.%m.%Y')
+        end_dt = (last_rec.actual_date or last_rec.scheduled_date).strftime('%d.%m.%Y')
+
+        child_full_name = f"{getattr(child_profile, 'name', '')} {getattr(child_profile, 'lastname', '')}".strip() or "Не указано"
+        dob = getattr(child_profile, 'date_birth', None)
+        dob_str = dob.strftime('%d.%m.%Y') if dob else "Не указано"
+
+        info_data = [
+            [Paragraph("<b>Имя ребёнка</b>", cell_header_style), Paragraph(child_full_name, cell_body_style)],
+            [Paragraph("<b>Дата рождения</b>", cell_header_style), Paragraph(dob_str, cell_body_style)],
+            [Paragraph("<b>Период наблюдения</b>", cell_header_style), Paragraph(f"{start_dt} – {end_dt}", cell_body_style)],
+        ]
+
+        info_table = Table(info_data, colWidths=[140, 390])
+        info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+
+        elements.append(Paragraph("Информация о ребёнке", section_heading))
+        elements.append(info_table)
+        elements.append(Spacer(1, 8))
+
+        table_base_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ])
+
+        # 3. Физическое развитие
+        elements.append(Paragraph("Физическое развитие (по датам)", section_heading))
+        phys_data = [[
+            Paragraph("Дата", cell_header_style),
+            Paragraph("Рост (см)", cell_header_style),
+            Paragraph("Вес (кг)", cell_header_style),
+            Paragraph("Окружность головы (см)", cell_header_style),
+            Paragraph("Окружность груди (см)", cell_header_style),
+            Paragraph("ИМТ", cell_header_style),
+        ]]
+
+        for m in completed_measurements:
+            d_str = (m.actual_date or m.scheduled_date).strftime('%d.%m.%Y')
+            p = m.physical_development or {}
+            phys_data.append([
+                Paragraph(d_str, cell_body_style),
+                Paragraph(str(p.get('height_cm', 'Не указано')), cell_body_style),
+                Paragraph(str(p.get('weight_kg', 'Не указано')), cell_body_style),
+                Paragraph(str(p.get('head_circ_cm', 'Не указано')), cell_body_style),
+                Paragraph(str(p.get('chest_circ_cm', 'Не указано')), cell_body_style),
+                Paragraph(str(p.get('bmi', 'Не указано')), cell_body_style),
+            ])
+
+        phys_table = Table(phys_data, colWidths=[70, 90, 80, 115, 115, 60])
+        phys_table.setStyle(table_base_style)
+        elements.append(phys_table)
+        elements.append(Spacer(1, 8))
+
+        # 4. Витальные показатели
+        elements.append(Paragraph("Витальные показатели (по датам)", section_heading))
+        vitals_data = [[
+            Paragraph("Дата", cell_header_style),
+            Paragraph("Температура тела (°C)", cell_header_style),
+            Paragraph("Частота пульса (уд/мин)", cell_header_style),
+            Paragraph("Частота дыхания (в мин)", cell_header_style),
+        ]]
+
+        for m in completed_measurements:
+            d_str = (m.actual_date or m.scheduled_date).strftime('%d.%m.%Y')
+            v = m.vital_signs or {}
+            vitals_data.append([
+                Paragraph(d_str, cell_body_style),
+                Paragraph(str(v.get('body_temperature', 'Не указано')), cell_body_style),
+                Paragraph(str(v.get('pulse_rate', 'Не указано')), cell_body_style),
+                Paragraph(str(v.get('respiratory_rate', 'Не указано')), cell_body_style),
+            ])
+
+        vitals_table = Table(vitals_data, colWidths=[90, 140, 150, 150])
+        vitals_table.setStyle(table_base_style)
+        elements.append(vitals_table)
+        elements.append(Spacer(1, 8))
+
+        # 5. Режим и поведение
+        elements.append(Paragraph("Режим и поведение (по датам)", section_heading))
+        regime_data = [[
+            Paragraph("Дата", cell_header_style),
+            Paragraph("Сон (качество)", cell_header_style),
+            Paragraph("Часы сна", cell_header_style),
+            Paragraph("Питание", cell_header_style),
+            Paragraph("Стул", cell_header_style),
+            Paragraph("Мочеиспускание", cell_header_style),
+            Paragraph("Настроение", cell_header_style),
+            Paragraph("Активность", cell_header_style),
+        ]]
+
+        for m in completed_measurements:
+            d_str = (m.actual_date or m.scheduled_date).strftime('%d.%m.%Y')
+            r = m.regime_and_behavior or {}
+            regime_data.append([
+                Paragraph(d_str, cell_body_style),
+                Paragraph(str(r.get('sleep_quality', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('sleep_hours', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('feeding_type', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('stool_frequency', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('urination_frequency', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('mood', 'Не указано')), cell_body_style),
+                Paragraph(str(r.get('activity', 'Не указано')), cell_body_style),
+            ])
+
+        regime_table = Table(regime_data, colWidths=[55, 65, 55, 70, 70, 80, 65, 70])
+        regime_table.setStyle(table_base_style)
+        elements.append(regime_table)
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"report_child_{child_profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
         )

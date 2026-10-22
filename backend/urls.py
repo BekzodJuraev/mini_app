@@ -72,7 +72,10 @@ urlpatterns=[
  path('api/habit/delete/<int:pk>', views.DeleteHabitView.as_view(), name='habit_delete'),
 
  path('api/baby/tracking',views.ChildMeasurementMainAPIView.as_view()),
-
+ path('api/baby/tracking/download',views.DownloadPDFReportAPIView.as_view()),
+ path('api/baby/tracking/physical/<int:pk>',views.PhysicalDevelopmentAPIView.as_view()),
+ path('api/baby/tracking/vital/<int:pk>',views.VitalSignsAPIView.as_view()),
+ path('api/baby/tracking/regime/<int:pk>',views.RegimeAndBehaviorAPIView.as_view()),
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
 

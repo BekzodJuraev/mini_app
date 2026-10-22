@@ -173,3 +173,31 @@ Dog test
     "operations": "Нет",
     "hereditary_diseases": "Сахарный диабет 2 типа по мужской линии (у дедушки)."
 }
+baby physical
+{
+  "height_cm": 70.5,
+  "weight_kg": 7.2,
+  "head_circ_cm": 42.0,
+  "chest_circ_cm": 43.0,
+  "bmi": 16.7
+}
+
+{
+  "body_temperature": 36.6,
+  "pulse_rate": 115,
+  "respiratory_rate": 30
+}
+
+{
+  "sleep_quality": "Хороший",
+  "had_awakenings": false,
+  "sleep_hours": 10.5,
+  "feeding_type": "Грудное",
+  "feeding_volume": "180 мл",
+  "stool_frequency": "Нормально",
+  "stool_consistency": "Мягкая",
+  "stool_color": "Желтый",
+  "urination_frequency": "Нормально",
+  "mood": "Хорошее",
+  "activity": "Хорошая"
+}

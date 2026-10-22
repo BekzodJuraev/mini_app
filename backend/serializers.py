@@ -1189,3 +1189,34 @@ class PhysicalDevelopmentDataSerializer(serializers.Serializer):
     head_circ_cm = serializers.FloatField(required=False, allow_null=True)
     chest_circ_cm = serializers.FloatField(required=False, allow_null=True)
     bmi = serializers.FloatField(required=False, allow_null=True)
+
+
+class VitalSignsDataSerializer(serializers.Serializer):
+    """Витальные показатели (image_1)"""
+    body_temperature = serializers.FloatField()  # Температура тела (°C)
+    pulse_rate = serializers.IntegerField()      # Частота пульса (уд/мин)
+    respiratory_rate = serializers.IntegerField( ) # Частота дыхания (кол-во в мин)
+
+
+class RegimeAndBehaviorDataSerializer(serializers.Serializer):
+    """Режим и поведение (image_2)"""
+    # Сон
+    sleep_quality = serializers.CharField() # Хороший / Нормальный / Плохой
+    had_awakenings = serializers.BooleanField()                # Были пробуждения? (true/false)
+    sleep_hours = serializers.FloatField()                    # Кол-во часов сна
+
+    # Питание
+    feeding_type = serializers.CharField() # Грудное / Смесь / Прикорм
+    feeding_volume = serializers.CharField() # Объём
+
+    # Стул
+    stool_frequency = serializers.CharField()   # Часто / Нормально / Редко
+    stool_consistency = serializers.CharField() # Консистенция
+    stool_color = serializers.CharField()       # Цвет
+
+    # Мочеиспускание
+    urination_frequency = serializers.CharField() # Часто / Нормально / Редко
+
+    # Настроение и Активность
+    mood = serializers.CharField()     # Хорошее / Нормальное / Плохое
+    activity = serializers.CharField()
