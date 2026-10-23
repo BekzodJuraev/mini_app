@@ -274,7 +274,25 @@ class Profile(models.Model):
         return self.name
 
 
-from django.db import models
+class ChildHealthAnalysisProfile(models.Model):
+    """
+    Модель анализа и рекомендаций для ребёнка, привязанная к Profile через OneToOneField.
+    """
+    profile = models.OneToOneField(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name="child_health_analysis",
+    )
+    anaylis_chilld = models.TextField(
+        verbose_name="Анализ и рекомендации для ребенка",
+    )
+    created_at = models.DateField(
+        auto_now=True,
+        verbose_name="Дата создания",
+    )
+
+    def __str__(self):
+        return f"Анализ здоровья ребенка для профиля {self.profile_id}"
 
 
 class ChildMeasurement(models.Model):
