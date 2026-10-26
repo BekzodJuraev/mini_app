@@ -295,6 +295,57 @@ class ChildHealthAnalysisProfile(models.Model):
         return f"Анализ здоровья ребенка для профиля {self.profile_id}"
 
 
+
+
+
+
+class ChildIllnessReport(models.Model):
+    """
+        Блок опроса 'Ребёнку нездоровится'.
+        """
+    profile = models.ForeignKey(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name="illness_surveys",
+    )
+    # Основные жалобы (множественный выбор)
+    main_complaints = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Основные жалобы",
+    )
+    started_at = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Когда началось",
+    )
+    # Интенсивность (множественный выбор списком)
+    intensity = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Интенсивность",
+    )
+    # Фото или файл
+    file_attachment = models.FileField(
+        upload_to="illness_files/",
+        blank=True,
+        null=True,
+        verbose_name="Фото или файл",
+    )
+    # Что уже предприняли (просто текстовое поле)
+    actions_taken = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Что уже предприняли",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата создания",
+    )
+
+    def __str__(self):
+        return f"Опрос от {self.created_at.strftime('%d.%m.%Y %H:%M')}"
 class ChildMeasurement(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Ожидает заполнения'),

@@ -117,7 +117,8 @@ from .serializers import (
     ChildMeasurementListSerializer,
     PhysicalDevelopmentDataSerializer,
     VitalSignsDataSerializer,
-    RegimeAndBehaviorDataSerializer
+    RegimeAndBehaviorDataSerializer,
+    ChildIllnessSurveySerializer
 
 
 
@@ -6498,4 +6499,35 @@ class DownloadPDFReportAPIView(APIView):
             as_attachment=True,
             filename=filename,
             content_type='application/pdf'
+        )
+
+
+class ChildIllnessSurveyCreateAPIView(APIView):
+    """
+    POST: Сохраняет заполненную форму 'Ребёнку нездоровится'.
+    Поддерживает передачу JSON-данных и файлов/фотографий (multipart/form-data).
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = ChildIllnessSurveySerializer(
+            data=request.data,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            # Передаем профиль текущего пользователя прямо при сохранении
+            serializer.save(profile=request.user.profile)
+            return Response(
+                {
+                    "message": "Данные успешно зафиксированы.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
         )

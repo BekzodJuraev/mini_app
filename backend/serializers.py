@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -1220,3 +1220,29 @@ class RegimeAndBehaviorDataSerializer(serializers.Serializer):
     # Настроение и Активность
     mood = serializers.CharField()     # Хорошее / Нормальное / Плохое
     activity = serializers.CharField()
+
+
+class ChildIllnessSurveySerializer(serializers.ModelSerializer):
+    # Обязательные поля со списком (чекбоксы)
+    main_complaints = serializers.ListField(
+        child=serializers.CharField(),
+        allow_empty=False
+    )
+    intensity = serializers.ListField(
+        child=serializers.CharField(),
+        allow_empty=False
+    )
+
+    class Meta:
+        model = ChildIllnessReport
+        fields = [
+            'id',
+            'main_complaints',
+            'started_at',
+            'intensity',
+            'file_attachment',
+            'actions_taken',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
