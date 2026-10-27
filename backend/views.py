@@ -138,7 +138,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -6510,6 +6510,33 @@ class ChildIllnessSurveyCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+
+    def get(self, request):
+        profile = request.user.profile
+
+        # Берём последнюю запись по дате создания для текущего профиля
+        latest_survey = ChildIllnessReport.objects.filter(profile=profile).order_by('-created_at').first()
+
+        # Если записей ещё нет
+        if not latest_survey:
+            return Response(
+                {"detail": "Записи о самочувствии ребёнка пока не найдены."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ChildIllnessSurveySerializer(latest_survey)
+
+        return Response(
+            {
+                "message": "Последняя запись успешно получена.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @swagger_auto_schema(
+        responses={status.HTTP_201_CREATED: ChildIllnessSurveySerializer}
+    )
     def post(self, request):
         serializer = ChildIllnessSurveySerializer(
             data=request.data,
@@ -6530,4 +6557,176 @@ class ChildIllnessSurveyCreateAPIView(APIView):
         return Response(
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class DownloadIllnessReportPDFAPIView(APIView):
+    """
+    GET: Выгрузка PDF-отчёта по истории симптомов и жалоб ребёнка.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        child_profile = request.user.profile
+
+        # Получаем все сохранённые опросы/жалобы этого профиля
+        surveys = ChildIllnessReport.objects.filter(profile=child_profile).order_by('-created_at')
+
+        if not surveys.exists():
+            return Response(
+                {"detail": "Нет зафиксированных данных для формирования отчёта."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=30,
+            bottomMargin=30
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Стили с поддержкой кириллицы
+        title_style = ParagraphStyle(
+            'DocTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=15,
+            leading=18,
+            textColor=colors.HexColor('#0F172A'),
+            alignment=1,
+            spaceAfter = 8,
+        )
+
+        subtitle_style = ParagraphStyle(
+            'DocSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor('#334155'),
+            alignment=1,
+            spaceAfter=15,
+        )
+
+        section_heading = ParagraphStyle(
+            'SectionHeading',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=10.5,
+            leading=14,
+            textColor=colors.HexColor('#1D4ED8'),
+            spaceBefore=10,
+            spaceAfter=6,
+        )
+
+        cell_header_style = ParagraphStyle(
+            'CellHeader',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=7.5,
+            leading=9.5,
+            textColor=colors.HexColor('#0F172A'),
+            alignment=1,
+        )
+
+        cell_body_style = ParagraphStyle(
+            'CellBody',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=7.5,
+            leading=9.5,
+            textColor=colors.HexColor('#334155'),
+            alignment=1,
+        )
+
+        # 1. Шапка документа
+        elements.append(Paragraph("Отчёт наблюдений за состоянием ребёнка", title_style))
+        elements.append(Paragraph(
+            "Данный отчёт формируется на основе всех симптомов и жалоб, введённых пользователем в приложении. "
+            "Отчёт может быть передан педиатру для анализа состояния ребёнка.",
+            subtitle_style
+        ))
+
+        # 2. Блок «Информация о ребёнке»
+        elements.append(Paragraph("Информация о ребёнке", section_heading))
+
+        child_name = f"{getattr(child_profile, 'name', '')} {getattr(child_profile, 'lastname', '')}".strip() or "Не указано"
+        child_dob = child_profile.date_birth.strftime('%d.%m.%Y') if (
+                    child_profile and child_profile.date_birth) else "Не указано"
+
+        info_data = [
+            [Paragraph("<b>Имя ребёнка:</b>", cell_body_style), Paragraph(child_name, cell_body_style)],
+            [Paragraph("<b>Дата рождения:</b>", cell_body_style), Paragraph(child_dob, cell_body_style)],
+        ]
+        info_table = Table(info_data, colWidths=[100, 435])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(info_table)
+        elements.append(Spacer(1, 10))
+
+        # 3. Блок «История симптомов и жалоб» (Таблица)
+        elements.append(Paragraph("История симптомов и жалоб", section_heading))
+
+        table_data = [[
+            Paragraph("Дата записи", cell_header_style),
+            Paragraph("Основная жалоба", cell_header_style),
+            Paragraph("Интенсивность", cell_header_style),
+            Paragraph("Когда началось", cell_header_style),
+            Paragraph("Что предпринял", cell_header_style),
+            Paragraph("Фото / файл", cell_header_style),
+        ]]
+
+        for s in surveys:
+            date_str = s.created_at.strftime('%d.%m.%Y %H:%M')
+
+            # Превращаем списки в читаемый текст через запятую
+            complaints_str = ", ".join(s.main_complaints) if isinstance(s.main_complaints, list) else str(
+                s.main_complaints or '-')
+            intensity_str = ", ".join(s.intensity) if isinstance(s.intensity, list) else str(s.intensity or '-')
+            started_str = str(s.started_at or '-')
+            actions_str = str(s.actions_taken or '-')
+
+            file_str = "Есть файл" if s.file_attachment else "Нет"
+
+            table_data.append([
+                Paragraph(date_str, cell_body_style),
+                Paragraph(complaints_str, cell_body_style),
+                Paragraph(intensity_str, cell_body_style),
+                Paragraph(started_str, cell_body_style),
+                Paragraph(actions_str, cell_body_style),
+                Paragraph(file_str, cell_body_style),
+            ])
+
+        # Суммарная ширина колонок под формат A4 (общая ширина ~ 535)
+        history_table = Table(table_data, colWidths=[75, 100, 75, 80, 125, 80])
+        history_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+
+        elements.append(history_table)
+
+        # Сборка PDF
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"illness_report_{child_profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
         )
