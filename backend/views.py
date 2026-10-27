@@ -118,7 +118,8 @@ from .serializers import (
     PhysicalDevelopmentDataSerializer,
     VitalSignsDataSerializer,
     RegimeAndBehaviorDataSerializer,
-    ChildIllnessSurveySerializer
+    ChildIllnessSurveySerializer,
+    ChildHealthAnalysisProfileSerializer
 
 
 
@@ -138,11 +139,11 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis,get_main_avatar_url
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis,get_main_avatar_url,get_child_health_analysis
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -6544,11 +6545,35 @@ class ChildIllnessSurveyCreateAPIView(APIView):
         )
 
         if serializer.is_valid():
-            # Передаем профиль текущего пользователя прямо при сохранении
-            serializer.save(profile=request.user.profile)
+            # 1. Сохраняем отчет с привязкой к профилю
+            report = serializer.save(profile=request.user.profile)
+
+            # 2. Собираем данные для промпта из только что созданного отчета
+            user_data = {
+                "main_complaints": report.main_complaints,
+                "started_at": report.started_at,
+                "intensity": report.intensity,
+                "actions_taken": report.actions_taken,
+                "created_at": report.created_at.strftime('%Y-%m-%d %H:%M')
+            }
+
+            # 3. Генерируем текст анализа через ИИ
+            try:
+                analysis_text = get_child_health_analysis(user_data)
+            except Exception as e:
+                analysis_text = "Не удалось сгенерировать автоматический анализ."
+
+            # 4. Сохраняем/обновляем в OneToOneField модель анализа для экрана
+            ChildHealthAnalysisProfile.objects.update_or_create(
+                profile=request.user.profile,
+                defaults={
+                    'anaylis_chilld': analysis_text
+                }
+            )
+
             return Response(
                 {
-                    "message": "Данные успешно зафиксированы.",
+                    "message": "Жалоба зафиксирована, анализ обновлен.",
                     "data": serializer.data
                 },
                 status=status.HTTP_201_CREATED
@@ -6729,4 +6754,29 @@ class DownloadIllnessReportPDFAPIView(APIView):
             as_attachment=True,
             filename=filename,
             content_type='application/pdf'
+        )
+
+
+class ChildHealthAnalysisRetrieveAPIView(APIView):
+    """
+    GET: Возвращает готовый блок 'Анализ и рекомендации' для главного экрана.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+
+        try:
+            analysis_obj = ChildHealthAnalysisProfile.objects.get(profile=profile)
+        except ChildHealthAnalysisProfile.DoesNotExist:
+            return Response(
+                {"detail": "Анализ пока не сформирован. Заполните форму 'Ребёнку нездоровится'."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = ChildHealthAnalysisProfileSerializer(analysis_obj)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
         )

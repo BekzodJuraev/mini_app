@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -1246,3 +1246,7 @@ class ChildIllnessSurveySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at']
 
+class ChildHealthAnalysisProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChildHealthAnalysisProfile
+        fields= ['anaylis_chilld']
