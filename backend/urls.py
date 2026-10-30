@@ -79,7 +79,7 @@ urlpatterns=[
  path('api/baby/complains',views.ChildIllnessSurveyCreateAPIView.as_view()),
  path('api/baby/complains/report',views.DownloadIllnessReportPDFAPIView.as_view()),
  path('api/baby/complains/analysis',views.ChildHealthAnalysisRetrieveAPIView.as_view()),
-
+ #asd
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
 
