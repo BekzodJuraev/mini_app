@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -1250,3 +1250,42 @@ class ChildHealthAnalysisProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChildHealthAnalysisProfile
         fields= ['anaylis_chilld']
+
+
+class ChildCalendarEventSerializer(serializers.ModelSerializer):
+    color_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChildCalendarEvent
+        fields = [
+            'id',
+            'event_type',
+            'title',
+            'description',
+            'scheduled_date',
+            'is_completed',
+            'completed_at',
+            'parent_comment',
+            'file_attachment',
+            'reaction_text',
+            'reaction_date',
+            'color_code',
+        ]
+        read_only_fields = ['id', 'event_type', 'title', 'description', 'scheduled_date']
+
+    def get_color_code(self, obj):
+        # Цветовая индикация по ТЗ: синий - прививка, зеленый - осмотр, темно-зеленый - если есть реакция
+        if obj.reaction_text:
+            return "dark_green"
+        return "blue" if obj.event_type == 'vaccine' else "green"
+
+
+class CompleteCheckupSerializer(serializers.Serializer):
+    """Сериализатор для подтверждения осмотра (с необязательным комментарием и файлом)"""
+    parent_comment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    file_attachment = serializers.FileField(required=False, allow_null=True)
+
+
+class AddVaccineReactionSerializer(serializers.Serializer):
+    """Сериализатор для добавления реакции на пройденную прививку"""
+    reaction_text = serializers.CharField(required=True, allow_blank=False)

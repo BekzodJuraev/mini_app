@@ -79,6 +79,18 @@ urlpatterns=[
  path('api/baby/complains',views.ChildIllnessSurveyCreateAPIView.as_view()),
  path('api/baby/complains/report',views.DownloadIllnessReportPDFAPIView.as_view()),
  path('api/baby/complains/analysis',views.ChildHealthAnalysisRetrieveAPIView.as_view()),
+
+ path('api/baby/calendar', views.ChildCalendarAPIView.as_view(), name='child-calendar'),
+
+ # 2. Кнопки "Прививка пройдена" / "Осмотр пройден" (по ID события)
+ path('api/baby/calendar/<int:event_id>/complete', views.CompleteCalendarEventAPIView.as_view(),
+      name='child-calendar-complete'),
+
+ # 3. Кнопка "Зафиксировать" во вкладке "Реакции" (по ID прививки)
+ path('api/baby/calendar/<int:event_id>/reaction', views.AddVaccineReactionAPIView.as_view(), name='child-calendar-reaction'),
+
+
+
  #asd
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),

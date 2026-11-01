@@ -346,6 +346,79 @@ class ChildIllnessReport(models.Model):
 
     def __str__(self):
         return f"Опрос от {self.created_at.strftime('%d.%m.%Y %H:%M')}"
+
+
+class ChildCalendarEvent(models.Model):
+    EVENT_TYPES = (
+        ('vaccine', 'Прививка'),       # Синяя отметка в календаре
+        ('checkup', 'Осмотр'),         # Зеленая отметка в календаре
+    )
+
+    profile = models.ForeignKey(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name="child_calendar_events",
+    )
+    event_type = models.CharField(
+        max_length=20,
+        choices=EVENT_TYPES,
+        verbose_name="Тип события",
+    )
+    title = models.CharField(
+        max_length=255,
+        verbose_name="Название прививки или направление врача",
+    )
+    description = models.TextField(
+        verbose_name="Описание, зачем нужно",
+    )
+    scheduled_date = models.DateField(
+        verbose_name="Назначенная дата",
+    )
+
+    # Статус прохождения ("Прививка пройдена" / "Осмотр пройден")
+    is_completed = models.BooleanField(
+        default=False,
+        verbose_name="Пройдено",
+    )
+    completed_at = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Дата фактического прохождения",
+    )
+
+    # Поля для Осмотра (комментарий родителя и файл при прохождении)
+    parent_comment = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Комментарий родителя (результаты осмотра)",
+    )
+    file_attachment = models.FileField(
+        upload_to="checkup_files/",
+        blank=True,
+        null=True,
+        verbose_name="Фото или файл осмотра",
+    )
+
+    # Поля для Реакции на прививку (темно-зеленая отметка в календаре)
+    reaction_text = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Описание реакции на прививку",
+    )
+    reaction_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Дата фиксации реакции",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['scheduled_date', 'id']
+
+    def __str__(self):
+        return f"{self.get_event_type_display()}: {self.title} ({self.scheduled_date})"
+
 class ChildMeasurement(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Ожидает заполнения'),

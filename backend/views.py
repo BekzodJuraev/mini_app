@@ -119,7 +119,10 @@ from .serializers import (
     VitalSignsDataSerializer,
     RegimeAndBehaviorDataSerializer,
     ChildIllnessSurveySerializer,
-    ChildHealthAnalysisProfileSerializer
+    ChildHealthAnalysisProfileSerializer,
+    ChildCalendarEventSerializer,
+    CompleteCheckupSerializer,
+    AddVaccineReactionSerializer
 
 
 
@@ -139,7 +142,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -152,7 +155,7 @@ from django.db.models import Sum,Q,Count,F,Max,Prefetch,OuterRef, Subquery,Value
 from .generate_avatar import (
     generate_direct_dalle_avatar
 )
-
+from .baby_calendar import generate_child_calendar_events
 from .generate_system import generate_system_avatars
 
 class LeavePetFamilyView(APIView):
@@ -6780,3 +6783,165 @@ class ChildHealthAnalysisRetrieveAPIView(APIView):
             serializer.data,
             status=status.HTTP_200_OK
         )
+
+
+
+class ChildCalendarAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Здоровье ребёнка: Календарь событий"],
+        operation_summary="Получить события календаря (сетка месяца, конкретный день или вкладки)",
+        operation_description=(
+            "Единый эндпоинт для работы с календарём прививок и осмотров[cite: 9, 13].\n\n"
+            "- Без параметров: вернёт все события.\n"
+            "- `?month=2026-11`: события за конкретный месяц для расстановки цветных точек в календаре[cite: 9, 10].\n"
+            "- `?date=2026-11-15`: события на конкретный выбранный день[cite: 9, 10].\n"
+            "- `?tab=vaccines`: вкладка предстоящих прививок[cite: 13].\n"
+            "- `?tab=checkups`: вкладка предстоящих осмотров[cite: 13].\n"
+            "- `?tab=completed`: вкладка пройденных прививок и осмотров[cite: 13].\n"
+            "- `?tab=reactions`: вкладка реакций (список пройденных прививок)[cite: 13]."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                'month',
+                openapi.IN_QUERY,
+                description="Фильтр по месяцу в формате YYYY-MM (например: 2026-11)",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+            openapi.Parameter(
+                'date',
+                openapi.IN_QUERY,
+                description="Фильтр по конкретной дате в формате YYYY-MM-DD (например: 2026-11-15)",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+            openapi.Parameter(
+                'tab',
+                openapi.IN_QUERY,
+                description="Фильтр по верхним вкладкам: vaccines, checkups, completed, reactions",
+                type=openapi.TYPE_STRING,
+                enum=['vaccines', 'checkups', 'completed', 'reactions'],
+                required=False,
+            ),
+        ],
+        responses={status.HTTP_200_OK: ChildCalendarEventSerializer(many=True)}
+    )
+    def get(self, request):
+        profile = request.user.profile
+
+        birth_date = getattr(profile, 'date_birth', None) or getattr(
+            getattr(profile, 'child_profile', None), 'date_birth', None
+        )
+        if birth_date:
+            generate_child_calendar_events(profile, birth_date)
+
+        queryset = ChildCalendarEvent.objects.filter(profile=profile)
+
+        tab = request.query_params.get('tab')
+        if tab == 'vaccines':
+            queryset = queryset.filter(event_type='vaccine', is_completed=False)
+        elif tab == 'checkups':
+            queryset = queryset.filter(event_type='checkup', is_completed=False)
+        elif tab == 'completed':
+            queryset = queryset.filter(is_completed=True)
+        elif tab == 'reactions':
+            queryset = queryset.filter(event_type='vaccine', is_completed=True)
+
+        selected_date = request.query_params.get('date')
+        if selected_date:
+            queryset = queryset.filter(scheduled_date=selected_date)
+
+        month_param = request.query_params.get('month')
+        if month_param:
+            try:
+                year, month = map(int, month_param.split('-'))
+                queryset = queryset.filter(scheduled_date__year=year, scheduled_date__month=month)
+            except ValueError:
+                pass
+
+        serializer = ChildCalendarEventSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class CompleteCalendarEventAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        tags=["Здоровье ребёнка: Календарь событий"],
+        operation_summary="Отметить 'Прививка пройдена' или 'Осмотр пройден'",
+        operation_description=(
+            "Переводит событие в статус пройденного (`is_completed=True`)[cite: 9, 13]. "
+            "Для прививки тело запроса можно оставить пустым. "
+            "Для осмотра можно передать `parent_comment` и прикрепить файл `file_attachment` (`multipart/form-data`)[cite: 13]."
+        ),
+        request_body=CompleteCheckupSerializer,
+        responses={status.HTTP_200_OK: ChildCalendarEventSerializer()}
+    )
+    def post(self, request, event_id):
+        profile = request.user.profile
+        event = get_object_or_404(ChildCalendarEvent, id=event_id, profile=profile)
+
+        if event.event_type == 'checkup':
+            serializer = CompleteCheckupSerializer(data=request.data)
+            if serializer.is_valid():
+                if 'parent_comment' in serializer.validated_data:
+                    event.parent_comment = serializer.validated_data['parent_comment']
+                if 'file_attachment' in serializer.validated_data:
+                    event.file_attachment = serializer.validated_data['file_attachment']
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        event.is_completed = True
+        event.completed_at = date.today()
+        event.save()
+
+        return Response(
+            {
+                "message": "Событие успешно отмечено как пройденное.",
+                "data": ChildCalendarEventSerializer(event, context={'request': request}).data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class AddVaccineReactionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Здоровье ребёнка: Календарь событий"],
+        operation_summary="Зафиксировать реакцию на пройденную прививку",
+        operation_description=(
+            "Добавляет описание реакции к пройденной прививке[cite: 13]. "
+            "После этого цвет индикатора события меняется на `dark_green` (тёмно-зелёный)[cite: 9, 10]."
+        ),
+        request_body=AddVaccineReactionSerializer,
+        responses={status.HTTP_200_OK: ChildCalendarEventSerializer()}
+    )
+    def post(self, request, event_id):
+        profile = request.user.profile
+        event = get_object_or_404(
+            ChildCalendarEvent,
+            id=event_id,
+            profile=profile,
+            event_type='vaccine',
+            is_completed=True
+        )
+
+        serializer = AddVaccineReactionSerializer(data=request.data)
+        if serializer.is_valid():
+            event.reaction_text = serializer.validated_data['reaction_text']
+            event.reaction_date = date.today()
+            event.save()
+
+            return Response(
+                {
+                    "message": "Реакция на прививку успешно зафиксирована.",
+                    "data": ChildCalendarEventSerializer(event, context={'request': request}).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
