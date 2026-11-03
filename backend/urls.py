@@ -95,7 +95,7 @@ urlpatterns=[
  path('api/relationship/notbaby',views.RelationshipView.as_view(),name='relationship'),
  path('api/relationship/baby', views.RelationshipBabyView.as_view(), name='relationship_baby'),
 
-
+ path('api/report/drugs', views.DownloadMedicationRegimePDFAPIView.as_view(), name='drugs-report-pdf'),
 
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
  path('api/relationship/add_by_ref',views.AddRefamilyvView.as_view()),

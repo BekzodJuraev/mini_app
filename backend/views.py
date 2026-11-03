@@ -15,6 +15,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.graphics.shapes import Drawing, Line, PolyLine, String, Group
 import calendar
 import copy
 from django.core.files.base import ContentFile
@@ -6945,3 +6946,281 @@ class AddVaccineReactionAPIView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+def build_medication_chart(dates_list, percentages_list):
+    """
+    Рисует векторный график приёма лекарств за 30 дней (как на макете):
+    - Ось Y: от 0% до 100% с шагом 10%
+    - Ось X: 30 дат в формате ДД.ММ (повернуты вертикально на 90 градусов)
+    - Пунктирная сетка и синяя линия графика (#3B82F6)
+    """
+    drawing = Drawing(515, 230)
+
+    chart_x = 40
+    chart_y = 45
+    chart_w = 460
+    chart_h = 165
+
+    grid_color = colors.HexColor('#E2E8F0')
+    axis_color = colors.HexColor('#0F172A')
+    line_color = colors.HexColor('#3B82F6')
+    text_color = colors.HexColor('#334155')
+
+    # 1. Горизонтальные линии сетки и подписи оси Y (0% .. 100%)
+    for i in range(11):
+        pct = i * 10
+        y_pos = chart_y + (pct / 100.0) * chart_h
+
+        # Пунктирная горизонтальная линия
+        drawing.add(Line(
+            chart_x, y_pos, chart_x + chart_w, y_pos,
+            strokeColor=grid_color, strokeWidth=0.6, strokeDashArray=[2, 2]
+        ))
+
+        # Подпись процента слева
+        drawing.add(String(
+            chart_x - 6, y_pos - 3, f"{pct}%",
+            fontName=FONT_NAME, fontSize=7, fillColor=text_color, textAnchor='end'
+        ))
+
+    # 2. Вертикальные линии сетки, подписи дат по оси X и расчет точек графика
+    num_days = len(dates_list)
+    step_x = chart_w / max(num_days - 1, 1)
+    points = []
+
+    for idx, (d, pct) in enumerate(zip(dates_list, percentages_list)):
+        x_pos = chart_x + idx * step_x
+        y_pos = chart_y + (pct / 100.0) * chart_h
+        points.extend([x_pos, y_pos])
+
+        # Вертикальная пунктирная линия
+        drawing.add(Line(
+            x_pos, chart_y, x_pos, chart_y + chart_h,
+            strokeColor=grid_color, strokeWidth=0.5, strokeDashArray=[2, 2]
+        ))
+
+        # Повернутая на 90 градусов дата (ДД.ММ) под осью X
+        date_str = d.strftime('%d.%m')
+        g = Group()
+        g.translate(x_pos + 2, chart_y - 18)
+        g.rotate(90)
+        g.add(String(0, 0, date_str, fontName=FONT_NAME, fontSize=6.5, fillColor=text_color))
+        drawing.add(g)
+
+    # 3. Оси X и Y (черные сплошные линии)
+    drawing.add(Line(chart_x, chart_y, chart_x, chart_y + chart_h, strokeColor=axis_color, strokeWidth=1))
+    drawing.add(Line(chart_x, chart_y, chart_x + chart_w, chart_y, strokeColor=axis_color, strokeWidth=1))
+
+    # 4. Линия графика
+    if len(points) >= 4:
+        drawing.add(PolyLine(points, strokeColor=line_color, strokeWidth=1.5))
+
+    return drawing
+
+
+class DownloadMedicationRegimePDFAPIView(APIView):
+    """
+    GET: Генерирует и скачивает PDF-отчёт 'Режим приёма лекарств (последний месяц)'[cite: 9].
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Лекарства: Отчёты"],
+        operation_summary="Скачать PDF-отчёт 'Режим приёма лекарств (последний месяц)'",
+        operation_description=(
+                "Формирует PDF-документ с графиком приёма лекарств за последние 30 дней и таблицей статистики "
+                "(пропуски, регулярность в %, оценка соблюдения режима из 10)[cite: 9]. "
+                "Если лекарства не добавлены, выводит сообщение 'Данные о приёме лекарств отсутствуют'[cite: 9]."
+        ),
+        responses={
+            status.HTTP_200_OK: openapi.Response(
+                description="PDF-файл отчёта",
+                schema=openapi.Schema(type=openapi.TYPE_FILE)
+            )
+        }
+    )
+    def get(self, request):
+        profile = request.user.profile
+        # Подтягиваем сразу привязанные часы приёма через related_name='notifications_drugs'
+        drugs_qs = Drugs.objects.filter(profile=profile).prefetch_related('notifications_drugs')
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=40,
+            bottomMargin=40
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            'MedTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'MedSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor('#334155'),
+            spaceAfter=18,
+        )
+        section_style = ParagraphStyle(
+            'MedSection',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceBefore=12,
+            spaceAfter=8,
+        )
+        cell_style = ParagraphStyle(
+            'MedCell',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor('#0F172A'),
+        )
+        empty_style = ParagraphStyle(
+            'MedEmpty',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=11,
+            leading=15,
+            textColor=colors.HexColor('#64748B'),
+            spaceBefore=30,
+        )
+
+        # 1. Заголовок и подзаголовок
+        elements.append(Paragraph("Режим приёма лекарств (последний месяц)", title_style))
+        elements.append(Paragraph(
+            "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
+            subtitle_style
+        ))
+
+        # 2. Если пользователь не добавил лекарства
+        if not drugs_qs.exists():
+            elements.append(Paragraph("Данные о приёме лекарств отсутствуют", empty_style))
+            doc.build(elements)
+            buffer.seek(0)
+            filename = f"medication_regime_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+            return FileResponse(buffer, as_attachment=True, filename=filename, content_type='application/pdf')
+
+        # 3. Расчёт показателей за последние 30 дней
+        today = date.today()
+        start_date = today - timedelta(days=29)
+        dates_list = [start_date + timedelta(days=i) for i in range(30)]
+
+        # Фильтруем Check_Drugs строго через notification__drugs__profile
+        checks_qs = Check_Drugs.objects.filter(
+            notification__drugs__profile=profile,
+            date__range=(start_date, today),
+            is_taken=True
+        )
+
+        taken_by_date = {}
+        for chk in checks_qs:
+            taken_by_date[chk.date] = taken_by_date.get(chk.date, 0) + 1
+
+        # Считаем суточную норму приёмов по каждому лекарству
+        drug_schedule_info = []
+        for drug in drugs_qs:
+            # Берём количество созданных будильников/уведомлений в Notification_drugs
+            notif_count = drug.notifications_drugs.count()
+            # Если уведомления есть — берём их число, иначе ориентируемся на поле day (или 1)
+            daily_intakes = notif_count if notif_count > 0 else max(drug.day or 1, 1)
+
+            # Длительность курса в днях (в модели save() интервал считается от time_day)
+            duration_days = max(drug.time_day or 30, 1)
+            end_date = drug.created_at + timedelta(days=duration_days)
+            drug_schedule_info.append((drug.created_at, end_date, daily_intakes))
+
+        percentages_list = []
+        total_planned = 0
+        total_taken = 0
+        missed_days_count = 0
+
+        for d in dates_list:
+            planned_for_day = 0
+            for d_start, d_end, daily_intakes in drug_schedule_info:
+                if d_start <= d < d_end:
+                    planned_for_day += daily_intakes
+
+            # Если курс был создан позже или раньше окна, берём общую дневную норму для расчёта
+            if planned_for_day == 0:
+                planned_for_day = sum(item[2] for item in drug_schedule_info)
+
+            taken_for_day = min(taken_by_date.get(d, 0), planned_for_day)
+
+            total_planned += planned_for_day
+            total_taken += taken_for_day
+
+            if taken_for_day < planned_for_day:
+                missed_days_count += 1
+
+            day_pct = round((taken_for_day / planned_for_day) * 100, 1) if planned_for_day > 0 else 0.0
+            percentages_list.append(day_pct)
+
+        missed_intakes = max(total_planned - total_taken, 0)
+        regularity_pct = round((total_taken / total_planned) * 100, 1) if total_planned > 0 else 0.0
+        score_10 = round(regularity_pct / 10)
+
+        if score_10 >= 8:
+            score_label = "высокая регулярность"
+        elif score_10 >= 5:
+            score_label = "средняя регулярность"
+        else:
+            score_label = "низкая регулярность"
+
+        # 4. Отрисовка блока «График приема лекарств»
+        elements.append(Paragraph("График приема лекарств", section_style))
+        elements.append(build_medication_chart(dates_list, percentages_list))
+        elements.append(Spacer(1, 15))
+
+        # 5. Отрисовка блока «Статистика» (Таблица)
+        elements.append(Paragraph("Статистика", section_style))
+
+        regularity_str = f"{str(regularity_pct).replace('.', ',')}%"
+        misses_str = f"{missed_intakes} из {total_planned} запланированных приёмов ({missed_days_count} дн.)"
+        score_str = f"{score_10} из 10 — {score_label}"
+
+        stats_data = [
+            [Paragraph("Пропуски", cell_style), Paragraph(misses_str, cell_style)],
+            [Paragraph("Регулярность", cell_style), Paragraph(regularity_str, cell_style)],
+            [Paragraph("Оценка соблюдения режима", cell_style), Paragraph(score_str, cell_style)],
+        ]
+
+        stats_table = Table(stats_data, colWidths=[260, 255])
+        stats_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(stats_table)
+
+        # Сборка PDF
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"medication_regime_{profile.id}_{today.strftime('%Y%m%d')}.pdf"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )
