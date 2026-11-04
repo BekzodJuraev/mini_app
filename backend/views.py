@@ -136,14 +136,14 @@ from .main_function import build_user_data_payload
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from django.db.models import Exists, OuterRef
-
+from .report_calories import update_nutrition_ai_report_for_profile,calculate_monthly_nutrition_stats
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent
+from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Check_Drugs,Daily_check,Rentgen_Image,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetRentgen,PetRentgen_Image,PetDaily_check,PetCalories,Notification_drugs,NutritionGoal,Test,Notification,NutritionGoalPet,Notification_Pet_drugs,Tests_Pet,BloodPressure,PetShare,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent,CaloriesReportProfile
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
@@ -3668,6 +3668,7 @@ class CaroiesView(APIView):
 
         # Сохраняем профиль (декоратор @update_system поймает это изменение)
         profile.save(update_fields=['food_percentage'])
+        update_nutrition_ai_report_for_profile(profile)
 
         return Response({'message': cal_record.detail}, status=status.HTTP_200_OK)
 
@@ -7218,6 +7219,223 @@ class DownloadMedicationRegimePDFAPIView(APIView):
         buffer.seek(0)
 
         filename = f"medication_regime_{profile.id}_{today.strftime('%Y%m%d')}.pdf"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )
+
+
+class DownloadNutritionRegimePDFAPIView(APIView):
+    """
+    GET: Генерирует и скачивает PDF-отчёт 'Режим питания (последний месяц)'.
+    Берёт готовый ИИ-анализ из OneToOne модели CaloriesReportProfile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Питание: Отчёты"],
+        operation_summary="Скачать PDF-отчёт 'Режим питания (последний месяц)'",
+        operation_description=(
+            "Формирует PDF-документ с графиком выполнения нормы питания за 30 дней, "
+            "таблицей статистики (частота приёмов пищи, средние калории, вода, БЖУ, клетчатка) "
+            "и готовыми блоками ИИ-анализа ('Отчёт о вредности/полезности рациона' и 'Общие рекомендации')."
+        ),
+        responses={
+            status.HTTP_200_OK: openapi.Response(
+                description="PDF-файл отчёта",
+                schema=openapi.Schema(type=openapi.TYPE_FILE)
+            )
+        }
+    )
+    def get(self, request):
+        profile = request.user.profile
+        stats = calculate_monthly_nutrition_stats(profile)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=35,
+            bottomMargin=35
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            'NutrTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'NutrSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor('#334155'),
+            spaceAfter=14,
+        )
+        section_style = ParagraphStyle(
+            'NutrSection',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceBefore=12,
+            spaceAfter=6,
+        )
+        cell_style = ParagraphStyle(
+            'NutrCell',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor('#0F172A'),
+        )
+        cell_center_bold = ParagraphStyle(
+            'NutrCellCenterBold',
+            parent=cell_style,
+            fontName=FONT_NAME_BOLD,
+            alignment=1,
+        )
+        cell_right = ParagraphStyle(
+            'NutrCellRight',
+            parent=cell_style,
+            alignment=2,
+        )
+        body_text_style = ParagraphStyle(
+            'NutrBodyText',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12.5,
+            textColor=colors.HexColor('#1E293B'),
+            spaceAfter=8,
+        )
+        empty_style = ParagraphStyle(
+            'NutrEmpty',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=11,
+            leading=15,
+            textColor=colors.HexColor('#64748B'),
+            spaceBefore=30,
+        )
+
+        # 1. Заголовок и подзаголовок
+        elements.append(Paragraph("Режим питания (последний месяц)", title_style))
+        elements.append(Paragraph(
+            "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
+            subtitle_style
+        ))
+
+        # 2. Если записей за последние 30 дней нет
+        if not stats:
+            elements.append(Paragraph("Данные о питании за выбранный период отсутствуют", empty_style))
+            doc.build(elements)
+            buffer.seek(0)
+            filename = f"nutrition_regime_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+            return FileResponse(buffer, as_attachment=True, filename=filename, content_type='application/pdf')
+
+        # 3. График выполнения нормы питания (показываем только если установлена цель NutritionGoal)
+        if stats["has_goal"]:
+            elements.append(Paragraph("График выполнения нормы питания", section_style))
+            elements.append(build_medication_chart(stats["dates_list"], stats["percentages_list"]))
+            elements.append(Spacer(1, 10))
+
+        # 4. Таблица «Статистика» (с объединением ячеек как на макете)
+        elements.append(Paragraph("Статистика", section_style))
+        avg = stats["averages"]
+
+        meals_str = f"{str(avg['meals_per_day']).replace('.', ',')} раза в день"
+        water_str = f"{str(avg['water_liters']).replace('.', ',')} л"
+
+        table_data = [
+            [
+                Paragraph("Частота приёмов пищи", cell_style),
+                "",
+                Paragraph(meals_str, cell_style),
+                ""
+            ],
+            [
+                Paragraph("Средняя пищевая ценность в день", cell_center_bold),
+                "",
+                "",
+                ""
+            ],
+            [
+                Paragraph("Калории", cell_style),
+                Paragraph(f"{avg['calories']} ккал", cell_right),
+                Paragraph("Потребление воды", cell_style),
+                Paragraph(water_str, cell_right),
+            ],
+            [
+                Paragraph("Углеводы", cell_style),
+                Paragraph(f"{avg['carbs']} г", cell_right),
+                Paragraph("Белки", cell_style),
+                Paragraph(f"{avg['proteins']} г", cell_right),
+            ],
+            [
+                Paragraph("Клетчатка", cell_style),
+                Paragraph(f"{avg['fiber']} г", cell_right),
+                Paragraph("Жиры", cell_style),
+                Paragraph(f"{avg['fats']} г", cell_right),
+            ],
+        ]
+
+        stats_table = Table(table_data, colWidths=[140, 117.5, 140, 117.5])
+        stats_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (1, 0)),
+            ('SPAN', (2, 0), (3, 0)),
+            ('SPAN', (0, 1), (3, 1)),
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(stats_table)
+        elements.append(Spacer(1, 10))
+
+        # 5. Берём готовый ИИ-анализ из CaloriesReportProfile
+        report_obj = getattr(profile, 'calories_report', None)
+        if not report_obj:
+            # Если отчёт ещё ни разу не создавался (например, старые данные до обновления), создаём 1 раз
+            update_nutrition_ai_report_for_profile(profile)
+            report_obj = CaloriesReportProfile.objects.filter(profile=profile).first()
+
+        diet_text = (
+            report_obj.diet_report
+            if (report_obj and report_obj.diet_report)
+            else "За последний месяц средняя калорийность рациона соответствовала зафиксированным приёмам пищи."
+        )
+        rec_text = (
+            report_obj.general_recommendations
+            if (report_obj and report_obj.general_recommendations)
+            else "Сохранять регулярный режим питания, равномерно распределять приёмы пищи в течение дня и контролировать количество воды."
+        )
+
+        # 6. Блоки «Отчёт о вредности/полезности рациона» и «Общие рекомендации»
+        elements.append(Paragraph("Отчёт о вредности/полезности рациона", section_style))
+        elements.append(Paragraph(diet_text, body_text_style))
+
+        elements.append(Paragraph("Общие рекомендации", section_style))
+        elements.append(Paragraph(rec_text, body_text_style))
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"nutrition_regime_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
         return FileResponse(
             buffer,
             as_attachment=True,

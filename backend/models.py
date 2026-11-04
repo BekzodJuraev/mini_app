@@ -984,6 +984,32 @@ class Calories(models.Model):
     def __str__(self):
         return self.profile.name
 
+
+class CaloriesReportProfile(models.Model):
+    """
+    OneToOne модель для хранения готового ИИ-анализа питания за 30 дней (для PDF-отчёта).
+    Обновляется при подтверждении приёма пищи (PATCH).
+    """
+    profile = models.OneToOneField(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name='calories_report',
+        verbose_name="Профиль"
+    )
+    diet_report = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Отчёт о вредности/полезности рациона"
+    )
+    general_recommendations = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Общие рекомендации"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Отчёт питания для {self.profile}"
 class PetCalories(models.Model):
     pet = models.ForeignKey(
         'Pet', on_delete=models.CASCADE, related_name='pet_calories', verbose_name="Питомец"
