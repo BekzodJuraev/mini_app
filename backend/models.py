@@ -225,6 +225,7 @@ class Profile(models.Model):
     IK = models.FloatField(null=True,blank=True)
     timezone = models.CharField(max_length=50, null=True,blank=True)
     water_goal=models.FloatField(default=0)
+
     life_expectancy_json=models.TextField(null=True,default=None)
     health_recommendations=models.TextField(null=True,default=None)
     risk_test=models.TextField(null=True,default=None)
@@ -296,7 +297,29 @@ class ChildHealthAnalysisProfile(models.Model):
 
 
 
+class GeneralHealthReportProfile(models.Model):
+    """
+    OneToOne модель только для 4 текстовых блоков ИИ
+    на странице 'Сводка состояния здоровья на основе всех шкал'.
+    """
+    profile = models.OneToOneField(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name='general_health_report',
+        verbose_name="Профиль"
+    )
 
+    brief_summary = models.TextField(blank=True, null=True)
+    dynamics_analysis = models.TextField(blank=True, null=True)
+    norms_comparison = models.TextField(blank=True, null=True)
+    personal_recommendations = models.TextField(blank=True, null=True)
+
+    # MD5-отпечаток данных, чтобы не вызывать ИИ без изменений
+    data_hash = models.CharField(max_length=64, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Сводка по шкалам для {self.profile}"
 
 
 class ChildIllnessReport(models.Model):

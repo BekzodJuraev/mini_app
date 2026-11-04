@@ -28,6 +28,7 @@ import random
 from django import db
 from django.core.mail import send_mail
 from django.core.cache import cache
+from .report import collect_all_user_health_data,get_or_update_scales_summary_report
 from .serializers import (
     SetResetPasswordSer,
     VerifyCodeSerializer,
@@ -7436,6 +7437,267 @@ class DownloadNutritionRegimePDFAPIView(APIView):
         buffer.seek(0)
 
         filename = f"nutrition_regime_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )
+class DownloadGeneralHealthPersonalPDFAPIView(APIView):
+    """
+    GET: Генерирует PDF 'Общее состояние здоровья' (Персональные данные + Пройденные анализы).
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Общее здоровье: Отчёты"],
+        operation_summary="Скачать PDF 'Общее состояние здоровья' (Персональные данные и Анализы)",
+        responses={
+            status.HTTP_200_OK: openapi.Response(
+                description="PDF-файл отчёта",
+                schema=openapi.Schema(type=openapi.TYPE_FILE)
+            )
+        }
+    )
+    def get(self, request):
+        profile = request.user.profile
+        collected_data = collect_all_user_health_data(profile)
+        p_table = collected_data["personal_table"]
+        analyses = collected_data["analyses"]
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=35,
+            bottomMargin=35
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Единые стили (точно как в твоём отчёте питания)
+        title_style = ParagraphStyle(
+            'NutrTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'NutrSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor('#334155'),
+            spaceAfter=14,
+        )
+        section_style = ParagraphStyle(
+            'NutrSection',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceBefore=12,
+            spaceAfter=6,
+        )
+        cell_style = ParagraphStyle(
+            'NutrCell',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor('#0F172A'),
+        )
+
+        # 1. Заголовок и подзаголовок
+        elements.append(Paragraph("Общее состояние здоровья", title_style))
+        elements.append(Paragraph(
+            "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
+            subtitle_style
+        ))
+
+        # 2. Персональные данные (Таблица 1)
+        elements.append(Paragraph("Персональные данные", section_style))
+
+        table1_data = [
+            [Paragraph("Имя Фамилия Отчество", cell_style), Paragraph(p_table["full_name"], cell_style)],
+            [Paragraph("Пол", cell_style), Paragraph(p_table["gender"], cell_style)],
+            [Paragraph("Возраст", cell_style), Paragraph(p_table["age"], cell_style)],
+            [Paragraph("Рост / Вес", cell_style), Paragraph(p_table["height_weight"], cell_style)],
+        ]
+
+        t1 = Table(table1_data, colWidths=[240, 275])
+        t1.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(t1)
+        elements.append(Spacer(1, 10))
+
+        # 3. Персональные данные (Таблица 2)
+        table2_data = [
+            [Paragraph("ИМТ", cell_style), Paragraph(p_table["bmi"], cell_style)],
+            [Paragraph("Индекс курения", cell_style), Paragraph(p_table["smoking"], cell_style)],
+            [Paragraph("Хронические неинфекционные заболевания", cell_style), Paragraph(p_table["chronic_diseases"], cell_style)],
+            [Paragraph("Приём лекарств", cell_style), Paragraph(p_table["drugs"], cell_style)],
+            [Paragraph("Группа крови и резус-фактор", cell_style), Paragraph(p_table["blood_group"], cell_style)],
+            [Paragraph("Место проживания", cell_style), Paragraph(p_table["place_of_residence"], cell_style)],
+        ]
+
+        t2 = Table(table2_data, colWidths=[240, 275])
+        t2.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(t2)
+        elements.append(Spacer(1, 12))
+
+        # 4. Пройденные анализы (Таблица 3 с поддержкой разрыва по строкам splitByRow=1)
+        elements.append(Paragraph("Пройденные анализы", section_style))
+
+        analyses_rows = []
+        for item in analyses:
+            analyses_rows.append([
+                Paragraph(item["title"], cell_style),
+                Paragraph(item["result"], cell_style)
+            ])
+
+        if not analyses_rows:
+            analyses_rows.append([
+                Paragraph("Анализы не добавлены", cell_style),
+                Paragraph("В разделе «Анализы» отсутствуют загруженные данные", cell_style)
+            ])
+
+        t3 = Table(analyses_rows, colWidths=[180, 335], splitByRow=1)
+        t3.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(t3)
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"general_health_personal_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )
+
+
+class DownloadHealthScalesSummaryPDFAPIView(APIView):
+    """
+    GET: Генерирует PDF 'Сводка состояния здоровья на основе всех шкал'.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Общее здоровье: Отчёты"],
+        operation_summary="Скачать PDF 'Сводка состояния здоровья на основе всех шкал'",
+        responses={
+            status.HTTP_200_OK: openapi.Response(
+                description="PDF-файл отчёта",
+                schema=openapi.Schema(type=openapi.TYPE_FILE)
+            )
+        }
+    )
+    def get(self, request):
+        profile = request.user.profile
+        report_obj = get_or_update_scales_summary_report(profile)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=35,
+            bottomMargin=35
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Единые стили (точно как в твоём отчёте питания)
+        title_style = ParagraphStyle(
+            'NutrTitle',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'NutrSubTitle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor('#334155'),
+            spaceAfter=14,
+        )
+        section_style = ParagraphStyle(
+            'NutrSection',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_BOLD,
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor('#1E3A8A'),
+            spaceBefore=12,
+            spaceAfter=6,
+        )
+        body_text_style = ParagraphStyle(
+            'NutrBodyText',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8.5,
+            leading=12.5,
+            textColor=colors.HexColor('#1E293B'),
+            spaceAfter=8,
+        )
+
+        elements.append(Paragraph("Сводка состояния здоровья на основе всех шкал", title_style))
+        elements.append(Paragraph(
+            "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
+            subtitle_style
+        ))
+
+        elements.append(Paragraph("Краткий отчет по здоровью", section_style))
+        elements.append(Paragraph(report_obj.brief_summary or "Данные не указаны", body_text_style))
+
+        elements.append(Paragraph("Анализ динамики здоровья", section_style))
+        elements.append(Paragraph(report_obj.dynamics_analysis or "Данные не указаны", body_text_style))
+
+        elements.append(Paragraph("Сравнение с нормами по возрасту и полу", section_style))
+        elements.append(Paragraph(report_obj.norms_comparison or "Данные не указаны", body_text_style))
+
+        elements.append(Paragraph("Краткие персональные рекомендации", section_style))
+        elements.append(Paragraph(report_obj.personal_recommendations or "Данные не указаны", body_text_style))
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f"health_scales_summary_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
         return FileResponse(
             buffer,
             as_attachment=True,

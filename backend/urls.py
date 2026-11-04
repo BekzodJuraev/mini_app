@@ -97,6 +97,12 @@ urlpatterns=[
 
  path('api/report/drugs', views.DownloadMedicationRegimePDFAPIView.as_view(), name='drugs-report-pdf'),
  path('api/report/calories', views.DownloadNutritionRegimePDFAPIView.as_view(), name='drugs-report-pdf'),
+ path('api/report/personal',views.DownloadGeneralHealthPersonalPDFAPIView.as_view()),
+ path('api/report/scales-summary',views.DownloadHealthScalesSummaryPDFAPIView.as_view()),
+
+
+
+
  path('api/relationship/list', views.GetRelationshipListView.as_view(),name='list_relat'),
  path('api/relationship/add_by_ref',views.AddRefamilyvView.as_view()),
  path('api/relationship/delete_from_family',views.DeleteFromFamilyView.as_view()),
