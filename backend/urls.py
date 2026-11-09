@@ -101,7 +101,10 @@ urlpatterns=[
  path('api/report/scales-summary',views.DownloadHealthScalesSummaryPDFAPIView.as_view()),
 
  path('api/doctor/cabinet',views.DoctorCabinetAPIView.as_view()),
-
+ path('api/doctor/status',views.DoctorShiftToggleAPIView.as_view()),
+ path('api/doctor/consulatation',views.DoctorConsultationsListAPIView.as_view()),
+ path('api/doctor/withdraw', views.DoctorWithdrawalAPIView.as_view()),
+ path('api/doctor/withdraw/<int:withdrawal_id>', views.DoctorWithdrawalDetailAPIView.as_view()),
 
 
 

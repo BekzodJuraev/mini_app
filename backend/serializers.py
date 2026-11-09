@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Tracking_Habit,Habit,Drugs,Rentgen,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,Notification_drugs,NutritionGoal,Test,Question,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,Critical_analysis,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,NotificationFemale,ChildMeasurement,ChildIllnessReport,ChildHealthAnalysisProfile,ChildCalendarEvent,DoctorProfile, Consultation, ConsultationMessage,DoctorWithdrawal
     #,DigestiveSystem,DentalJawSystem,EndocrineSystem,CardiovascularSystem,MentalHealthSystem,ImmuneSystem,RespiratorySystem,HematopoieticMetabolicSystem,SkeletalMuscleSystem,SensorySystem,ExcretorySystem
 from django.contrib.auth.models import User
 import openai
@@ -1290,7 +1290,7 @@ class AddVaccineReactionSerializer(serializers.Serializer):
     """Сериализатор для добавления реакции на пройденную прививку"""
     reaction_text = serializers.CharField(required=True, allow_blank=False)
 
-from .models import DoctorProfile, Consultation, ConsultationMessage
+
 
 class ConsultationHistoryItemSerializer(serializers.ModelSerializer):
     """Элемент списка 'История консультаций' внизу профиля врача (Иванова Марина | + 1 100 ₽)"""
@@ -1353,13 +1353,6 @@ class DoctorOnlineToggleSerializer(serializers.Serializer):
     is_online = serializers.BooleanField(required=True, help_text="True — Online, False — Offline")
 
 
-class DoctorWithdrawMockSerializer(serializers.Serializer):
-    """Тестовый вывод средств (списывает сумму или весь баланс врача)"""
-    amount = serializers.IntegerField(
-        required=False,
-        min_value=1,
-        help_text="Сумма вывода в ₽ (если не передать — выводится весь доступный баланс)"
-    )
 
 
 class DoctorConsultationQueueSerializer(serializers.ModelSerializer):
@@ -1460,3 +1453,95 @@ class CompleteConsultationSerializer(serializers.Serializer):
         default=False,
         help_text="Требуется ли очная встреча с врачом? (True/False)"
     )
+
+class DoctorWithdrawCreateSerializer(serializers.Serializer):
+    """
+    Экран 'Вывод средств': форма создания заявки на вывод.
+    """
+    amount = serializers.IntegerField(
+        min_value=1,
+        required=True,
+        help_text="Сумма вывода (₽)"
+    )
+    card_number = serializers.CharField(
+        max_length=30,
+        required=True,
+        help_text="Номер банковской карты (16 цифр)"
+    )
+    cardholder_name = serializers.CharField(
+        max_length=255,
+        required=True,
+        help_text="ФИО держателя карты (Получатель)"
+    )
+
+    def validate_card_number(self, value):
+        digits = "".join(ch for ch in value if ch.isdigit())
+        if len(digits) < 12 or len(digits) > 19:
+            raise serializers.ValidationError("Введите корректный номер банковской карты (16 цифр).")
+        return digits
+
+
+class DoctorWithdrawalListSerializer(serializers.ModelSerializer):
+    """
+    Экран 'История вывода средств' (список операций: **** 4242 | - 10 100 ₽ | дата).
+    """
+    short_masked_card = serializers.CharField(read_only=True)
+    amount_display = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    date_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DoctorWithdrawal
+        fields = [
+            'id',
+            'short_masked_card',
+            'amount',
+            'amount_display',
+            'status',
+            'status_display',
+            'date_display',
+        ]
+
+    def get_amount_display(self, obj):
+        # Формат как на макете: "- 10 100 ₽"
+        formatted_num = f"{obj.amount:,}".replace(",", " ")
+        return f"- {formatted_num} ₽"
+
+    def get_date_display(self, obj):
+        return obj.created_at.strftime('%d.%m.%Y') if obj.created_at else ""
+
+
+class DoctorWithdrawalDetailSerializer(serializers.ModelSerializer):
+    """
+    Экран 'Детали транзакции':
+    - Получатель (cardholder_name)
+    - Номер банковской карты (full_masked_card + полный card_number)
+    - Сумма вывода (amount / amount_display)
+    - Статус операции (Одобрено / В обработке / Отклонено)
+    - Дата операции (ДД.ММ.ГГГГ)
+    """
+    full_masked_card = serializers.CharField(read_only=True)
+    amount_display = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    date_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DoctorWithdrawal
+        fields = [
+            'id',
+            'cardholder_name',
+            'card_number',
+            'full_masked_card',
+            'amount',
+            'amount_display',
+            'status',
+            'status_display',
+            'date_display',
+        ]
+
+    def get_amount_display(self, obj):
+        formatted_num = f"{obj.amount:,}".replace(",", " ")
+        return f"{formatted_num} ₽"
+
+    def get_date_display(self, obj):
+        return obj.created_at.strftime('%d.%m.%Y') if obj.created_at else ""

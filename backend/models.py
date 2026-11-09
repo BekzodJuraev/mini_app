@@ -1271,3 +1271,61 @@ class ConsultationMessage(models.Model):
         ordering = ['created_at']
         verbose_name = "Сообщение консультации"
         verbose_name_plural = "Сообщения консультаций"
+
+
+class DoctorWithdrawal(models.Model):
+    """
+    История операций по выводу средств врачом.
+    """
+    STATUS_CHOICES = (
+        ('approved', 'Одобрено'),
+        ('processing', 'В обработке'),
+        ('rejected', 'Отклонено'),
+    )
+
+    doctor = models.ForeignKey(
+        DoctorProfile,
+        on_delete=models.CASCADE,
+        related_name='withdrawals',
+        verbose_name="Врач"
+    )
+    amount = models.PositiveIntegerField(verbose_name="Сумма вывода (₽)")
+    card_number = models.CharField(max_length=30, verbose_name="Номер банковской карты")
+    cardholder_name = models.CharField(max_length=255, verbose_name="ФИО держателя карты (Получатель)")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='approved',  # Для теста без платежки сразу ставим 'Одобрено'
+        verbose_name="Статус операции"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата операции")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Вывод средств врача"
+        verbose_name_plural = "История выводов средств врачей"
+
+    @property
+    def clean_digits(self) -> str:
+        """Оставляет только цифры номера карты"""
+        return "".join(ch for ch in (self.card_number or "") if ch.isdigit())
+
+    @property
+    def short_masked_card(self) -> str:
+        """Формат для списка 'История вывода средств': '**** 4242'"""
+        digits = self.clean_digits
+        last4 = digits[-4:] if len(digits) >= 4 else digits
+        return f"**** {last4}"
+
+    @property
+    def full_masked_card(self) -> str:
+        """Формат для экрана 'Детали транзакции': '4276 3800 **** 4242'"""
+        digits = self.clean_digits
+        if len(digits) >= 16:
+            return f"{digits[:4]} {digits[4:8]} **** {digits[-4:]}"
+        elif len(digits) >= 4:
+            return f"0000 0000 **** {digits[-4:]}"
+        return self.card_number
+
+    def __str__(self):
+        return f"{self.doctor.full_name} — {self.amount} ₽ ({self.get_status_display()})"

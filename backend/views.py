@@ -1,6 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import ExpressionWrapper, F, DurationField, DateField
 from datetime import date,timedelta
+from django.db import transaction
 from rest_framework.parsers import MultiPartParser, FormParser
 from collections import defaultdict
 from django.contrib.auth import authenticate,login,logout
@@ -7706,15 +7707,17 @@ class DownloadHealthScalesSummaryPDFAPIView(APIView):
         )
 
 
-from .models import DoctorProfile, Consultation, ConsultationMessage
+from .models import DoctorProfile, Consultation, ConsultationMessage,DoctorWithdrawal
 from .serializers import (
     DoctorCabinetSerializer,
     DoctorProfileUpdateSerializer,
     DoctorOnlineToggleSerializer,
-    DoctorWithdrawMockSerializer,
     DoctorConsultationQueueSerializer,
     ConsultationMessageSerializer,
     CompleteConsultationSerializer,
+    DoctorWithdrawCreateSerializer,
+    DoctorWithdrawalListSerializer,
+    DoctorWithdrawalDetailSerializer,
 )
 
 # Обязательный параметр telegram_id для Swagger
@@ -7795,52 +7798,7 @@ class DoctorCabinetAPIView(APIView):
         )
 
 
-# ==============================================================================
-# 2. ТЕСТОВЫЙ ВЫВОД СРЕДСТВ (КНОПКА «ВЫВЕСТИ»)
-# ==============================================================================
 
-class DoctorWithdrawMockAPIView(APIView):
-    permission_classes = [AllowAny]
-
-    @swagger_auto_schema(
-        tags=["Врач: Отдельная панель"],
-        operation_summary="Вывести средства с баланса врача (тестовый режим)",
-        manual_parameters=DOCTOR_SWAGGER_PARAMS,
-        request_body=DoctorWithdrawMockSerializer,
-        responses={status.HTTP_200_OK: "Средства успешно выведены"}
-    )
-    def post(self, request):
-        doctor = get_current_doctor(request)
-        if not doctor:
-            return Response(
-                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        serializer = DoctorWithdrawMockSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        if doctor.balance <= 0:
-            return Response(
-                {"error": "На балансе нет доступных средств для вывода."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        withdraw_amount = serializer.validated_data.get('amount') or doctor.balance
-        if withdraw_amount > doctor.balance:
-            return Response(
-                {"error": f"Недостаточно средств. Доступно к выводу: {doctor.balance} ₽"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        doctor.balance -= withdraw_amount
-        doctor.save(update_fields=['balance'])
-
-        return Response({
-            "message": f"Заявка на вывод {withdraw_amount} ₽ успешно выполнена (тестовый режим).",
-            "withdrawn_amount": withdraw_amount,
-            "new_balance": doctor.balance
-        }, status=status.HTTP_200_OK)
 
 
 # ==============================================================================
@@ -8137,3 +8095,118 @@ class DoctorCompleteConsultationAPIView(APIView):
             "earned_from_consultation": earning,
             "new_doctor_balance": doctor.balance,
         }, status=status.HTTP_200_OK)
+
+
+
+class DoctorWithdrawalAPIView(APIView):
+    """
+    GET: Получить доступный баланс врача и список 'История вывода средств'.
+    POST: Оформить вывод средств (Сумма вывода, Номер карты, ФИО держателя карты).
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Вывод средств"],
+        operation_summary="Получить доступный баланс и историю вывода средств",
+        operation_description=(
+            "Возвращает `available_balance` врача (для плашки 'Доступный баланс') "
+            "и список всех операций по выводу средств (`withdrawals`: маска карты **** 4242, сумма, дата)."
+        ),
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: DoctorWithdrawalListSerializer(many=True)}
+    )
+    def get(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        withdrawals = doctor.withdrawals.all()
+        return Response({
+            "available_balance": doctor.balance,
+            "withdrawals": DoctorWithdrawalListSerializer(withdrawals, many=True).data
+        }, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        tags=["Врач: Вывод средств"],
+        operation_summary="Вывести средства на банковскую карту (тестовый режим)",
+        operation_description=(
+            "Принимает `amount` (Сумма вывода), `card_number` (Номер карты) и `cardholder_name` (ФИО держателя карты). "
+            "Проверяет достаточность средств на балансе, списывает сумму и создаёт транзакцию в истории со статусом 'Одобрено'."
+        ),
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        request_body=DoctorWithdrawCreateSerializer,
+        responses={status.HTTP_201_CREATED: DoctorWithdrawalDetailSerializer()}
+    )
+    def post(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = DoctorWithdrawCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        amount = serializer.validated_data['amount']
+        card_number = serializer.validated_data['card_number']
+        cardholder_name = serializer.validated_data['cardholder_name'].strip()
+
+        if doctor.balance <= 0 or amount > doctor.balance:
+            return Response(
+                {"error": f"Недостаточно средств на балансе. Доступный баланс: {doctor.balance} ₽"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            doctor.balance -= amount
+            doctor.save(update_fields=['balance'])
+
+            withdrawal = DoctorWithdrawal.objects.create(
+                doctor=doctor,
+                amount=amount,
+                card_number=card_number,
+                cardholder_name=cardholder_name,
+                status='approved'
+            )
+
+        return Response({
+            "message": "Средства успешно выведены.",
+            "available_balance": doctor.balance,
+            "transaction": DoctorWithdrawalDetailSerializer(withdrawal).data
+        }, status=status.HTTP_201_CREATED)
+
+
+class DoctorWithdrawalDetailAPIView(APIView):
+    """
+    GET: Экран 'Детали транзакции' (подробная информация о конкретной операции вывода средств).
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Вывод средств"],
+        operation_summary="Получить детали конкретной транзакции вывода средств",
+        operation_description=(
+            "Возвращает подробную информацию об операции: Получатель (`cardholder_name`), "
+            "Номер банковской карты (`full_masked_card`), Сумма вывода (`amount_display`), "
+            "Статус операции (`status_display`: Одобрено / В обработке / Отклонено) и Дата операции (`date_display`)."
+        ),
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: DoctorWithdrawalDetailSerializer()}
+    )
+    def get(self, request, withdrawal_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        withdrawal = get_object_or_404(DoctorWithdrawal, id=withdrawal_id, doctor=doctor)
+        return Response(
+            DoctorWithdrawalDetailSerializer(withdrawal).data,
+            status=status.HTTP_200_OK
+        )

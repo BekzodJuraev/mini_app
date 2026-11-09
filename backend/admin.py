@@ -1,8 +1,14 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation,DoctorWithdrawal
 
 
 import nested_admin
+
+@admin.register(DoctorWithdrawal)
+class DoctorWithdrawalAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doctor', 'amount', 'short_masked_card', 'cardholder_name', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('doctor__full_name', 'cardholder_name', 'card_number')
 @admin.register(Consultation)
 class ConsultationAdmin(admin.ModelAdmin):
     list_display = ('id', 'doctor', 'client', 'status', 'doctor_earning', 'needs_in_person_visit', 'created_at')
