@@ -1062,4 +1062,212 @@ class PetChat(models.Model):
     def __str__(self):
         return self.pet.klichka
 
+class ConsultationSettings(models.Model):
+    """
+    Единые настройки консультаций в Django Admin (комиссия сервиса для всех врачей).
+    """
+    commission_percent = models.PositiveIntegerField(
+        default=30,
+        verbose_name="Единая комиссия сервиса (%)"
+    )
 
+    class Meta:
+        verbose_name = "Настройки комиссии сервиса"
+        verbose_name_plural = "Настройки комиссии сервиса"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_commission(cls) -> int:
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={'commission_percent': 30})
+        return obj.commission_percent
+
+    def __str__(self):
+        return f"Комиссия сервиса: {self.commission_percent}%"
+class DoctorProfile(models.Model):
+    """
+    Отдельная независимая модель врача (идентификация строго по telegram_id).
+    """
+    telegram_id = models.BigIntegerField(
+        unique=True,
+        db_index=True,
+        verbose_name="Telegram ID врача"
+    )
+    full_name = models.CharField(max_length=255, verbose_name="ФИО врача")
+    photo = models.ImageField(
+        upload_to='doctors/photos/',
+        null=True,
+        blank=True,
+        verbose_name="Фотография"
+    )
+    specialization = models.CharField(max_length=200, verbose_name="Специализация (например: Терапевт)")
+    short_description = models.TextField(blank=True, default="", verbose_name="Коротко о себе")
+    education = models.TextField(blank=True, default="", verbose_name="Образование")
+    qualification = models.CharField(max_length=255, blank=True, default="", verbose_name="Квалификация")
+    practice_start_date = models.DateField(verbose_name="Дата начала медицинской практики")
+
+    # Финансы и рейтинг
+    consultation_price = models.PositiveIntegerField(
+        default=1500,
+        verbose_name="Стоимость консультации для клиента (₽)"
+    )
+    balance = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Текущий баланс к выводу (₽)"
+    )
+    total_earned = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Общий заработок за всё время (₽)"
+    )
+    rating = models.FloatField(default=5.0, verbose_name="Рейтинг")
+
+    # Статусы
+    is_online = models.BooleanField(default=False, verbose_name="Статус Online / Offline")
+    is_active = models.BooleanField(default=True, verbose_name="Профиль активен (не отключен админом)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Врач"
+        verbose_name_plural = "Врачи"
+
+    @property
+    def experience_years(self) -> int:
+        if not self.practice_start_date:
+            return 0
+        today = date.today()
+        years = today.year - self.practice_start_date.year - (
+            (today.month, today.day) < (self.practice_start_date.month, self.practice_start_date.day)
+        )
+        return max(years, 0)
+
+    @property
+    def experience_display(self) -> str:
+        y = self.experience_years
+        if y % 10 == 1 and y % 100 != 11:
+            word = "год"
+        elif 2 <= y % 10 <= 4 and (y % 100 < 10 or y % 100 >= 20):
+            word = "года"
+        else:
+            word = "лет"
+        return f"{y} {word} стажа"
+
+    @property
+    def service_commission_percent(self) -> int:
+        return ConsultationSettings.get_commission()
+
+    @property
+    def doctor_payout(self) -> int:
+        comm = self.service_commission_percent
+        return int(round(self.consultation_price * (100 - comm) / 100.0))
+
+    def __str__(self):
+        return f"{self.full_name} ({self.specialization}) [TG: {self.telegram_id}]"
+
+
+class Consultation(models.Model):
+    """
+    Заявка / сессия онлайн-консультации между Пациентом (Profile) и Врачом (DoctorProfile).
+    """
+    STATUS_CHOICES = (
+        ('active', 'Активна'),
+        ('completed', 'Сессия завершена'),
+    )
+
+    client = models.ForeignKey(
+        'Profile',
+        on_delete=models.CASCADE,
+        related_name='client_consultations',
+        verbose_name="Пациент"
+    )
+    doctor = models.ForeignKey(
+        DoctorProfile,
+        on_delete=models.CASCADE,
+        related_name='doctor_consultations',
+        verbose_name="Врач"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        verbose_name="Статус"
+    )
+    initial_complaint = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Первичное обращение / жалоба пациента"
+    )
+
+    room_name = models.CharField(max_length=100, unique=True, editable=False)
+    call_offered = models.BooleanField(default=False, verbose_name="Врач предложил звонок")
+
+    price_for_client = models.PositiveIntegerField(default=0, verbose_name="Цена для клиента (₽)")
+    commission_percent = models.PositiveIntegerField(default=30, verbose_name="Комиссия сервиса (%)")
+    doctor_earning = models.PositiveIntegerField(default=0, verbose_name="Доход врача с консультации (₽)")
+
+    doctor_conclusion = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Заключение врача (Совет по улучшению состояния и Лекарства)"
+    )
+    conclusion_file = models.FileField(
+        upload_to='consultations/conclusions/',
+        blank=True,
+        null=True,
+        verbose_name="Файл с заключением"
+    )
+    needs_in_person_visit = models.BooleanField(
+        default=False,
+        verbose_name="Требуется ли очная встреча с врачом?"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Консультация"
+        verbose_name_plural = "Консультации"
+
+    def save(self, *args, **kwargs):
+        if not self.room_name:
+            self.room_name = f"consult_{uuid.uuid4().hex[:12]}"
+        if not self.pk and self.doctor:
+            self.price_for_client = self.doctor.consultation_price
+            self.commission_percent = self.doctor.service_commission_percent
+            self.doctor_earning = self.doctor.doctor_payout
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Консультация #{self.id}: {self.doctor.full_name} — {self.client.name}"
+
+
+class ConsultationMessage(models.Model):
+    SENDER_CHOICES = (
+        ('client', 'Пациент'),
+        ('doctor', 'Врач'),
+        ('system', 'Система'),
+    )
+
+    consultation = models.ForeignKey(
+        Consultation,
+        on_delete=models.CASCADE,
+        related_name='messages',
+        verbose_name="Консультация"
+    )
+    sender_role = models.CharField(max_length=15, choices=SENDER_CHOICES, verbose_name="Отправитель")
+    text = models.TextField(blank=True, default="", verbose_name="Текст сообщения")
+    file_attachment = models.FileField(
+        upload_to='consultations/chat_files/',
+        null=True,
+        blank=True,
+        verbose_name="Прикрепленный файл"
+    )
+    is_read = models.BooleanField(default=False, verbose_name="Прочитано")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "Сообщение консультации"
+        verbose_name_plural = "Сообщения консультаций"

@@ -1289,3 +1289,174 @@ class CompleteCheckupSerializer(serializers.Serializer):
 class AddVaccineReactionSerializer(serializers.Serializer):
     """Сериализатор для добавления реакции на пройденную прививку"""
     reaction_text = serializers.CharField(required=True, allow_blank=False)
+
+from .models import DoctorProfile, Consultation, ConsultationMessage
+
+class ConsultationHistoryItemSerializer(serializers.ModelSerializer):
+    """Элемент списка 'История консультаций' внизу профиля врача (Иванова Марина | + 1 100 ₽)"""
+    client_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Consultation
+        fields = ['id', 'client_full_name', 'doctor_earning', 'completed_at']
+
+    def get_client_full_name(self, obj):
+        parts = [p for p in (obj.client.lastname, obj.client.name) if p]
+        return " ".join(parts) if parts else (obj.client.nickname or f"Пациент #{obj.client.id}")
+
+
+class DoctorCabinetSerializer(serializers.ModelSerializer):
+    """Полные данные для главного экрана 'Мой кабинет / Профиль' врача"""
+    experience_years = serializers.IntegerField(read_only=True)
+    experience_display = serializers.CharField(read_only=True)
+    service_commission_percent = serializers.IntegerField(read_only=True)
+    doctor_payout = serializers.IntegerField(read_only=True)
+    consultation_history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DoctorProfile
+        fields = [
+            'id',
+            'full_name',
+            'photo',
+            'specialization',
+            'education',
+            'qualification',
+            'practice_start_date',
+            'experience_years',
+            'experience_display',
+            'rating',
+            'balance',
+            'total_earned',
+            'short_description',
+            'consultation_price',
+            'doctor_payout',
+            'service_commission_percent',
+            'is_online',
+            'consultation_history',
+        ]
+
+    def get_consultation_history(self, obj):
+        completed_qs = obj.doctor_consultations.filter(status='completed').select_related('client')[:20]
+        return ConsultationHistoryItemSerializer(completed_qs, many=True).data
+
+
+class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
+    """Экран 'Изменение профиля': врач меняет 'Коротко о себе' и 'Стоимость консультации для клиента'"""
+    class Meta:
+        model = DoctorProfile
+        fields = ['short_description', 'consultation_price']
+
+
+class DoctorOnlineToggleSerializer(serializers.Serializer):
+    """Переключатель статуса Online / Offline"""
+    is_online = serializers.BooleanField(required=True, help_text="True — Online, False — Offline")
+
+
+class DoctorWithdrawMockSerializer(serializers.Serializer):
+    """Тестовый вывод средств (списывает сумму или весь баланс врача)"""
+    amount = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Сумма вывода в ₽ (если не передать — выводится весь доступный баланс)"
+    )
+
+
+class DoctorConsultationQueueSerializer(serializers.ModelSerializer):
+    """Экран 'Заявки': список назначенных врачу активных и завершённых консультаций"""
+    client_full_name = serializers.SerializerMethodField()
+    client_photo = serializers.SerializerMethodField()
+    last_message_text = serializers.SerializerMethodField()
+    time_display = serializers.SerializerMethodField()
+    unread_For_doctor = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Consultation
+        fields = [
+            'id',
+            'status',
+            'status_display',
+            'client_full_name',
+            'client_photo',
+            'last_message_text',
+            'time_display',
+            'unread_For_doctor',
+        ]
+
+    def get_client_full_name(self, obj):
+        parts = [p for p in (obj.client.lastname, obj.client.name, obj.client.middle_name) if p]
+        return " ".join(parts) if parts else f"Пациент #{obj.client.id}"
+
+    def get_client_photo(self, obj):
+        request = self.context.get('request')
+        if obj.client.photo and request:
+            return request.build_absolute_uri(obj.client.photo.url)
+        return None
+
+    def get_last_message_text(self, obj):
+        if obj.status == 'completed':
+            return "Сессия завершена"
+        last_msg = obj.messages.last()
+        if last_msg and last_msg.text:
+            return last_msg.text
+        return obj.initial_complaint or f"Здравствуйте {obj.doctor.full_name}!"
+
+    def get_time_display(self, obj):
+        last_msg = obj.messages.last()
+        dt = last_msg.created_at if last_msg else obj.created_at
+        return dt.strftime('%H:%M') if dt else ""
+
+    def get_unread_For_doctor(self, obj):
+        if obj.status == 'completed':
+            return False
+        return obj.messages.filter(sender_role='client', is_read=False).exists()
+
+    def get_status_display(self, obj):
+        return "Сессия завершена" if obj.status == 'completed' else "Активна"
+
+
+class ConsultationMessageSerializer(serializers.ModelSerializer):
+    """Сериализатор одного сообщения в чате"""
+    time_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConsultationMessage
+        fields = ['id', 'sender_role', 'text', 'file_attachment', 'is_read', 'time_display', 'created_at']
+        read_only_fields = ['id', 'sender_role', 'is_read', 'time_display', 'created_at']
+
+    def get_time_display(self, obj):
+        return obj.created_at.strftime('%H:%M') if obj.created_at else ""
+
+
+class CompleteConsultationSerializer(serializers.Serializer):
+    """
+    Экран 'Вы завершили сессию':
+    Как указано в ТЗ, поля можно передать как единым 'doctor_conclusion', так и двумя полями с UI
+    ('improvement_advice' и 'medications'), которые бэкенд автоматически склеит в одно поле 'Заключение врача'.
+    """
+    doctor_conclusion = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Единое поле 'Заключение врача' (если фронтенд отправляет одним полем)"
+    )
+    improvement_advice = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Совет по улучшению состояния (склеивается в Заключение врача)"
+    )
+    medications = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Лекарства, если требуется (склеивается в Заключение врача)"
+    )
+    conclusion_file = serializers.FileField(
+        required=False,
+        allow_null=True,
+        help_text="Прикрепленный файл с заключением (при необходимости)"
+    )
+    needs_in_person_visit = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Требуется ли очная встреча с врачом? (True/False)"
+    )

@@ -1,8 +1,25 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation
 
 
 import nested_admin
+@admin.register(Consultation)
+class ConsultationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doctor', 'client', 'status', 'doctor_earning', 'needs_in_person_visit', 'created_at')
+    list_filter = ('status', 'needs_in_person_visit')
+@admin.register(ConsultationSettings)
+class ConsultationSettingsAdmin(admin.ModelAdmin):
+    list_display = ('commission_percent',)
+@admin.register(DoctorProfile)
+class DoctorProfileAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'telegram_id', 'full_name', 'specialization',
+        'experience_display', 'consultation_price', 'doctor_payout',
+        'balance', 'is_online', 'is_active'
+    )
+    list_filter = ('specialization', 'is_online', 'is_active')
+    search_fields = ('full_name', 'telegram_id', 'specialization')
+    readonly_fields = ('experience_display', 'service_commission_percent', 'doctor_payout', 'total_earned')
 @admin.register(GeneralHealthReportProfile)
 class GeneralHealthReportProfileadmin(admin.ModelAdmin):
     pass

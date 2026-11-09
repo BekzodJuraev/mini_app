@@ -100,6 +100,15 @@ urlpatterns=[
  path('api/report/personal',views.DownloadGeneralHealthPersonalPDFAPIView.as_view()),
  path('api/report/scales-summary',views.DownloadHealthScalesSummaryPDFAPIView.as_view()),
 
+ path('api/doctor/cabinet',views.DoctorCabinetAPIView.as_view()),
+
+
+
+
+
+
+
+
 
 
 

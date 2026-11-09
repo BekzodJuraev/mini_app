@@ -7704,3 +7704,436 @@ class DownloadHealthScalesSummaryPDFAPIView(APIView):
             filename=filename,
             content_type='application/pdf'
         )
+
+
+from .models import DoctorProfile, Consultation, ConsultationMessage
+from .serializers import (
+    DoctorCabinetSerializer,
+    DoctorProfileUpdateSerializer,
+    DoctorOnlineToggleSerializer,
+    DoctorWithdrawMockSerializer,
+    DoctorConsultationQueueSerializer,
+    ConsultationMessageSerializer,
+    CompleteConsultationSerializer,
+)
+
+# Обязательный параметр telegram_id для Swagger
+DOCTOR_SWAGGER_PARAMS = [
+    openapi.Parameter(
+        'telegram_id',
+        openapi.IN_QUERY,
+        type=openapi.TYPE_INTEGER,
+        required=True,
+        description="Telegram ID врача (обязательно)"
+    ),
+]
+
+
+def get_current_doctor(request) -> DoctorProfile:
+    """
+    Находит активного врача строго по telegram_id (из query_params, заголовка X-Doctor-Telegram-Id или body).
+    """
+    tg_id = (
+        request.query_params.get('telegram_id')
+        or request.headers.get('X-Doctor-Telegram-Id')
+        or request.data.get('telegram_id')
+    )
+    if not tg_id:
+        return None
+
+    try:
+        return DoctorProfile.objects.filter(telegram_id=int(tg_id), is_active=True).first()
+    except (ValueError, TypeError):
+        return None
+
+
+# ==============================================================================
+# 1. КАБИНЕТ ВРАЧА (ПРОФИЛЬ + ИЗМЕНЕНИЕ ОПИСАНИЯ И ЦЕНЫ)
+# ==============================================================================
+
+class DoctorCabinetAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Получить профиль врача ('Мой кабинет')",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: DoctorCabinetSerializer()}
+    )
+    def get(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = DoctorCabinetSerializer(doctor, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Изменить описание 'Коротко о себе' и цену консультации",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        request_body=DoctorProfileUpdateSerializer,
+        responses={status.HTTP_200_OK: DoctorCabinetSerializer()}
+    )
+    def patch(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = DoctorProfileUpdateSerializer(doctor, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            DoctorCabinetSerializer(doctor, context={'request': request}).data,
+            status=status.HTTP_200_OK
+        )
+
+
+# ==============================================================================
+# 2. ТЕСТОВЫЙ ВЫВОД СРЕДСТВ (КНОПКА «ВЫВЕСТИ»)
+# ==============================================================================
+
+class DoctorWithdrawMockAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Вывести средства с баланса врача (тестовый режим)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        request_body=DoctorWithdrawMockSerializer,
+        responses={status.HTTP_200_OK: "Средства успешно выведены"}
+    )
+    def post(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = DoctorWithdrawMockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if doctor.balance <= 0:
+            return Response(
+                {"error": "На балансе нет доступных средств для вывода."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        withdraw_amount = serializer.validated_data.get('amount') or doctor.balance
+        if withdraw_amount > doctor.balance:
+            return Response(
+                {"error": f"Недостаточно средств. Доступно к выводу: {doctor.balance} ₽"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        doctor.balance -= withdraw_amount
+        doctor.save(update_fields=['balance'])
+
+        return Response({
+            "message": f"Заявка на вывод {withdraw_amount} ₽ успешно выполнена (тестовый режим).",
+            "withdrawn_amount": withdraw_amount,
+            "new_balance": doctor.balance
+        }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 3. ПЕРЕКЛЮЧАТЕЛЬ ONLINE / OFFLINE И СПИСОК ЗАЯВОК ВРАЧА
+# ==============================================================================
+
+class DoctorShiftToggleAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Переключить статус врача Online / Offline",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        request_body=DoctorOnlineToggleSerializer,
+        responses={status.HTTP_200_OK: "Статус успешно изменен"}
+    )
+    def post(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = DoctorOnlineToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        doctor.is_online = serializer.validated_data['is_online']
+        doctor.save(update_fields=['is_online'])
+
+        status_label = "Online" if doctor.is_online else "Offline"
+        return Response({
+            "is_online": doctor.is_online,
+            "status_label": status_label,
+            "message": (
+                "Начало работы. Ожидайте, как только к вам обратится клиент, мы вам сообщим!"
+                if doctor.is_online
+                else "Вы перешли в режим Offline. Новые заявки не назначаются."
+            )
+        }, status=status.HTTP_200_OK)
+
+
+class DoctorConsultationsListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Получить список заявок врача (активные и завершенные)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: "Списки заявок"}
+    )
+    def get(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        qs = Consultation.objects.filter(doctor=doctor).select_related('client').prefetch_related('messages')
+        active_qs = qs.filter(status='active')
+        completed_qs = qs.filter(status='completed')
+
+        return Response({
+            "is_online": doctor.is_online,
+            "active_consultations": DoctorConsultationQueueSerializer(
+                active_qs, many=True, context={'request': request}
+            ).data,
+            "completed_consultations": DoctorConsultationQueueSerializer(
+                completed_qs, many=True, context={'request': request}
+            ).data,
+        }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 4. ЧАТ КОНСУЛЬТАЦИИ, ПРЕДЛОЖЕНИЕ ЗВОНКА И ЗАВЕРШЕНИЕ СЕССИИ
+# ==============================================================================
+
+class DoctorConsultationChatAPIView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Открыть чат консультации (получить сообщения)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: "Данные чата и список сообщений"}
+    )
+    def get(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
+        consultation.messages.filter(sender_role='client', is_read=False).update(is_read=True)
+
+        client_parts = [p for p in (consultation.client.lastname, consultation.client.name, consultation.client.middle_name) if p]
+        client_name = " ".join(client_parts) if client_parts else f"Пациент #{consultation.client.id}"
+
+        return Response({
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "is_chat_active": consultation.status == 'active',
+            "call_offered": consultation.call_offered,
+            "room_name": consultation.room_name,
+            "doctor_specialization": doctor.specialization,
+            "doctor_full_name": doctor.full_name,
+            "client_full_name": client_name,
+            "messages": ConsultationMessageSerializer(
+                consultation.messages.all(), many=True, context={'request': request}
+            ).data
+        }, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Отправить сообщение в чат пациенту",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS + [
+            openapi.Parameter('text', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False, description="Текст сообщения"),
+            openapi.Parameter('file_attachment', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False, description="Прикрепленный файл"),
+        ],
+        responses={status.HTTP_201_CREATED: ConsultationMessageSerializer()}
+    )
+    def post(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
+
+        if consultation.status != 'active':
+            return Response(
+                {"error": "Сессия завершена. Отправка сообщений заблокирована."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        text = (request.data.get('text') or '').strip()
+        file_obj = request.FILES.get('file_attachment')
+
+        if not text and not file_obj:
+            return Response(
+                {"error": "Введите текст сообщения или прикрепите файл."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        msg = ConsultationMessage.objects.create(
+            consultation=consultation,
+            sender_role='doctor',
+            text=text,
+            file_attachment=file_obj
+        )
+
+        return Response(
+            ConsultationMessageSerializer(msg, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class DoctorOfferCallAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Нажать кнопку 'Предложить звонок'",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: "Предложение звонка отправлено"}
+    )
+    def post(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
+        if consultation.status != 'active':
+            return Response(
+                {"error": "Консультация уже завершена."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        consultation.call_offered = True
+        consultation.save(update_fields=['call_offered'])
+
+        ConsultationMessage.objects.create(
+            consultation=consultation,
+            sender_role='system',
+            text="Врач предлагает перейти на аудиозвонок."
+        )
+
+        return Response({
+            "message": "Предложение перейти на аудиозвонок отправлено пациенту.",
+            "room_name": consultation.room_name,
+            "call_offered": True
+        }, status=status.HTTP_200_OK)
+
+
+class DoctorCompleteConsultationAPIView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Завершить сессию и отправить заключение пациенту",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS + [
+            openapi.Parameter(
+                'doctor_conclusion', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
+                description="Единое поле 'Заключение врача' (или используй improvement_advice + medications)"
+            ),
+            openapi.Parameter(
+                'improvement_advice', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
+                description="Совет по улучшению состояния"
+            ),
+            openapi.Parameter(
+                'medications', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
+                description="Лекарства (если требуется)"
+            ),
+            openapi.Parameter(
+                'conclusion_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False,
+                description="Файл с заключением (при необходимости)"
+            ),
+            openapi.Parameter(
+                'needs_in_person_visit', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False,
+                description="Требуется ли очная встреча с врачом? (true / false)"
+            ),
+        ],
+        responses={status.HTTP_200_OK: "Сессия успешно завершена"}
+    )
+    def post(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
+
+        if consultation.status == 'completed':
+            return Response(
+                {"error": "Эта консультация уже была завершена ранее."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = CompleteConsultationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        v_data = serializer.validated_data
+
+        direct_conclusion = (v_data.get('doctor_conclusion') or '').strip()
+        advice = (v_data.get('improvement_advice') or '').strip()
+        meds = (v_data.get('medications') or '').strip()
+
+        if direct_conclusion:
+            final_conclusion = direct_conclusion
+        else:
+            parts = []
+            if advice:
+                parts.append(f"Совет по улучшению состояния:\n{advice}")
+            if meds:
+                parts.append(f"Лекарства:\n{meds}")
+            final_conclusion = "\n\n".join(parts)
+
+        if not final_conclusion and not request.FILES.get('conclusion_file'):
+            return Response(
+                {"error": "Заполните заключение врача или прикрепите файл с заключением."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        consultation.doctor_conclusion = final_conclusion
+        if request.FILES.get('conclusion_file'):
+            consultation.conclusion_file = request.FILES['conclusion_file']
+        consultation.needs_in_person_visit = v_data.get('needs_in_person_visit', False)
+        consultation.status = 'completed'
+        consultation.completed_at = timezone.now()
+        consultation.save()
+
+        earning = consultation.doctor_earning or doctor.doctor_payout
+        doctor.balance += earning
+        doctor.total_earned += earning
+        doctor.save(update_fields=['balance', 'total_earned'])
+
+        return Response({
+            "message": "Сессия успешно завершена, результат отправлен пациенту.",
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "doctor_conclusion": consultation.doctor_conclusion,
+            "needs_in_person_visit": consultation.needs_in_person_visit,
+            "earned_from_consultation": earning,
+            "new_doctor_balance": doctor.balance,
+        }, status=status.HTTP_200_OK)
