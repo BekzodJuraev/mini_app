@@ -1171,8 +1171,18 @@ class Consultation(models.Model):
     Заявка / сессия онлайн-консультации между Пациентом (Profile) и Врачом (DoctorProfile).
     """
     STATUS_CHOICES = (
+        ('waiting_payment', 'Ожидает оплаты'),
         ('active', 'Активна'),
         ('completed', 'Сессия завершена'),
+        ('cancelled', 'Отменена'),
+    )
+
+    CALL_STATUS_CHOICES = (
+        ('none', 'Нет звонка'),
+        ('offered', 'Врач предложил звонок'),
+        ('accepted', 'Звонок принят (идет разговор)'),
+        ('declined', 'Пациент отклонил звонок'),
+        ('ended', 'Звонок завершен'),
     )
 
     client = models.ForeignKey(
@@ -1193,19 +1203,49 @@ class Consultation(models.Model):
         default='active',
         verbose_name="Статус"
     )
+
+    # Первичное описание проблемы и файл от клиента (Скрин 2)
     initial_complaint = models.TextField(
         blank=True,
         default="",
-        verbose_name="Первичное обращение / жалоба пациента"
+        verbose_name="Краткое описание проблемы от пациента"
+    )
+    initial_file = models.FileField(
+        upload_to='consultations/initial_files/',
+        null=True,
+        blank=True,
+        verbose_name="Прикрепленный файл к проблеме (анализ/фото/документ)"
     )
 
+    # Таймер консультации (30 минут с момента первого действия врача — Скрин 5)
+    duration_minutes = models.PositiveIntegerField(
+        default=30,
+        verbose_name="Длительность консультации (мин)"
+    )
+    timer_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Время старта таймера (первый ответ врача)"
+    )
+
+    # Звонок LiveKit (Скрины 6 и 7)
     room_name = models.CharField(max_length=100, unique=True, editable=False)
     call_offered = models.BooleanField(default=False, verbose_name="Врач предложил звонок")
+    call_status = models.CharField(
+        max_length=20,
+        choices=CALL_STATUS_CHOICES,
+        default='none',
+        verbose_name="Статус аудиозвонка"
+    )
 
+    # Финансы
     price_for_client = models.PositiveIntegerField(default=0, verbose_name="Цена для клиента (₽)")
     commission_percent = models.PositiveIntegerField(default=30, verbose_name="Комиссия сервиса (%)")
     doctor_earning = models.PositiveIntegerField(default=0, verbose_name="Доход врача с консультации (₽)")
+    payment_method = models.CharField(max_length=50, blank=True, default="", verbose_name="Способ оплаты")
+    is_paid = models.BooleanField(default=True, verbose_name="Оплачено")
 
+    # Заключение врача после завершения (Скрин 8)
     doctor_conclusion = models.TextField(
         blank=True,
         null=True,
@@ -1220,6 +1260,18 @@ class Consultation(models.Model):
     needs_in_person_visit = models.BooleanField(
         default=False,
         verbose_name="Требуется ли очная встреча с врачом?"
+    )
+
+    # Оценка и отзыв от клиента после завершения (Скрин 9)
+    rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Оценка пациента (1-5 звезд)"
+    )
+    review_comment = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Комментарий пациента к оценке"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1239,9 +1291,38 @@ class Consultation(models.Model):
             self.doctor_earning = self.doctor.doctor_payout
         super().save(*args, **kwargs)
 
+    @property
+    def remaining_seconds(self) -> int:
+        """
+        Сколько секунд осталось до конца 30-минутной консультации.
+        Если врач ещё не ответил (timer_started_at is None), возвращает полные 1800 секунд (30:00).
+        """
+        total_sec = self.duration_minutes * 60
+        if self.status == 'completed':
+            return 0
+        if not self.timer_started_at:
+            return total_sec
+        from django.utils import timezone
+        elapsed = int((timezone.now() - self.timer_started_at).total_seconds())
+        return max(total_sec - elapsed, 0)
+
+    @property
+    def remaining_time_display(self) -> str:
+        """Формат для шапки чата: '29:48'"""
+        sec = self.remaining_seconds
+        mins = sec // 60
+        rem_sec = sec % 60
+        return f"{mins:02d}:{rem_sec:02d}"
+
+    def start_timer_if_needed(self):
+        """Запускает 30-минутный таймер при первом действии врача"""
+        if not self.timer_started_at:
+            from django.utils import timezone
+            self.timer_started_at = timezone.now()
+            self.save(update_fields=['timer_started_at'])
+
     def __str__(self):
         return f"Консультация #{self.id}: {self.doctor.full_name} — {self.client.name}"
-
 
 class ConsultationMessage(models.Model):
     SENDER_CHOICES = (

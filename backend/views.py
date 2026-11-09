@@ -7883,9 +7883,9 @@ class DoctorConsultationChatAPIView(APIView):
 
     @swagger_auto_schema(
         tags=["Врач: Отдельная панель"],
-        operation_summary="Открыть чат консультации (получить сообщения)",
+        operation_summary="Открыть чат консультации (получить сообщения и таймер)",
         manual_parameters=DOCTOR_SWAGGER_PARAMS,
-        responses={status.HTTP_200_OK: "Данные чата и список сообщений"}
+        responses={status.HTTP_200_OK: "Данные чата, таймер 30 минут и список сообщений"}
     )
     def get(self, request, consultation_id):
         doctor = get_current_doctor(request)
@@ -7901,15 +7901,30 @@ class DoctorConsultationChatAPIView(APIView):
         client_parts = [p for p in (consultation.client.lastname, consultation.client.name, consultation.client.middle_name) if p]
         client_name = " ".join(client_parts) if client_parts else f"Пациент #{consultation.client.id}"
 
+        initial_file_url = (
+            request.build_absolute_uri(consultation.initial_file.url)
+            if consultation.initial_file else None
+        )
+
         return Response({
             "consultation_id": consultation.id,
             "status": consultation.status,
             "is_chat_active": consultation.status == 'active',
+            # Таймер консультации (запускается после первого действия врача)
+            "timer_started": consultation.timer_started_at is not None,
+            "timer_started_at": consultation.timer_started_at,
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
+            # Статус звонка и комната LiveKit
             "call_offered": consultation.call_offered,
+            "call_status": consultation.call_status,
             "room_name": consultation.room_name,
+            # Данные участников и первичной жалобы клиента
             "doctor_specialization": doctor.specialization,
             "doctor_full_name": doctor.full_name,
             "client_full_name": client_name,
+            "initial_complaint": consultation.initial_complaint,
+            "initial_file": initial_file_url,
             "messages": ConsultationMessageSerializer(
                 consultation.messages.all(), many=True, context={'request': request}
             ).data
@@ -7917,7 +7932,7 @@ class DoctorConsultationChatAPIView(APIView):
 
     @swagger_auto_schema(
         tags=["Врач: Отдельная панель"],
-        operation_summary="Отправить сообщение в чат пациенту",
+        operation_summary="Отправить сообщение в чат пациенту (запускает таймер при первом ответе)",
         manual_parameters=DOCTOR_SWAGGER_PARAMS + [
             openapi.Parameter('text', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False, description="Текст сообщения"),
             openapi.Parameter('file_attachment', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False, description="Прикрепленный файл"),
@@ -7936,7 +7951,7 @@ class DoctorConsultationChatAPIView(APIView):
 
         if consultation.status != 'active':
             return Response(
-                {"error": "Сессия завершена. Отправка сообщений заблокирована."},
+                {"error": "Сессия завершена или еще не оплачена. Отправка сообщений заблокирована."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -7949,6 +7964,9 @@ class DoctorConsultationChatAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # По ТЗ: Таймер 30 минут запускается сразу после первого действия/ответа со стороны врача!
+        consultation.start_timer_if_needed()
+
         msg = ConsultationMessage.objects.create(
             consultation=consultation,
             sender_role='doctor',
@@ -7956,10 +7974,12 @@ class DoctorConsultationChatAPIView(APIView):
             file_attachment=file_obj
         )
 
-        return Response(
-            ConsultationMessageSerializer(msg, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            "message_data": ConsultationMessageSerializer(msg, context={'request': request}).data,
+            "timer_started_at": consultation.timer_started_at,
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
+        }, status=status.HTTP_201_CREATED)
 
 
 class DoctorOfferCallAPIView(APIView):
@@ -7982,23 +8002,30 @@ class DoctorOfferCallAPIView(APIView):
         consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
         if consultation.status != 'active':
             return Response(
-                {"error": "Консультация уже завершена."},
+                {"error": "Консультация не активна."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Первое действие врача также запускает таймер, если он ещё не был запущен
+        consultation.start_timer_if_needed()
+
         consultation.call_offered = True
-        consultation.save(update_fields=['call_offered'])
+        consultation.call_status = 'offered'
+        consultation.save(update_fields=['call_offered', 'call_status'])
 
         ConsultationMessage.objects.create(
             consultation=consultation,
             sender_role='system',
-            text="Врач предлагает перейти на аудиозвонок."
+            text=f"{doctor.full_name} предлагает вам: Аудио звонок"
         )
 
         return Response({
             "message": "Предложение перейти на аудиозвонок отправлено пациенту.",
             "room_name": consultation.room_name,
-            "call_offered": True
+            "call_offered": True,
+            "call_status": consultation.call_status,
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
         }, status=status.HTTP_200_OK)
 
 
