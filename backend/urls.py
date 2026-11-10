@@ -103,6 +103,10 @@ urlpatterns=[
  path('api/doctor/cabinet',views.DoctorCabinetAPIView.as_view()),
  path('api/doctor/status',views.DoctorShiftToggleAPIView.as_view()),
  path('api/doctor/consulatation',views.DoctorConsultationsListAPIView.as_view()),
+
+ path('api/doctor/chat/<int:consultation_id>',views.DoctorConsultationChatAPIView.as_view()),
+ path('api/doctor/offercall/<int:consultation_id>',views.DoctorOfferCallAPIView.as_view()),
+ path('api/doctor/competechat/<int:consultation_id>', views.DoctorCompleteConsultationAPIView.as_view()),
  path('api/doctor/withdraw', views.DoctorWithdrawalAPIView.as_view()),
  path('api/doctor/withdraw/<int:withdrawal_id>', views.DoctorWithdrawalDetailAPIView.as_view()),
 
