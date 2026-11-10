@@ -8039,15 +8039,7 @@ class DoctorCompleteConsultationAPIView(APIView):
         manual_parameters=DOCTOR_SWAGGER_PARAMS + [
             openapi.Parameter(
                 'doctor_conclusion', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
-                description="Единое поле 'Заключение врача' (или используй improvement_advice + medications)"
-            ),
-            openapi.Parameter(
-                'improvement_advice', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
-                description="Совет по улучшению состояния"
-            ),
-            openapi.Parameter(
-                'medications', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False,
-                description="Лекарства (если требуется)"
+                description="Заключение врача"
             ),
             openapi.Parameter(
                 'conclusion_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False,
@@ -8080,29 +8072,18 @@ class DoctorCompleteConsultationAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         v_data = serializer.validated_data
 
-        direct_conclusion = (v_data.get('doctor_conclusion') or '').strip()
-        advice = (v_data.get('improvement_advice') or '').strip()
-        meds = (v_data.get('medications') or '').strip()
+        final_conclusion = (v_data.get('doctor_conclusion') or '').strip()
+        file_obj = request.FILES.get('conclusion_file')
 
-        if direct_conclusion:
-            final_conclusion = direct_conclusion
-        else:
-            parts = []
-            if advice:
-                parts.append(f"Совет по улучшению состояния:\n{advice}")
-            if meds:
-                parts.append(f"Лекарства:\n{meds}")
-            final_conclusion = "\n\n".join(parts)
-
-        if not final_conclusion and not request.FILES.get('conclusion_file'):
+        if not final_conclusion and not file_obj:
             return Response(
                 {"error": "Заполните заключение врача или прикрепите файл с заключением."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         consultation.doctor_conclusion = final_conclusion
-        if request.FILES.get('conclusion_file'):
-            consultation.conclusion_file = request.FILES['conclusion_file']
+        if file_obj:
+            consultation.conclusion_file = file_obj
         consultation.needs_in_person_visit = v_data.get('needs_in_person_visit', False)
         consultation.status = 'completed'
         consultation.completed_at = timezone.now()

@@ -1425,23 +1425,12 @@ class ConsultationMessageSerializer(serializers.ModelSerializer):
 class CompleteConsultationSerializer(serializers.Serializer):
     """
     Экран 'Вы завершили сессию':
-    Как указано в ТЗ, поля можно передать как единым 'doctor_conclusion', так и двумя полями с UI
-    ('improvement_advice' и 'medications'), которые бэкенд автоматически склеит в одно поле 'Заключение врача'.
+    Единое поле 'Заключение врача', файл заключения и чекбокс очного осмотра.
     """
     doctor_conclusion = serializers.CharField(
         required=False,
         allow_blank=True,
-        help_text="Единое поле 'Заключение врача' (если фронтенд отправляет одним полем)"
-    )
-    improvement_advice = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        help_text="Совет по улучшению состояния (склеивается в Заключение врача)"
-    )
-    medications = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        help_text="Лекарства, если требуется (склеивается в Заключение врача)"
+        help_text="Заключение врача"
     )
     conclusion_file = serializers.FileField(
         required=False,
@@ -1453,7 +1442,6 @@ class CompleteConsultationSerializer(serializers.Serializer):
         default=False,
         help_text="Требуется ли очная встреча с врачом? (True/False)"
     )
-
 class DoctorWithdrawCreateSerializer(serializers.Serializer):
     """
     Экран 'Вывод средств': форма создания заявки на вывод.
