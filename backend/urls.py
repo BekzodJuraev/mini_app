@@ -112,6 +112,11 @@ urlpatterns=[
 
  #client
  path('api/client/consultations/create', views.ClientCreateAndMatchConsultationAPIView.as_view()),
+ path('api/client/consultations/<int:consultation_id>/pay', views.ClientPayConsultationMockAPIView.as_view()),
+ path('api/client/consultations/<int:consultation_id>/chat', views.ClientConsultationChatAPIView.as_view()),
+ path('api/client/consultations/<int:consultation_id>/call-action', views.ClientCallActionAPIView.as_view()),
+ path('api/client/consultations/<int:consultation_id>/result', views.ClientConsultationResultAPIView.as_view()),
+ path('api/client/consultations/<int:consultation_id>/review', views.ClientReviewConsultationAPIView.as_view()),
 
 
 
