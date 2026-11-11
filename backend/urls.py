@@ -110,7 +110,8 @@ urlpatterns=[
  path('api/doctor/withdraw', views.DoctorWithdrawalAPIView.as_view()),
  path('api/doctor/withdraw/<int:withdrawal_id>', views.DoctorWithdrawalDetailAPIView.as_view()),
 
-
+ #client
+ path('api/client/consultations/create', views.ClientCreateAndMatchConsultationAPIView.as_view()),
 
 
 

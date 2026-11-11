@@ -7718,8 +7718,13 @@ from .serializers import (
     DoctorWithdrawCreateSerializer,
     DoctorWithdrawalListSerializer,
     DoctorWithdrawalDetailSerializer,
+    ClientCreateConsultationSerializer,
+    ClientPayConsultationSerializer,
+    ClientCallResponseSerializer,
+    ClientReviewConsultationSerializer,
+    ConsultationMessageSerializer,
 )
-
+from .doctor_search import match_online_doctor_with_ai
 # Обязательный параметр telegram_id для Swagger
 DOCTOR_SWAGGER_PARAMS = [
     openapi.Parameter(
@@ -8218,3 +8223,475 @@ class DoctorWithdrawalDetailAPIView(APIView):
             DoctorWithdrawalDetailSerializer(withdrawal).data,
             status=status.HTTP_200_OK
         )
+
+#CLIENT
+class ClientCreateAndMatchConsultationAPIView(APIView):
+    """
+    POST: Клиент описывает проблему и прикрепляет файл (фото/документ/анализ).
+    ИИ ищет подходящего врача со статусом Online.
+    - Если врач найден: создаёт заявку в статусе 'waiting_payment' и возвращает данные для экрана оплаты.
+    - Если врач не найден: возвращает экран 'Врач не найден'.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Описать проблему и подобрать врача через ИИ",
+        operation_description=(
+            "Принимает описание проблемы (`complaint`) и необязательный файл (`file_attachment`). "
+            "ИИ анализирует жалобу, профиль клиента и подбирает подходящего врача среди врачей со статусом Online.\n\n"
+            "- Если врач найден: возвращает `doctor_found: true`, `consultation_id`, цену и текст для экрана оплаты.\n"
+            "- Если подходящего врача онлайн нет: возвращает `doctor_found: false` и текст для экрана 'Врач не найден'."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                'complaint', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True,
+                description="Кратко опишите свою проблему (Что вас беспокоит?)"
+            ),
+            openapi.Parameter(
+                'file_attachment', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False,
+                description="Прикрепить файл (фотография, документ, результат анализа)"
+            ),
+        ],
+        responses={
+            status.HTTP_201_CREATED: "Врач успешно подобран (переход к оплате)",
+            status.HTTP_200_OK: "Врач не найден (экран 'Подходящий врач сейчас не найден')",
+        }
+    )
+    def post(self, request):
+        profile = request.user.profile
+        serializer = ClientCreateConsultationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        complaint = serializer.validated_data['complaint'].strip()
+        file_obj = request.FILES.get('file_attachment')
+        filename = file_obj.name if file_obj else None
+
+        # ИИ подбирает подходящего врача среди тех, кто сейчас Online
+        matched_doctor = match_online_doctor_with_ai(profile, complaint, filename)
+
+        # Экран "Врач не найден" (по ТЗ со скрина 3)
+        if not matched_doctor:
+            return Response({
+                "doctor_found": False,
+                "title": "Подходящий врач сейчас не найден",
+                "message": "Среди врачей, находящихся онлайн, сейчас нет подходящего специалиста."
+            }, status=status.HTTP_200_OK)
+
+        # Создаем консультацию в ожидании оплаты
+        consultation = Consultation.objects.create(
+            client=profile,
+            doctor=matched_doctor,
+            status='waiting_payment',
+            initial_complaint=complaint,
+            initial_file=file_obj,
+            price_for_client=matched_doctor.consultation_price,
+            commission_percent=matched_doctor.service_commission_percent,
+            doctor_earning=matched_doctor.doctor_payout,
+            is_paid=False,
+        )
+
+        doctor_photo_url = (
+            request.build_absolute_uri(matched_doctor.photo.url)
+            if matched_doctor.photo else None
+        )
+
+        # Данные для Экрана 4 ("Оплата консультации")
+        return Response({
+            "doctor_found": True,
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "duration_minutes": consultation.duration_minutes,
+            "duration_display": f"{consultation.duration_minutes} мин",
+            "price": consultation.price_for_client,
+            "price_display": f"{consultation.price_for_client:,}".replace(",", " ") + " ₽",
+            "payment_Screen_notice": "Врач найден. После успешной оплаты откроется чат со специалистом.",
+            "doctor": {
+                "id": matched_doctor.id,
+                "full_name": matched_doctor.full_name,
+                "specialization": matched_doctor.specialization,
+                "photo": doctor_photo_url,
+                "rating": matched_doctor.rating,
+                "experience_display": matched_doctor.experience_display,
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+# ==============================================================================
+# 2. ЭКРАН 4: ОПЛАТА КОНСУЛЬТАЦИИ (ТЕСТОВЫЙ РЕЖИМ -> ОТКРЫТИЕ ЧАТА)
+# ==============================================================================
+
+class ClientPayConsultationMockAPIView(APIView):
+    """
+    POST: Экран 'Оплата консультации'.
+    Переводит консультацию в статус 'active', создаёт первое сообщение в чате из жалобы клиента
+    и открывает доступ к чату и для клиента, и для врача.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Оплатить консультацию (тестовый режим) и открыть чат",
+        operation_description=(
+            "Принимает выбранный способ оплаты (`payment_method`: `card`, `sbp`, `yookassa`, `cryptomus`). "
+            "Отмечает консультацию оплаченной (`is_paid=True`, `status='active'`), автоматически отправляет "
+            "описание проблемы и прикрепленный файл первым сообщением в чат и открывает чат со специалистом."
+        ),
+        request_body=ClientPayConsultationSerializer,
+        responses={status.HTTP_200_OK: "Оплата прошла успешно, чат открыт"}
+    )
+    def post(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(Consultation, id=consultation_id, client=profile)
+
+        if consultation.status == 'completed':
+            return Response({"error": "Эта консультация уже завершена."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ClientPayConsultationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        payment_method = serializer.validated_data.get('payment_method', 'card')
+
+        if consultation.status == 'waiting_payment':
+            consultation.status = 'active'
+            consultation.is_paid = True
+            consultation.payment_method = payment_method
+            consultation.save(update_fields=['status', 'is_paid', 'payment_method'])
+
+            # Автоматически создаем первое сообщение от клиента в чате из его жалобы и файла
+            if not consultation.messages.exists() and (consultation.initial_complaint or consultation.initial_file):
+                ConsultationMessage.objects.create(
+                    consultation=consultation,
+                    sender_role='client',
+                    text=consultation.initial_complaint,
+                    file_attachment=consultation.initial_file
+                )
+
+        return Response({
+            "message": "Оплата прошла успешно. Чат со специалистом открыт.",
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "is_paid": consultation.is_paid,
+            "room_name": consultation.room_name,
+        }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 3. ЭКРАН 5: ЧАТ КЛИЕНТА С ВРАЧОМ (СООБЩЕНИЯ, ФАЙЛЫ, ТАЙМЕР, УВЕДОМЛЕНИЕ О ЗВОНКЕ)
+# ==============================================================================
+
+class ClientConsultationChatAPIView(APIView):
+    """
+    GET: Получить данные экрана чата (фото, ФИО и специализация врача, таймер 30 минут,
+         уведомление о входящем звонке и список сообщений). Поддерживает ?after_id= для лёгкого пуллинга.
+    POST: Отправить текстовое сообщение и/или прикрепить файл в чат врачу.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Открыть чат с врачом (получить сообщения, таймер и статус звонка)",
+        manual_parameters=[
+            openapi.Parameter(
+                'after_id', openapi.IN_QUERY, type=openapi.TYPE_INTEGER, required=False,
+                description="Если передать ID последнего полученного сообщения, вернет только новые сообщения после него"
+            )
+        ],
+        responses={status.HTTP_200_OK: "Данные чата для клиента"}
+    )
+    def get(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
+
+        # Помечаем сообщения от врача и системы как прочитанные клиентом
+        consultation.messages.filter(sender_role__in=['doctor', 'system'], is_read=False).update(is_read=True)
+
+        messages_qs = consultation.messages.all()
+        after_id = request.query_params.get('after_id')
+        if after_id and str(after_id).isdigit():
+            messages_qs = messages_qs.filter(id__gt=int(after_id))
+
+        doctor = consultation.doctor
+        doctor_photo_url = (
+            request.build_absolute_uri(doctor.photo.url)
+            if doctor.photo else None
+        )
+
+        # Плашка входящего звонка (Экран 6: "Иванов Иван предлагает вам: Аудио звонок [Принять] [Отклонить]")
+        incoming_call_banner = None
+        if consultation.status == 'active' and consultation.call_status == 'offered':
+            incoming_call_banner = {
+                "show_banner": True,
+                "play_ringtone": True,
+                "text": f"{doctor.full_name} предлагает вам: Аудио звонок",
+                "doctor_full_name": doctor.full_name,
+                "doctor_photo": doctor_photo_url,
+            }
+
+        return Response({
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "is_chat_active": consultation.status == 'active',
+            # Шапка чата: Фото, специализация и ФИО врача + оставшееся время
+            "doctor": {
+                "id": doctor.id,
+                "full_name": doctor.full_name,
+                "specialization": doctor.specialization,
+                "photo": doctor_photo_url,
+            },
+            # Таймер (запускается сразу после первого действия со стороны врача)
+            "timer_started": consultation.timer_started_at is not None,
+            "timer_started_at": consultation.timer_started_at,
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
+            # Аудиозвонок
+            "call_offered": consultation.call_offered,
+            "call_status": consultation.call_status,
+            "incoming_call_banner": incoming_call_banner,
+            "room_name": consultation.room_name,
+            # Сообщения
+            "messages": ConsultationMessageSerializer(
+                messages_qs, many=True, context={'request': request}
+            ).data
+        }, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Отправить сообщение или файл врачу в чате",
+        manual_parameters=[
+            openapi.Parameter('text', openapi.IN_FORM, type=openapi.TYPE_STRING, required=False, description="Текст сообщения"),
+            openapi.Parameter('file_attachment', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False, description="Прикрепленный файл"),
+        ],
+        responses={status.HTTP_201_CREATED: ConsultationMessageSerializer()}
+    )
+    def post(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(Consultation, id=consultation_id, client=profile)
+
+        if consultation.status != 'active':
+            return Response(
+                {"error": "Консультация завершена или еще не оплачена. Отправка сообщений недоступна."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        text = (request.data.get('text') or '').strip()
+        file_obj = request.FILES.get('file_attachment')
+
+        if not text and not file_obj:
+            return Response(
+                {"error": "Введите текст сообщения или прикрепите файл."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        msg = ConsultationMessage.objects.create(
+            consultation=consultation,
+            sender_role='client',
+            text=text,
+            file_attachment=file_obj
+        )
+
+        return Response(
+            ConsultationMessageSerializer(msg, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+# ==============================================================================
+# 4. ЭКРАНЫ 6-7: ПРИНЯТЬ / ОТКЛОНИТЬ / ЗАВЕРШИТЬ АУДИОЗВОНОК
+# ==============================================================================
+
+class ClientCallActionAPIView(APIView):
+    """
+    POST: Действие клиента по аудиозвонку:
+    - action='accept' (Кнопка 'Принять' -> прекращает звук вызова, открывает экран аудиозвонка)
+    - action='decline' (Кнопка 'Отклонить' -> прекращает звук вызова, клиент остается в чате)
+    - action='end' (Кнопка завершения звонка -> возвращает клиента обратно в чат)
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Принять, отклонить или завершить аудиозвонок с врачом",
+        request_body=ClientCallResponseSerializer,
+        responses={status.HTTP_200_OK: "Статус звонка обновлен"}
+    )
+    def post(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
+
+        if consultation.status != 'active':
+            return Response({"error": "Консультация уже завершена."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ClientCallResponseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data['action']
+
+        doctor = consultation.doctor
+        doctor_photo_url = (
+            request.build_absolute_uri(doctor.photo.url)
+            if doctor.photo else None
+        )
+
+        if action == 'accept':
+            consultation.call_status = 'accepted'
+            consultation.call_offered = False
+            consultation.save(update_fields=['call_status', 'call_offered'])
+
+            return Response({
+                "message": "Вызов принят. Открывается экран аудиозвонка.",
+                "call_status": consultation.call_status,
+                "room_name": consultation.room_name,
+                "doctor": {
+                    "full_name": doctor.full_name,
+                    "specialization": doctor.specialization,
+                    "photo": doctor_photo_url,
+                },
+                "remaining_seconds": consultation.remaining_seconds,
+                "remaining_time_display": consultation.remaining_time_display,
+            }, status=status.HTTP_200_OK)
+
+        elif action == 'decline':
+            consultation.call_status = 'declined'
+            consultation.call_offered = False
+            consultation.save(update_fields=['call_status', 'call_offered'])
+
+            ConsultationMessage.objects.create(
+                consultation=consultation,
+                sender_role='system',
+                text="Пациент отклонил аудиозвонок."
+            )
+
+            return Response({
+                "message": "Аудиозвонок отклонен. Вы остаетесь в чате.",
+                "call_status": consultation.call_status,
+            }, status=status.HTTP_200_OK)
+
+        elif action == 'end':
+            consultation.call_status = 'ended'
+            consultation.call_offered = False
+            consultation.save(update_fields=['call_status', 'call_offered'])
+
+            return Response({
+                "message": "Аудиозвонок завершен. Возврат в чат консультации.",
+                "call_status": consultation.call_status,
+            }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 5. ЭКРАН 8: «КОНСУЛЬТАЦИЯ ЗАВЕРШЕНА» (ЗАКЛЮЧЕНИЕ ВРАЧА + ФАЙЛ + ОЧНЫЙ ОСМОТР)
+# ==============================================================================
+
+class ClientConsultationResultAPIView(APIView):
+    """
+    GET: Экран 'Консультация завершена'.
+    Возвращает:
+    - Текст 'Заключение врача'
+    - Флаг `has_conclusion_file` и ссылку `conclusion_file_url` (если файл не загружен — кнопка скачивания отсутствует)
+    - Флаг `show_in_person_button` ('Записаться на очный осмотр', если врач отметил галочку)
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Получить экран 'Консультация завершена' (Заключение врача)",
+        responses={status.HTTP_200_OK: "Данные заключения врача"}
+    )
+    def get(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
+
+        has_file = bool(consultation.conclusion_file)
+        file_url = (
+            request.build_absolute_uri(consultation.conclusion_file.url)
+            if has_file else None
+        )
+
+        return Response({
+            "consultation_id": consultation.id,
+            "status": consultation.status,
+            "title": "Консультация завершена",
+            "doctor_conclusion": consultation.doctor_conclusion or "",
+            # Если врач прикрепил файл — отображается кнопка скачивания, иначе кнопка отсутствует
+            "has_conclusion_file": has_file,
+            "conclusion_file_url": file_url,
+            # Если отмечен пункт 'Требуется очный осмотр' — отображается кнопка 'Записаться на очный осмотр'
+            "needs_in_person_visit": consultation.needs_in_person_visit,
+            "show_in_person_button": consultation.needs_in_person_visit,
+            "in_person_button_text": "Записаться на очный осмотр" if consultation.needs_in_person_visit else None,
+            # Оценена ли уже консультация
+            "is_reviewed": consultation.rating is not None,
+            "rating": consultation.rating,
+            "review_comment": consultation.review_comment,
+        }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 6. ЭКРАН 9: «ОЦЕНИТЕ КОНСУЛЬТАЦИЮ С ВРАЧОМ» (1-5 ЗВЕЗД + КОММЕНТАРИЙ)
+# ==============================================================================
+
+class ClientReviewConsultationAPIView(APIView):
+    """
+    POST: Экран 'Оцените консультацию с врачом'.
+    Сохраняет оценку (1-5 звезд) и комментарий, после чего автоматически пересчитывает средний рейтинг врача.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Оценить консультацию с врачом (1-5 звезд и комментарий)",
+        request_body=ClientReviewConsultationSerializer,
+        responses={status.HTTP_200_OK: "Отзыв успешно сохранен"}
+    )
+    def post(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
+
+        if consultation.status != 'completed':
+            return Response(
+                {"error": "Оценить консультацию можно только после её завершения."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = ClientReviewConsultationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        consultation.rating = serializer.validated_data['rating']
+        consultation.review_comment = serializer.validated_data.get('comment', '').strip()
+        consultation.save(update_fields=['rating', 'review_comment'])
+
+        # Автоматически пересчитываем средний рейтинг врача по всем его оценкам
+        doctor = consultation.doctor
+        avg_rating = Consultation.objects.filter(
+            doctor=doctor,
+            rating__isnull=False
+        ).aggregate(avg=Avg('rating'))['avg']
+
+        if avg_rating is not None:
+            doctor.rating = round(float(avg_rating), 1)
+            doctor.save(update_fields=['rating'])
+
+        return Response({
+            "message": "Спасибо! Ваша оценка сохранена.",
+            "consultation_id": consultation.id,
+            "rating": consultation.rating,
+            "comment": consultation.review_comment,
+            "doctor_new_rating": doctor.rating,
+        }, status=status.HTTP_200_OK)

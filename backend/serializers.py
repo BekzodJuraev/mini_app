@@ -1533,3 +1533,70 @@ class DoctorWithdrawalDetailSerializer(serializers.ModelSerializer):
 
     def get_date_display(self, obj):
         return obj.created_at.strftime('%d.%m.%Y') if obj.created_at else ""
+
+
+class ClientCreateConsultationSerializer(serializers.Serializer):
+    """
+    Экран 2: 'Кратко опишите свою проблему' + 'Прикрепить файл'
+    """
+    complaint = serializers.CharField(
+        required=True,
+        help_text="Что вас беспокоит? (описание проблемы или вопрос)"
+    )
+    file_attachment = serializers.FileField(
+        required=False,
+        allow_null=True,
+        help_text="Прикрепленный файл: фотография, документ или результат анализа"
+    )
+
+
+class ClientPayConsultationSerializer(serializers.Serializer):
+    """
+    Экран 4: 'Оплата консультации' (тестовый режим без реального эквайринга)
+    """
+    PAYMENT_CHOICES = (
+        ('card', 'VISA / MASTERCARD'),
+        ('sbp', 'СБП'),
+        ('yookassa', 'ЮKassa'),
+        ('cryptomus', 'Cryptomus'),
+    )
+    payment_method = serializers.ChoiceField(
+        choices=PAYMENT_CHOICES,
+        default='card',
+        required=False,
+        help_text="Выбранный способ оплаты"
+    )
+
+
+class ClientCallResponseSerializer(serializers.Serializer):
+    """
+    Экран 6-7: Реакция клиента на предложение аудиозвонка ('Принять' / 'Отклонить' / 'Завершить')
+    """
+    ACTION_CHOICES = (
+        ('accept', 'Принять звонок'),
+        ('decline', 'Отклонить звонок'),
+        ('end', 'Завершить аудиозвонок и вернуться в чат'),
+    )
+    action = serializers.ChoiceField(
+        choices=ACTION_CHOICES,
+        required=True,
+        help_text="accept — Принять, decline — Отклонить, end — Завершить звонок"
+    )
+
+
+class ClientReviewConsultationSerializer(serializers.Serializer):
+    """
+    Экран 9: 'Оцените консультацию с врачом' (1-5 звезд + комментарий)
+    """
+    rating = serializers.IntegerField(
+        min_value=1,
+        max_value=5,
+        required=True,
+        help_text="Оценка от 1 до 5 звезд"
+    )
+    comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Комментарий (отзыв о консультации)"
+    )
