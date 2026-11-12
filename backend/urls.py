@@ -119,6 +119,13 @@ urlpatterns=[
  path('api/client/consultations/<int:consultation_id>/review', views.ClientReviewConsultationAPIView.as_view()),
 
 
+# LiveKit токен и завершение звонка для Врача
+ path('api/doctor/consultations/<int:consultation_id>/livekit-token', views.DoctorLiveKitTokenAPIView.as_view()),
+
+# LiveKit токен для Клиента
+ path('api/client/consultations/<int:consultation_id>/livekit-token', views.ClientLiveKitTokenAPIView.as_view()),
+
+
 
 
 

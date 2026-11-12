@@ -23,9 +23,10 @@ from django.core.files.base import ContentFile
 from .tranlater import translate_api_response,translate_health_keys_api
 from django.db.models import Avg
 from drf_yasg import openapi
-from config import EMAIL_HOST_USER
+from config import EMAIL_HOST_USER,LIVEKIT_URL,LIVEKIT_API_KEY,LIVEKIT_API_SECRET
 from .avatar_generator import generate_avatars_for_profile
 import random
+from .livekit_call import generate_livekit_token
 from django import db
 from django.core.mail import send_mail
 from django.core.cache import cache
@@ -7992,9 +7993,9 @@ class DoctorOfferCallAPIView(APIView):
 
     @swagger_auto_schema(
         tags=["Врач: Отдельная панель"],
-        operation_summary="Нажать кнопку 'Предложить звонок'",
+        operation_summary="Нажать кнопку 'Предложить звонок' (возвращает LiveKit токен врача)",
         manual_parameters=DOCTOR_SWAGGER_PARAMS,
-        responses={status.HTTP_200_OK: "Предложение звонка отправлено"}
+        responses={status.HTTP_200_OK: "Предложение звонка отправлено + токен LiveKit"}
     )
     def post(self, request, consultation_id):
         doctor = get_current_doctor(request)
@@ -8011,7 +8012,7 @@ class DoctorOfferCallAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Первое действие врача также запускает таймер, если он ещё не был запущен
+        # Запускаем 30-минутный таймер при первом действии врача
         consultation.start_timer_if_needed()
 
         consultation.call_offered = True
@@ -8024,15 +8025,23 @@ class DoctorOfferCallAPIView(APIView):
             text=f"{doctor.full_name} предлагает вам: Аудио звонок"
         )
 
+        # Генерируем LiveKit токен для врача
+        lk_token = generate_livekit_token(
+            room_name=consultation.room_name,
+            identity=f"doctor_{doctor.id}",
+            participant_name=doctor.full_name
+        )
+
         return Response({
             "message": "Предложение перейти на аудиозвонок отправлено пациенту.",
             "room_name": consultation.room_name,
+            "livekit_ws_url":LIVEKIT_URL,
+            "livekit_token": lk_token,
             "call_offered": True,
             "call_status": consultation.call_status,
             "remaining_seconds": consultation.remaining_seconds,
             "remaining_time_display": consultation.remaining_time_display,
         }, status=status.HTTP_200_OK)
-
 
 class DoctorCompleteConsultationAPIView(APIView):
     permission_classes = [AllowAny]
@@ -8507,17 +8516,11 @@ class ClientConsultationChatAPIView(APIView):
 # ==============================================================================
 
 class ClientCallActionAPIView(APIView):
-    """
-    POST: Действие клиента по аудиозвонку:
-    - action='accept' (Кнопка 'Принять' -> прекращает звук вызова, открывает экран аудиозвонка)
-    - action='decline' (Кнопка 'Отклонить' -> прекращает звук вызова, клиент остается в чате)
-    - action='end' (Кнопка завершения звонка -> возвращает клиента обратно в чат)
-    """
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Клиент: Онлайн-консультации"],
-        operation_summary="Принять, отклонить или завершить аудиозвонок с врачом",
+        operation_summary="Принять, отклонить или завершить аудиозвонок (возвращает LiveKit токен при принятии)",
         request_body=ClientCallResponseSerializer,
         responses={status.HTTP_200_OK: "Статус звонка обновлен"}
     )
@@ -8547,10 +8550,22 @@ class ClientCallActionAPIView(APIView):
             consultation.call_offered = False
             consultation.save(update_fields=['call_status', 'call_offered'])
 
+            client_parts = [p for p in (profile.lastname, profile.name) if p]
+            client_name = " ".join(client_parts) if client_parts else f"Пациент #{profile.id}"
+
+            # Генерируем LiveKit токен для клиента
+            lk_token = generate_livekit_token(
+                room_name=consultation.room_name,
+                identity=f"client_{profile.id}",
+                participant_name=client_name
+            )
+
             return Response({
                 "message": "Вызов принят. Открывается экран аудиозвонка.",
                 "call_status": consultation.call_status,
                 "room_name": consultation.room_name,
+                "livekit_ws_url": LIVEKIT_URL,
+                "livekit_token": lk_token,
                 "doctor": {
                     "full_name": doctor.full_name,
                     "specialization": doctor.specialization,
@@ -8694,4 +8709,131 @@ class ClientReviewConsultationAPIView(APIView):
             "rating": consultation.rating,
             "comment": consultation.review_comment,
             "doctor_new_rating": doctor.rating,
+        }, status=status.HTTP_200_OK)
+
+
+
+
+class DoctorLiveKitTokenAPIView(APIView):
+    """
+    GET: Получить LiveKit токен врачу для подключения/переподключения к аудиозвонку
+    и завершить звонок со стороны врача (POST).
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Получить токен LiveKit для аудиозвонка (Врач)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: "LiveKit токен и URL комнаты"}
+    )
+    def get(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('client'),
+            id=consultation_id,
+            doctor=doctor
+        )
+        if consultation.status != 'active':
+            return Response({"error": "Консультация уже завершена."}, status=status.HTTP_400_BAD_REQUEST)
+
+        lk_token = generate_livekit_token(
+            room_name=consultation.room_name,
+            identity=f"doctor_{doctor.id}",
+            participant_name=doctor.full_name
+        )
+
+        client = consultation.client
+        client_parts = [p for p in (client.lastname, client.name) if p]
+        client_name = " ".join(client_parts) if client_parts else f"Пациент #{client.id}"
+        client_photo_url = request.build_absolute_uri(client.photo.url) if client.photo else None
+
+        return Response({
+            "consultation_id": consultation.id,
+            "room_name": consultation.room_name,
+            "livekit_ws_url": LIVEKIT_URL,
+            "livekit_token": lk_token,
+            "call_status": consultation.call_status,
+            "client": {
+                "full_name": client_name,
+                "photo": client_photo_url,
+            },
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
+        }, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Завершить текущий аудиозвонок и вернуться в чат (Врач)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: "Звонок завершен"}
+    )
+    def post(self, request, consultation_id):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response({"error": "Врач не найден."}, status=status.HTTP_403_FORBIDDEN)
+
+        consultation = get_object_or_404(Consultation, id=consultation_id, doctor=doctor)
+        consultation.call_status = 'ended'
+        consultation.call_offered = False
+        consultation.save(update_fields=['call_status', 'call_offered'])
+
+        return Response({
+            "message": "Аудиозвонок завершен. Возврат в чат консультации.",
+            "call_status": consultation.call_status,
+        }, status=status.HTTP_200_OK)
+
+
+class ClientLiveKitTokenAPIView(APIView):
+    """
+    GET: Получить LiveKit токен клиенту для подключения/переподключения к аудиозвонку.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Получить токен LiveKit для аудиозвонка (Клиент)",
+        responses={status.HTTP_200_OK: "LiveKit токен и URL комнаты"}
+    )
+    def get(self, request, consultation_id):
+        profile = request.user.profile
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
+        if consultation.status != 'active':
+            return Response({"error": "Консультация уже завершена."}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_parts = [p for p in (profile.lastname, profile.name) if p]
+        client_name = " ".join(client_parts) if client_parts else f"Пациент #{profile.id}"
+
+        lk_token = generate_livekit_token(
+            room_name=consultation.room_name,
+            identity=f"client_{profile.id}",
+            participant_name=client_name
+        )
+
+        doctor = consultation.doctor
+        doctor_photo_url = request.build_absolute_uri(doctor.photo.url) if doctor.photo else None
+
+        return Response({
+            "consultation_id": consultation.id,
+            "room_name": consultation.room_name,
+            "livekit_ws_url": LIVEKIT_URL,
+            "livekit_token": lk_token,
+            "call_status": consultation.call_status,
+            "doctor": {
+                "full_name": doctor.full_name,
+                "specialization": doctor.specialization,
+                "photo": doctor_photo_url,
+            },
+            "remaining_seconds": consultation.remaining_seconds,
+            "remaining_time_display": consultation.remaining_time_display,
         }, status=status.HTTP_200_OK)
