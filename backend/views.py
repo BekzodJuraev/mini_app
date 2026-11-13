@@ -6145,6 +6145,28 @@ def ensure_next_measurement_exists(profile, current_measurement):
     )
 
 
+def update_measurement_completion(profile, measurement):
+    """
+    Проверяет, заполнены ли все 3 вкладки.
+    Ставит status = 'completed' и создает следующий замер ТОЛЬКО когда заполнены все 3 вкладки.
+    Редактирование (повторный POST) при этом не блокируется.
+    """
+    has_physical = bool(measurement.physical_development)
+    has_vital = bool(measurement.vital_signs)
+    has_regime = bool(measurement.regime_and_behavior)
+
+    if not measurement.actual_date:
+        measurement.actual_date = date.today()
+
+    # Статус completed ставим только если есть данные во всех трех вкладках
+    if has_physical and has_vital and has_regime:
+        measurement.status = 'completed'
+        measurement.save()
+        ensure_next_measurement_exists(profile, measurement)
+    else:
+        measurement.save()
+
+
 class PhysicalDevelopmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -6153,7 +6175,6 @@ class PhysicalDevelopmentAPIView(APIView):
 
     def get(self, request, pk):
         measurement = self.get_object(pk, request.user.profile)
-        # Отдаем словарь из базы или пустой {}
         data = measurement.physical_development or {}
         return Response(data, status=status.HTTP_200_OK)
 
@@ -6164,25 +6185,16 @@ class PhysicalDevelopmentAPIView(APIView):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)
 
-        if measurement.status == 'completed' and measurement.physical_development:
-            return Response(
-                {"detail": "Физическое развитие для этой даты уже зафиксировано и недоступно для изменения."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = PhysicalDevelopmentDataSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         current_phys = measurement.physical_development or {}
         current_phys.update(serializer.validated_data)
+
+
         measurement.physical_development = current_phys
-
-        measurement.status = 'completed'
-        measurement.actual_date = date.today()
-        measurement.save()
-
-        ensure_next_measurement_exists(profile, measurement)
+        update_measurement_completion(profile, measurement)
 
         return Response(measurement.physical_development, status=status.HTTP_200_OK)
 
@@ -6195,7 +6207,6 @@ class VitalSignsAPIView(APIView):
 
     def get(self, request, pk):
         measurement = self.get_object(pk, request.user.profile)
-        # Отдаем словарь из базы или пустой {}
         data = measurement.vital_signs or {}
         return Response(data, status=status.HTTP_200_OK)
 
@@ -6206,12 +6217,6 @@ class VitalSignsAPIView(APIView):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)
 
-        if measurement.status == 'completed' and measurement.vital_signs:
-            return Response(
-                {"detail": "Витальные показатели для этой даты уже зафиксированы и недоступны для изменения."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = VitalSignsDataSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -6220,11 +6225,7 @@ class VitalSignsAPIView(APIView):
         current_vitals.update(serializer.validated_data)
         measurement.vital_signs = current_vitals
 
-        measurement.status = 'completed'
-        measurement.actual_date = date.today()
-        measurement.save()
-
-        ensure_next_measurement_exists(profile, measurement)
+        update_measurement_completion(profile, measurement)
 
         return Response(measurement.vital_signs, status=status.HTTP_200_OK)
 
@@ -6237,7 +6238,6 @@ class RegimeAndBehaviorAPIView(APIView):
 
     def get(self, request, pk):
         measurement = self.get_object(pk, request.user.profile)
-        # Отдаем словарь из базы или пустой {}
         data = measurement.regime_and_behavior or {}
         return Response(data, status=status.HTTP_200_OK)
 
@@ -6248,12 +6248,6 @@ class RegimeAndBehaviorAPIView(APIView):
         profile = request.user.profile
         measurement = self.get_object(pk, profile)
 
-        if measurement.status == 'completed' and measurement.regime_and_behavior:
-            return Response(
-                {"detail": "Режим и поведение для этой даты уже зафиксированы и недоступны для изменения."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = RegimeAndBehaviorDataSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -6262,14 +6256,9 @@ class RegimeAndBehaviorAPIView(APIView):
         current_regime.update(serializer.validated_data)
         measurement.regime_and_behavior = current_regime
 
-        measurement.status = 'completed'
-        measurement.actual_date = date.today()
-        measurement.save()
-
-        ensure_next_measurement_exists(profile, measurement)
+        update_measurement_completion(profile, measurement)
 
         return Response(measurement.regime_and_behavior, status=status.HTTP_200_OK)
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FONT_REGULAR_PATH = os.path.join(BASE_DIR, 'fonts', 'DejaVuSans.ttf')
