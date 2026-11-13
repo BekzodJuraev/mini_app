@@ -1,0 +1,5 @@
+https://www.figma.com/file/o1bBOsa9EpUBEanhHkTnv7/Untitled?type=design&node-id=0-1&mode=design&t=qJFYRyiN8aBEmYth-0
+16.171.177.4
+su apt install postgresql postgresql-contrib -y
+ssh -i "ssh.pem" ubuntu@ec2-13-60-24-130.eu-north-1.compute.amazonaws.com
+ec2-13-60-24-130.eu-north-1.compute.amazonaws.com:8000

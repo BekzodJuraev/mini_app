@@ -1184,43 +1184,91 @@ class ChildMeasurementListSerializer(serializers.ModelSerializer):
             'created_at',
         ]
 class PhysicalDevelopmentDataSerializer(serializers.Serializer):
-    height_cm = serializers.FloatField()
-    weight_kg = serializers.FloatField()
-    head_circ_cm = serializers.FloatField()
-    chest_circ_cm = serializers.FloatField()
-    bmi = serializers.FloatField()
+    """Физическое развитие (все 5 полей необязательные, принимает хотя бы одно поле)"""
+    height_cm = serializers.FloatField(required=False)
+    weight_kg = serializers.FloatField(required=False)
+    head_circ_cm = serializers.FloatField(required=False)
+    chest_circ_cm = serializers.FloatField(required=False)
+    bmi = serializers.FloatField(required=False)
+
+    def validate(self, attrs):
+        # Принимать, если заполнен хотя бы один показатель
+        has_any_value = any(val is not None for val in attrs.values())
+        if not has_any_value:
+            raise serializers.ValidationError(
+                "Заполните хотя бы один витальный показатель (температуру, пульс или частоту дыхания)."
+            )
+        return attrs
 
 
 class VitalSignsDataSerializer(serializers.Serializer):
-    """Витальные показатели (image_1)"""
-    body_temperature = serializers.FloatField()  # Температура тела (°C)
-    pulse_rate = serializers.IntegerField()      # Частота пульса (уд/мин)
-    respiratory_rate = serializers.IntegerField( ) # Частота дыхания (кол-во в мин)
+    """Витальные показатели (все 3 поля необязательные, пустые остаются None и не заменяются нулями)"""
+    body_temperature = serializers.FloatField(required=False)  # Температура тела (°C)
+    pulse_rate = serializers.IntegerField(required=False)      # Частота пульса (уд/мин)
+    respiratory_rate = serializers.IntegerField(required=False) # Частота дыхания (кол-во в мин)
+
+    def validate(self, attrs):
+        # Принимать, если заполнен хотя бы один показатель
+        has_any_value = any(val is not None for val in attrs.values())
+        if not has_any_value:
+            raise serializers.ValidationError(
+                "Заполните хотя бы один витальный показатель (температуру, пульс или частоту дыхания)."
+            )
+        return attrs
+
+class FlexibleFeedingTypeField(serializers.Field):
+    """
+    Принимает как список (например, ["Грудное", "Смесь"]), так и строку ("Грудное"),
+    и возвращает строку через запятую ("Грудное, Смесь") для сохранения и вывода в отчёте.
+    """
+    def to_internal_value(self, data):
+        if data is None or data == "" or data == []:
+            return None
+        if isinstance(data, list):
+            cleaned = [str(item).strip() for item in data if str(item).strip()]
+            return ", ".join(cleaned) if cleaned else None
+        if isinstance(data, str):
+            return data.strip() or None
+        raise serializers.ValidationError("Поле feeding_type должно быть списком строк или строкой.")
+
+    def to_representation(self, value):
+        if isinstance(value, list):
+            return ", ".join(str(v) for v in value if v)
+        return value
 
 
 class RegimeAndBehaviorDataSerializer(serializers.Serializer):
-    """Режим и поведение (image_2)"""
+    """Режим и поведение (все 11 полей необязательные + feeding_type списком)"""
     # Сон
-    sleep_quality = serializers.CharField() # Хороший / Нормальный / Плохой
-    had_awakenings = serializers.BooleanField()                # Были пробуждения? (true/false)
-    sleep_hours = serializers.FloatField()                    # Кол-во часов сна
+    sleep_quality = serializers.CharField(required=False)
+    had_awakenings = serializers.BooleanField(required=False)
+    sleep_hours = serializers.FloatField(required=False)
 
-    # Питание
-    feeding_type = serializers.CharField() # Грудное / Смесь / Прикорм
-    feeding_volume = serializers.CharField() # Объём
+    # Питание (принимает ["Грудное", "Смесь"] или строку, сохраняет через запятую)
+    feeding_type = FlexibleFeedingTypeField(required=False)
+    feeding_volume = serializers.CharField(required=False)
 
     # Стул
-    stool_frequency = serializers.CharField()   # Часто / Нормально / Редко
-    stool_consistency = serializers.CharField() # Консистенция
-    stool_color = serializers.CharField()       # Цвет
+    stool_frequency = serializers.CharField(required=False)
+    stool_consistency = serializers.CharField(required=False)
+    stool_color = serializers.CharField(required=False)
 
     # Мочеиспускание
-    urination_frequency = serializers.CharField() # Часто / Нормально / Редко
+    urination_frequency = serializers.CharField(required=False)
 
     # Настроение и Активность
-    mood = serializers.CharField()     # Хорошее / Нормальное / Плохое
-    activity = serializers.CharField()
+    mood = serializers.CharField(required=False)
+    activity = serializers.CharField(required=False)
 
+    def validate(self, attrs):
+        # Проверяем, что передано хотя бы одно непустое поле из 11
+        has_any_value = any(
+            val is not None and val != "" and val != []
+            for val in attrs.values()
+        )
+        if not has_any_value:
+            raise serializers.ValidationError("Заполните хотя бы один показатель режима или поведения.")
+        return attrs
 
 class ChildIllnessSurveySerializer(serializers.ModelSerializer):
     # Обязательные поля со списком (чекбоксы)
@@ -1230,6 +1278,7 @@ class ChildIllnessSurveySerializer(serializers.ModelSerializer):
     )
     intensity = serializers.ListField(
         child=serializers.CharField(),
+        required=False,
         allow_empty=False
     )
 
