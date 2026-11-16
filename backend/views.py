@@ -6503,32 +6503,48 @@ class DownloadPDFReportAPIView(APIView):
 
 class ChildIllnessSurveyCreateAPIView(APIView):
     """
+    GET: Возвращает список всех жалоб (историю 'Прошлые жалобы') или конкретную запись по ?id=...
     POST: Сохраняет заполненную форму 'Ребёнку нездоровится'.
-    Поддерживает передачу JSON-данных и файлов/фотографий (multipart/form-data).
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
-
     def get(self, request):
         profile = request.user.profile
+        survey_id = request.query_params.get('id')
 
-        # Берём последнюю запись по дате создания для текущего профиля
-        latest_survey = ChildIllnessReport.objects.filter(profile=profile).order_by('-created_at').first()
-
-        # Если записей ещё нет
-        if not latest_survey:
+        # Если фронтенд просит открыть конкретную прошлую жалобу по ?id=...
+        if survey_id:
+            survey = get_object_or_404(ChildIllnessReport, pk=survey_id, profile=profile)
+            serializer = ChildIllnessSurveySerializer(survey, context={'request': request})
             return Response(
-                {"detail": "Записи о самочувствии ребёнка пока не найдены."},
-                status=status.HTTP_404_NOT_FOUND
+                {
+                    "message": "Запись успешно получена.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
             )
 
-        serializer = ChildIllnessSurveySerializer(latest_survey)
+        # Берём ВСЕ записи по дате создания (от новых к старым) для блока «Прошлые жалобы»
+        surveys = ChildIllnessReport.objects.filter(profile=profile).order_by('-created_at')
+
+        if not surveys.exists():
+            return Response(
+                {
+                    "message": "Записи о самочувствии ребёнка пока не найдены.",
+                    "data": [],
+                    "history": []
+                },
+                status=status.HTTP_200_OK
+            )
+
+        serializer = ChildIllnessSurveySerializer(surveys, many=True, context={'request': request})
 
         return Response(
             {
-                "message": "Последняя запись успешно получена.",
-                "data": serializer.data
+                "message": "История жалоб успешно получена.",
+                "data": serializer.data,          # Теперь тут список всех жалоб (включая старый «Кашель» и новые)
+                "latest": serializer.data[0],     # На случай, если фронту отдельно нужна самая последняя
             },
             status=status.HTTP_200_OK
         )
@@ -6543,15 +6559,16 @@ class ChildIllnessSurveyCreateAPIView(APIView):
         )
 
         if serializer.is_valid():
-            # 1. Сохраняем отчет с привязкой к профилю
+            # 1. Сохраняем новую жалобу в историю (старые НЕ удаляются)
             report = serializer.save(profile=request.user.profile)
 
-            # 2. Собираем данные для промпта из только что созданного отчета
+            # 2. Собираем данные для промпта (если actions_taken пусто -> явно пишем 'Предпринятые действия не указаны')
+            actions_raw = (report.actions_taken or "").strip()
             user_data = {
                 "main_complaints": report.main_complaints,
                 "started_at": report.started_at,
                 "intensity": report.intensity,
-                "actions_taken": report.actions_taken,
+                "actions_taken": actions_raw if actions_raw else "Предпринятые действия не указаны (не упоминай в ответе, что родители ничего не предпринимали)",
                 "created_at": report.created_at.strftime('%Y-%m-%d %H:%M')
             }
 
@@ -6569,10 +6586,15 @@ class ChildIllnessSurveyCreateAPIView(APIView):
                 }
             )
 
+            # Возвращаем и только что созданную запись, и весь обновленный список прошлых жалоб
+            all_surveys = ChildIllnessReport.objects.filter(profile=request.user.profile).order_by('-created_at')
+            history_serializer = ChildIllnessSurveySerializer(all_surveys, many=True, context={'request': request})
+
             return Response(
                 {
                     "message": "Жалоба зафиксирована, анализ обновлен.",
-                    "data": serializer.data
+                    "data": serializer.data,
+                    "history": history_serializer.data
                 },
                 status=status.HTTP_201_CREATED
             )
