@@ -6007,38 +6007,46 @@ class ProfileMainAvatarAPIView(APIView):
 from dateutil.relativedelta import relativedelta
 def calculate_next_measurement_date(birth_date: date, last_measurement_date: date) -> date:
     """
-    Рассчитывает следующую дату измерения на основе возраста ребёнка
-    на момент последнего измерения согласно ТЗ.
+    Рассчитывает следующую дату измерения на основе ПОЛНОГО возраста ребёнка
+    (с учётом числа месяца, без округления вверх) на момент последнего измерения.
+    При ежемесячном шаге 31.01 автоматически переносится на 28.02 / 29.02.
     """
     if not birth_date or not last_measurement_date:
         return date.today() + relativedelta(days=7)
 
-    # Возраст ребёнка в месяцах и годах на момент последнего измерения
-    age_in_months = (last_measurement_date.year - birth_date.year) * 12 + (
-                last_measurement_date.month - birth_date.month)
-    age_in_years = age_in_months / 12.0
-
-    # 0–3 месяца — каждые 7 дней
-    if age_in_months < 3:
+    # Если замер каким-то образом датирован раньше даты рождения
+    if last_measurement_date < birth_date:
         return last_measurement_date + relativedelta(days=7)
 
-    # 3–12 месяцев — каждые 14 дней
-    elif 3 <= age_in_months < 12:
+    # Точный полный возраст с учётом дня рождения (без округления вверх!)
+    # Пример: birth_date = 06.08.2026, last_measurement_date = 05.11.2026
+    # rd.years = 0, rd.months = 2, rd.days = 30 -> full_months = 2 (< 3, шаг 7 дней -> 12.11.2026)
+    rd = relativedelta(last_measurement_date, birth_date)
+    full_months = rd.years * 12 + rd.months
+    full_years = rd.years
+
+    # 0–3 месяца (до наступления полных 3 месяцев) — каждые 7 дней
+    if full_months < 3:
+        return last_measurement_date + relativedelta(days=7)
+
+    # 3–12 месяцев (от полных 3 месяцев до наступления полного 1 года) — каждые 14 дней
+    elif full_years < 1:
         return last_measurement_date + relativedelta(days=14)
 
-    # 1–3 года — 1 раз в месяц
-    elif 1 <= age_in_years < 3:
+    # 1–3 года (от 1 года до наступления полных 3 лет) — 1 раз в месяц
+    # relativedelta(months=1) для 31.01.2027 сам вернёт 28.02.2027 (а в 2028 — 29.02.2028)
+    elif full_years < 3:
         return last_measurement_date + relativedelta(months=1)
 
-    # 3–7 лет — 1 раз в 3 месяца
-    elif 3 <= age_in_years < 7:
+    # 3–7 лет (от 3 лет до наступления полных 7 лет) — 1 раз в 3 месяца
+    elif full_years < 7:
         return last_measurement_date + relativedelta(months=3)
 
-    # 7–14 лет — 1 раз в 6 месяцев
-    elif 7 <= age_in_years < 14:
+    # 7–14 лет (от 7 лет до наступления полных 14 лет) — 1 раз в 6 месяцев
+    elif full_years < 14:
         return last_measurement_date + relativedelta(months=6)
 
-    # 14–18 лет — 1 раз в год
+    # 14–18 лет (от полных 14 лет и старше) — 1 раз в год
     else:
         return last_measurement_date + relativedelta(years=1)
 
