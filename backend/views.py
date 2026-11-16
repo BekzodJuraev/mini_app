@@ -3125,7 +3125,8 @@ class ChatRentgenView(APIView):
             r = Rentgen.objects.create(
                 profile=profile,
                 message=current_message,
-                answer=test.get('message')
+                answer=test.get('message'),
+                title=test.get('title')
             )
 
             # 6. Сохраняем картинки/документы пачкой
@@ -6822,6 +6823,7 @@ class ChildCalendarAPIView(APIView):
         ],
         responses={status.HTTP_200_OK: ChildCalendarEventSerializer(many=True)}
     )
+    @translate_api_response(fields=['title','description'])
     def get(self, request):
         profile = request.user.profile
 

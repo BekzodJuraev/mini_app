@@ -885,6 +885,8 @@ class Rentgen(models.Model):
     message=models.TextField(null=False, default="")
     answer = models.TextField(null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
+    title = models.CharField(max_length=255, verbose_name="Название",null=True,default=None)
+
 
     def __str__(self):
         return self.profile.name

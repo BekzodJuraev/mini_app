@@ -156,7 +156,7 @@ def collect_all_user_health_data(profile) -> dict:
     rentgens = []
     for r in Rentgen.objects.filter(profile=profile).order_by('-created_at')[:10]:
         date_str = r.created_at.strftime('%d.%m.%Y') if r.created_at else ""
-        raw_msg = clean_and_truncate_analysis_text(r.message, max_len=90) if r.message else "Анализ"
+        raw_msg = clean_and_truncate_analysis_text(r.title, max_len=90) if r.title else "Анализ"
         title = f"{raw_msg}, {date_str}" if date_str else raw_msg
         rentgens.append({
             "title": title,
