@@ -7740,7 +7740,7 @@ def get_current_doctor(request) -> DoctorProfile:
         return None
 
     try:
-        return DoctorProfile.objects.filter(telegram_id=int(tg_id), is_active=True).first()
+        return DoctorProfile.objects.filter(telegram_id=tg_id, is_active=True).first()
     except (ValueError, TypeError):
         return None
 

@@ -723,7 +723,7 @@ class BloodPressure(models.Model):
     created_at = models.DateField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.profile.name}: {self.systolic}/{self.diastolic}"
+        return f"{self.profile.name}"
 
     class Meta:
         verbose_name = "Давление"
@@ -1090,10 +1090,11 @@ class DoctorProfile(models.Model):
     """
     Отдельная независимая модель врача (идентификация строго по telegram_id).
     """
-    telegram_id = models.BigIntegerField(
+    telegram_id = models.CharField(
+        max_length=100,
         unique=True,
-        db_index=True,
-        verbose_name="Telegram ID врача"
+        verbose_name="Telegram ID или @username",
+        help_text="Введите числовой Telegram ID (например, 123456789) или @username"
     )
     full_name = models.CharField(max_length=255, verbose_name="ФИО врача")
     photo = models.ImageField(
@@ -1106,11 +1107,11 @@ class DoctorProfile(models.Model):
     short_description = models.TextField(blank=True, default="", verbose_name="Коротко о себе")
     education = models.TextField(blank=True, default="", verbose_name="Образование")
     qualification = models.CharField(max_length=255, blank=True, default="", verbose_name="Квалификация")
-    practice_start_date = models.DateField(verbose_name="Дата начала медицинской практики")
+    practice_start_date = models.DateField(blank=True,null=True,verbose_name="Дата начала медицинской практики")
 
     # Финансы и рейтинг
     consultation_price = models.PositiveIntegerField(
-        default=1500,
+        default=0,
         verbose_name="Стоимость консультации для клиента (₽)"
     )
     balance = models.PositiveIntegerField(
@@ -1121,7 +1122,7 @@ class DoctorProfile(models.Model):
         default=0,
         verbose_name="Общий заработок за всё время (₽)"
     )
-    rating = models.FloatField(default=5.0, verbose_name="Рейтинг")
+    rating = models.FloatField(default=None,null=True,blank=True, verbose_name="Рейтинг")
 
     # Статусы
     is_online = models.BooleanField(default=False, verbose_name="Статус Online / Offline")
@@ -1161,6 +1162,11 @@ class DoctorProfile(models.Model):
     def doctor_payout(self) -> int:
         comm = self.service_commission_percent
         return int(round(self.consultation_price * (100 - comm) / 100.0))
+
+    @property
+    def is_cabinet_ready(self) -> bool:
+        """Кабинет доступен, только когда врач сам заполнил 'Коротко о себе' и выставил цену > 0"""
+        return bool(self.short_description and self.short_description.strip()) and self.consultation_price > 0
 
     def __str__(self):
         return f"{self.full_name} ({self.specialization}) [TG: {self.telegram_id}]"

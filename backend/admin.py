@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation,DoctorWithdrawal
-
+from django.utils.html import format_html
+import re
 
 import nested_admin
 
@@ -19,13 +20,90 @@ class ConsultationSettingsAdmin(admin.ModelAdmin):
 @admin.register(DoctorProfile)
 class DoctorProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'telegram_id', 'full_name', 'specialization',
-        'experience_display', 'consultation_price', 'doctor_payout',
-        'balance', 'is_online', 'is_active'
+        "full_name",
+        "telegram_id",
+        "specialization",
+        "cabinet_status_display",
+        "balance_display",
+        "rating_display",
+
+        "is_active",
     )
-    list_filter = ('specialization', 'is_online', 'is_active')
-    search_fields = ('full_name', 'telegram_id', 'specialization')
-    readonly_fields = ('experience_display', 'service_commission_percent', 'doctor_payout', 'total_earned')
+
+    readonly_fields = (
+        "cabinet_status_display",
+        "balance_display",
+        "rating_display",
+        "total_earned",
+        "created_at",
+        "short_description_readonly",
+        "consultation_price_readonly",
+    )
+
+    def get_fields(self, request, obj=None):
+        # При СОЗДАНИИ врача ("Добавить врача") скрываем то, что заполняет врач сам
+        if obj is None:
+            return (
+                "telegram_id",
+                "full_name",
+                "photo",
+                "specialization",
+                "education",
+                "qualification",
+                "practice_start_date",
+                "is_active",
+                "cabinet_status_display",
+                "balance_display",
+                "rating_display",
+            )
+        # При ПРОСМОТРЕ/РЕДАКТИРОВАНИИ выводим все твои поля + статус кабинета
+        return (
+            "telegram_id",
+            "full_name",
+            "photo",
+            "specialization",
+            "education",
+            "qualification",
+            "practice_start_date",
+            "is_active",
+            "cabinet_status_display",
+            "short_description_readonly",
+            "consultation_price_readonly",
+            "balance_display",
+            "total_earned",
+            "rating_display",
+
+        )
+
+    @admin.display(description="Статус кабинета врача")
+    def cabinet_status_display(self, obj):
+        if obj is None or not obj.pk or not obj.is_cabinet_ready:
+            return format_html(
+                '<span style="color: #e03131; font-weight: bold;">'
+                'Кабинет недоступен (врач ещё не заполнил «Коротко о себе» и «Стоимость консультации» в своём кабинете)'
+                '</span>'
+            )
+        return format_html('<span style="color: #2f9e44; font-weight: bold;">Кабинет активен и заполнен</span>')
+
+    @admin.display(description="Текущий баланс к выводу")
+    def balance_display(self, obj):
+        if obj is None or not obj.pk or not obj.balance:
+            return "0 ₽"
+        return f"{obj.balance} ₽"
+
+    @admin.display(description="Рейтинг")
+    def rating_display(self, obj):
+        if obj is None or not obj.pk or obj.rating is None:
+            return "Нет оценок"
+        return f"{float(obj.rating):.1f}"
+
+    @admin.display(description="Коротко о себе (заполняется врачом)")
+    def short_description_readonly(self, obj):
+        return obj.short_description if (obj and obj.short_description) else "Не заполнено врачом"
+
+    @admin.display(description="Стоимость консультации для клиента (заполняется врачом)")
+    def consultation_price_readonly(self, obj):
+        return f"{obj.consultation_price} ₽" if (obj and obj.consultation_price) else "Не указана врачом"
 @admin.register(GeneralHealthReportProfile)
 class GeneralHealthReportProfileadmin(admin.ModelAdmin):
     pass
@@ -244,3 +322,62 @@ class Categories_Quest(admin.ModelAdmin):
 @admin.register(Quest)
 class Quest(admin.ModelAdmin):
     list_display = ['profile', 'created_at']
+
+
+
+SERVICE_MODELS_ORDER = {
+    "doctorprofile": 1,         # Врачи
+    "consultationsettings": 2,  # Настройки комиссии сервиса
+    "test": 3,                  # Тесты
+    "critical_analysis": 4,     # Тесты Kритические анализы
+}
+
+_original_get_app_list = admin.site.get_app_list
+
+
+def custom_get_app_list(request, app_label=None):
+    app_list = _original_get_app_list(request, app_label)
+
+    # Если открыта отдельная страница конкретного приложения, не дублируем
+    if app_label:
+        return app_list
+
+    service_models = []
+
+    for app in app_list:
+        # 1. Переводим название блока Backend на русский
+        if app.get("app_label", "").lower() == "backend" or app.get("name", "").lower() == "backend":
+            app["name"] = "Основной раздел"
+
+        # 2. Забираем 4 нужные модели по точному имени класса из models.py
+        remaining_models = []
+        for model_dict in app.get("models", []):
+            obj_name = str(model_dict.get("object_name", "")).strip().lower()
+
+            if obj_name in SERVICE_MODELS_ORDER:
+                service_models.append(model_dict)
+            else:
+                remaining_models.append(model_dict)
+
+        app["models"] = remaining_models
+
+    # 3. Сортируем ровно в том порядке, как в ТЗ:
+    # Врачи -> Настройки комиссии сервиса -> Тесты -> Тесты Критические анализы
+    service_models.sort(
+        key=lambda m: SERVICE_MODELS_ORDER.get(str(m.get("object_name", "")).strip().lower(), 99)
+    )
+
+    # 4. Добавляем отдельный блок «Управление сервисом» в самый низ меню
+    if service_models:
+        app_list.append({
+            "name": "Управление сервисом",
+            "app_label": "service_management",
+            "app_url": "/admin/",
+            "has_module_perms": True,
+            "models": service_models,
+        })
+
+    return app_list
+
+
+admin.site.get_app_list = custom_get_app_list
