@@ -6574,15 +6574,21 @@ class ChildIllnessSurveyCreateAPIView(APIView):
             # 1. Сохраняем новую жалобу в историю (старые НЕ удаляются)
             report = serializer.save(profile=request.user.profile)
 
-            # 2. Собираем данные для промпта (если actions_taken пусто -> явно пишем 'Предпринятые действия не указаны')
-            actions_raw = (report.actions_taken or "").strip()
-            user_data = {
-                "main_complaints": report.main_complaints,
-                "started_at": report.started_at,
-                "intensity": report.intensity,
-                "actions_taken": actions_raw if actions_raw else "Предпринятые действия не указаны (не упоминай в ответе, что родители ничего не предпринимали)",
-                "created_at": report.created_at.strftime('%Y-%m-%d %H:%M')
-            }
+            # 2. Берем последние 6 записей жалоб (включая только что созданную) для промпта
+            recent_reports = ChildIllnessReport.objects.filter(
+                profile=request.user.profile
+            ).order_by('-created_at')[:6]
+
+            user_data = []
+            for r in recent_reports:
+                actions_raw = (r.actions_taken or "").strip()
+                user_data.append({
+                    "main_complaints": r.main_complaints,
+                    "started_at": r.started_at,
+                    "intensity": r.intensity,
+                    "actions_taken": actions_raw if actions_raw else "Предпринятые действия не указаны (не упоминай в ответе, что родители ничего не предпринимали)",
+                    "created_at": r.created_at.strftime('%Y-%m-%d %H:%M')
+                })
 
             # 3. Генерируем текст анализа через ИИ
             try:
