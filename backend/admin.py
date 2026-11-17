@@ -104,6 +104,23 @@ class DoctorProfileAdmin(admin.ModelAdmin):
     @admin.display(description="Стоимость консультации для клиента (заполняется врачом)")
     def consultation_price_readonly(self, obj):
         return f"{obj.consultation_price} ₽" if (obj and obj.consultation_price) else "Не указана врачом"
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Меняет заголовок страницы редактирования на русский язык"""
+        extra_context = extra_context or {}
+        obj = self.get_object(request, object_id)
+        if obj:
+            extra_context['title'] = f"Редактирование врача: {obj.full_name}"
+        else:
+            extra_context['title'] = "Редактирование врача"
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def changelist_view(self, request, extra_context=None):
+        """Меняет заголовок списка врачей на русский язык"""
+        extra_context = extra_context or {}
+        extra_context['title'] = "Выбор врача для изменения"
+        # Передаем extra_context только один раз (по ключевому слову)
+        return super().changelist_view(request, extra_context=extra_context)
 @admin.register(GeneralHealthReportProfile)
 class GeneralHealthReportProfileadmin(admin.ModelAdmin):
     pass
