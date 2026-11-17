@@ -3871,25 +3871,29 @@ class CaloriesEdit(APIView):
     @swagger_auto_schema(
         responses={status.HTTP_200_OK: EditCaloriesSer()}
     )
-
-
-    def get(self,request):
+    def get(self, request):
         profile = request.user.profile
-        cal = Calories.objects.filter(profile=profile,saved=True).last()
+        record_id = request.query_params.get('id')
+        if record_id:
+            cal = get_object_or_404(Calories, pk=record_id, profile=profile, saved=True)
+        else:
+            cal = Calories.objects.filter(profile=profile, saved=True).last()
         serializer = self.serializer_class(cal)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
-        # request_body определяет, что мы ЖДЕМ от пользователя (detail тут исчезнет)
         request_body=EditCaloriesSer(),
-        # responses определяет, что мы ОТДАДИМ (тут detail будет виден)
         responses={status.HTTP_200_OK: EditCaloriesSer()}
     )
-
     def post(self, request):
         profile = request.user.profile
-        # Берем последнюю запись (обычно ту, что сейчас на экране)
-        cal = Calories.objects.filter(profile=profile).last()
+        record_id = request.data.get('id') or request.query_params.get('id')
+
+        # Ищем именно среди сохраненных (saved=True)
+        if record_id:
+            cal = get_object_or_404(Calories, pk=record_id, profile=profile, saved=True)
+        else:
+            cal = Calories.objects.filter(profile=profile, saved=True).last()
 
         if not cal:
             return Response({'message': 'Record not found'}, status=404)
@@ -3897,23 +3901,23 @@ class CaloriesEdit(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user_input = serializer.validated_data.get('message', '')
-
             active_details = serializer.validated_data.get('current_details', cal.detail)
 
-            # Вызываем AI, передавая ему и текст, и текущую структуру
-            test = calories_edit(user_input, cal.detail,active_details)
+            test = calories_edit(user_input, cal.detail, active_details)
 
-            if test.get('detail'):
+            if test.get('detail') is not None:
                 cal.detail = test.get('detail', [])
                 cal.total = test.get('total', {})
+                if 'water_intake' in test:
+                    cal.water_intake = float(test.get('water_intake') or 0)
 
-
-                cal.save(update_fields=['detail', 'total'])
+                cal.save(update_fields=['detail', 'total', 'water_intake'])
 
                 return Response({
-                    'message': test['message'],
+                    'message': test.get('message', ''),
                     'detail': cal.detail,
-                    'total': cal.total
+                    'total': cal.total,
+                    'water_intake': cal.water_intake
                 }, status=status.HTTP_200_OK)
 
             return Response({'message': test.get('message', 'Error analyzing data')}, status=200)
