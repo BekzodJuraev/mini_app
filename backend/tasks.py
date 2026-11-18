@@ -87,3 +87,29 @@ def send_female_health_reminder(user_id, title, description, **kwargs):
         f"💊 {description}"
     )
     send_user_notification(user_id, text)
+
+import io
+def send_pdf_to_telegram_async(profile, pdf_bytes: bytes, filename: str, caption: str = "Ваш PDF-отчёт"):
+    """
+    Синхронно отправляет сгенерированный PDF-файл в Telegram-бот по telegram_id
+    (если скачивают из детского профиля без своего telegram_id — берет telegram_id родителя).
+    """
+
+    tg_id = getattr(profile, 'telegram_id', None)
+    if not tg_id and getattr(profile, 'family', None):
+        tg_id = getattr(profile.family, 'telegram_id', None)
+
+    if not tg_id:
+        return
+
+    try:
+        doc_file = io.BytesIO(pdf_bytes)
+        doc_file.name = filename
+        bot.send_document(
+            chat_id=tg_id,
+            document=doc_file,
+            filename=filename,
+            caption=caption
+        )
+    except Exception as e:
+        print(f"Telegram PDF send error: {e}")
