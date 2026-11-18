@@ -1172,7 +1172,7 @@ class ChatAPIView(APIView):
 
             history = get_chat_history(profile)
             sections = detect_context(message)
-            print(sections)
+
             request.should_update_health = "health_update" in sections
 
 
