@@ -6583,14 +6583,14 @@ class ChildCalendarAPIView(APIView):
         tags=["Здоровье ребёнка: Календарь событий"],
         operation_summary="Получить события календаря (сетка месяца, конкретный день или вкладки)",
         operation_description=(
-            "Единый эндпоинт для работы с календарём прививок и осмотров[cite: 9, 13].\n\n"
-            "- Без параметров: вернёт все события.\n"
-            "- `?month=2026-11`: события за конкретный месяц для расстановки цветных точек в календаре[cite: 9, 10].\n"
-            "- `?date=2026-11-15`: события на конкретный выбранный день[cite: 9, 10].\n"
-            "- `?tab=vaccines`: вкладка предстоящих прививок[cite: 13].\n"
-            "- `?tab=checkups`: вкладка предстоящих осмотров[cite: 13].\n"
-            "- `?tab=completed`: вкладка пройденных прививок и осмотров[cite: 13].\n"
-            "- `?tab=reactions`: вкладка реакций (список пройденных прививок)[cite: 13]."
+                "Единый эндпоинт для работы с календарём прививок и осмотров.\n\n"
+                "- Без параметров: вернёт все события.\n"
+                "- `?month=2026-11`: события за конкретный месяц для расстановки цветных точек в календаре.\n"
+                "- `?date=2026-11-15`: события на конкретный выбранный день.\n"
+                "- `?tab=vaccines`: вкладка предстоящих прививок.\n"
+                "- `?tab=checkups`: вкладка предстоящих осмотров.\n"
+                "- `?tab=completed`: вкладка пройденных прививок и осмотров.\n"
+                "- `?tab=reactions`: вкладка реакций (список пройденных прививок)."
         ),
         manual_parameters=[
             openapi.Parameter(
@@ -6618,7 +6618,6 @@ class ChildCalendarAPIView(APIView):
         ],
         responses={status.HTTP_200_OK: ChildCalendarEventSerializer(many=True)}
     )
-    @translate_api_response(fields=['title','description'])
     def get(self, request):
         profile = request.user.profile
 
@@ -6654,7 +6653,6 @@ class ChildCalendarAPIView(APIView):
 
         serializer = ChildCalendarEventSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class CompleteCalendarEventAPIView(APIView):
     permission_classes = [IsAuthenticated]

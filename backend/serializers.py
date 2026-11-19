@@ -1328,6 +1328,25 @@ class ChildCalendarEventSerializer(serializers.ModelSerializer):
             return "dark_green"
         return "blue" if obj.event_type == 'vaccine' else "green"
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+
+        lang = 'ru'
+        if request:
+            accept_lang = request.headers.get('Accept-Language', 'ru')
+            # Берём первые 2 символа (например, из 'uz-UZ,uz;q=0.9' получится 'uz')
+            lang = accept_lang.split(',')[0].strip()[:2].lower()
+
+        if lang == 'uz':
+            data['title'] = instance.title_uz or instance.title
+            data['description'] = instance.description_uz or instance.description
+        elif lang == 'en':
+            data['title'] = instance.title_en or instance.title
+            data['description'] = instance.description_en or instance.description
+
+        return data
+
 
 class CompleteCheckupSerializer(serializers.Serializer):
     """Сериализатор для подтверждения осмотра (с необязательным комментарием и файлом)"""

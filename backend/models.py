@@ -398,6 +398,12 @@ class ChildCalendarEvent(models.Model):
         verbose_name="Назначенная дата",
     )
 
+    title_uz = models.CharField(max_length=255, blank=True, default="")
+    title_en = models.CharField(max_length=255, blank=True, default="")
+
+    description_uz = models.TextField(blank=True, default="")
+    description_en = models.TextField(blank=True, default="")
+
     # Статус прохождения ("Прививка пройдена" / "Осмотр пройден")
     is_completed = models.BooleanField(
         default=False,
