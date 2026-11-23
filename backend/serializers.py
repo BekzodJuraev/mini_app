@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 import openai
 from django.utils.timezone import localtime, now
 from concurrent.futures import ThreadPoolExecutor
+from django.utils import timezone
 import json
 import time
 from threading import Thread
@@ -1395,6 +1396,7 @@ class DoctorCabinetSerializer(serializers.ModelSerializer):
             'experience_display',
             'rating',
             'balance',
+            'reviews_count',
             'total_earned',
             'short_description',
             'consultation_price',
@@ -1408,6 +1410,8 @@ class DoctorCabinetSerializer(serializers.ModelSerializer):
         completed_qs = obj.doctor_consultations.filter(status='completed').select_related('client')[:20]
         return ConsultationHistoryItemSerializer(completed_qs, many=True).data
 
+    def get_reviews_count(self, obj):
+        return Consultation.objects.filter(doctor=obj, rating__isnull=False).count()
 
 class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     """Экран 'Изменение профиля': врач меняет 'Коротко о себе' и 'Стоимость консультации для клиента'"""
@@ -1421,7 +1425,21 @@ class DoctorOnlineToggleSerializer(serializers.Serializer):
     is_online = serializers.BooleanField(required=True, help_text="True — Online, False — Offline")
 
 
+class DoctorReviewItemSerializer(serializers.ModelSerializer):
+    """Отзыв о враче: строго оценка, дата и комментарий (без деталей консультации)."""
+    comment = serializers.CharField(source='review_comment', read_only=True)
+    date = serializers.SerializerMethodField()
 
+    class Meta:
+        model = Consultation
+        fields = ['id', 'rating', 'date', 'comment']
+
+    def get_date(self, obj):
+        dt = obj.completed_at or getattr(obj, 'created_at', None)
+        if not dt:
+            return None
+        local_dt = timezone.localtime(dt) if timezone.is_aware(dt) else dt
+        return local_dt.strftime('%d.%m.%Y')
 
 class DoctorConsultationQueueSerializer(serializers.ModelSerializer):
     """Экран 'Заявки': список назначенных врачу активных и завершённых консультаций"""

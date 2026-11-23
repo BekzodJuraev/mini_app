@@ -7197,6 +7197,7 @@ from .serializers import (
     ClientCallResponseSerializer,
     ClientReviewConsultationSerializer,
     ConsultationMessageSerializer,
+    DoctorReviewItemSerializer
 )
 from .doctor_search import match_online_doctor_with_ai
 # Обязательный параметр telegram_id для Swagger
@@ -7778,6 +7779,10 @@ class ClientCreateAndMatchConsultationAPIView(APIView):
             request.build_absolute_uri(matched_doctor.photo.url)
             if matched_doctor.photo else None
         )
+        reviews_count = Consultation.objects.filter(
+            doctor=matched_doctor,
+            rating__isnull=False
+        ).count()
 
         # Данные для Экрана 4 ("Оплата консультации")
         return Response({
@@ -7795,11 +7800,71 @@ class ClientCreateAndMatchConsultationAPIView(APIView):
                 "specialization": matched_doctor.specialization,
                 "photo": doctor_photo_url,
                 "rating": matched_doctor.rating,
+                "reviews_count": reviews_count,
                 "experience_display": matched_doctor.experience_display,
             }
         }, status=status.HTTP_201_CREATED)
 
+class ClientDoctorReviewsAPIView(APIView):
+    """
+    GET: Список отзывов конкретного врача для ссылки «Читать отзывы» на экране «Врач найден» (до оплаты).
+    Отдаёт только оценку, дату и комментарий, без деталей консультации.
+    """
+    permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        tags=["Клиент: Онлайн-консультации"],
+        operation_summary="Получить рейтинг и отзывы врача (ссылка «Читать отзывы»)",
+        responses={status.HTTP_200_OK: DoctorReviewItemSerializer(many=True)}
+    )
+    def get(self, request, doctor_id):
+        doctor = get_object_or_404(DoctorProfile, id=doctor_id, is_active=True)
+
+        reviews_qs = Consultation.objects.filter(
+            doctor=doctor,
+            rating__isnull=False
+        ).order_by('-completed_at', '-id')
+
+        return Response({
+            "doctor_id": doctor.id,
+            "full_name": doctor.full_name,
+            "specialization": doctor.specialization,
+            "rating": doctor.rating,
+            "reviews_count": reviews_qs.count(),
+            "reviews": DoctorReviewItemSerializer(reviews_qs, many=True).data,
+        }, status=status.HTTP_200_OK)
+
+
+class DoctorOwnReviewsAPIView(APIView):
+    """
+    GET: Просмотр собственного рейтинга и отзывов в личном кабинете врача.
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=["Врач: Отдельная панель"],
+        operation_summary="Получить свой рейтинг и список отзывов (Кабинет врача)",
+        manual_parameters=DOCTOR_SWAGGER_PARAMS,
+        responses={status.HTTP_200_OK: DoctorReviewItemSerializer(many=True)}
+    )
+    def get(self, request):
+        doctor = get_current_doctor(request)
+        if not doctor:
+            return Response(
+                {"error": "Врач с таким telegram_id не найден или профиль отключен."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        reviews_qs = Consultation.objects.filter(
+            doctor=doctor,
+            rating__isnull=False
+        ).order_by('-completed_at', '-id')
+
+        return Response({
+            "rating": doctor.rating,
+            "reviews_count": reviews_qs.count(),
+            "reviews": DoctorReviewItemSerializer(reviews_qs, many=True).data,
+        }, status=status.HTTP_200_OK)
 # ==============================================================================
 # 2. ЭКРАН 4: ОПЛАТА КОНСУЛЬТАЦИИ (ТЕСТОВЫЙ РЕЖИМ -> ОТКРЫТИЕ ЧАТА)
 # ==============================================================================

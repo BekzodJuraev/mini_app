@@ -103,7 +103,7 @@ urlpatterns=[
  path('api/doctor/cabinet',views.DoctorCabinetAPIView.as_view()),
  path('api/doctor/status',views.DoctorShiftToggleAPIView.as_view()),
  path('api/doctor/consulatation',views.DoctorConsultationsListAPIView.as_view()),
-
+ path('api/doctor/reviews', views.DoctorOwnReviewsAPIView.as_view(), name='doctor-own-reviews'),
  path('api/doctor/chat/<int:consultation_id>',views.DoctorConsultationChatAPIView.as_view()),
  path('api/doctor/offercall/<int:consultation_id>',views.DoctorOfferCallAPIView.as_view()),
  path('api/doctor/competechat/<int:consultation_id>', views.DoctorCompleteConsultationAPIView.as_view()),
@@ -117,7 +117,7 @@ urlpatterns=[
  path('api/client/consultations/<int:consultation_id>/call-action', views.ClientCallActionAPIView.as_view()),
  path('api/client/consultations/<int:consultation_id>/result', views.ClientConsultationResultAPIView.as_view()),
  path('api/client/consultations/<int:consultation_id>/review', views.ClientReviewConsultationAPIView.as_view()),
-
+ path('api/client/doctors/<int:doctor_id>/reviews', views.ClientDoctorReviewsAPIView.as_view(), name='client-doctor-reviews'),
 
 # LiveKit токен и завершение звонка для Врача
  path('api/doctor/consultations/<int:consultation_id>/livekit-token', views.DoctorLiveKitTokenAPIView.as_view()),
