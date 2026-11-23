@@ -10,7 +10,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.http import FileResponse
 import io
 import os
-
+import uuid
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -127,7 +127,8 @@ from .serializers import (
     ChildHealthAnalysisProfileSerializer,
     ChildCalendarEventSerializer,
     CompleteCheckupSerializer,
-    AddVaccineReactionSerializer
+    AddVaccineReactionSerializer,
+    UpdateAdultCredentialsSer
 
 
 
@@ -863,7 +864,117 @@ class RegisterFirstAPIView(APIView):
 
         return Response({'message': 'Registration successful', 'token': token.key}, status=status.HTTP_201_CREATED)
 
+def is_uuid_username(username) -> bool:
+    if not username:
+        return False
+    try:
+        uuid.UUID(str(username))
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
 
+
+class UpdateAdultCredentialsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UpdateAdultCredentialsSer
+
+    def _get_age(self, birth_date):
+        if not birth_date:
+            return None
+        today = date.today()
+        return today.year - birth_date.year - (
+            (today.month, today.day) < (birth_date.month, birth_date.day)
+        )
+
+    def get(self, request):
+        """Проверка: нужно ли переводить профиль во взрослый (18+ и логин всё ещё UUID)."""
+        user = request.user
+        profile = user.profile
+        age = self._get_age(profile.date_birth)
+        is_uuid = is_uuid_username(user.username)
+
+        return Response(
+            {
+                "needs_upgrade": bool(age is not None and age >= 18 and is_uuid),
+                "is_adult": bool(age is not None and age >= 18),
+                "already_upgraded": not is_uuid,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @swagger_auto_schema(
+        request_body=UpdateAdultCredentialsSer,
+        responses={status.HTTP_200_OK: '{"message": "Логин, пароль и Telegram ID успешно обновлены.", "token": "..."}'}
+    )
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        profile = user.profile
+
+        # 1. Проверка UUID: если username уже не UUID — аккаунт уже переведён во взрослый
+        if not is_uuid_username(user.username):
+            return Response(
+                {"error": "Аккаунт уже переведён во взрослый, логин и пароль уже заданы."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 2. Проверка возраста (>= 18 лет)
+        age = self._get_age(profile.date_birth)
+        if age is None:
+            return Response(
+                {"error": "Дата рождения не указана в профиле."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if age < 18:
+            return Response(
+                {"error": "Переход на взрослый аккаунт доступен только с 18 лет."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # 3. Валидация новых данных
+        serializer = self.serializer_class(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        v_data = serializer.validated_data
+
+        # Защита: новый логин сам не должен быть UUID
+        if is_uuid_username(v_data['login']):
+            return Response(
+                {"error": "Логин не может быть в формате UUID."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 4. Обновляем User (после этого username перестаёт быть UUID — повторный вызов не пройдёт)
+        user.username = v_data['login']
+        if v_data.get('email'):
+            user.email = v_data['email']
+        user.set_password(v_data['password'])
+        user.save()
+
+        # 5. Обновляем telegram_id и пол в Profile
+        update_fields = []
+        if v_data.get('telegram_id') is not None:
+            profile.telegram_id = v_data['telegram_id']
+            update_fields.append('telegram_id')
+
+        gender_lower = str(profile.gender or '').strip().lower()
+        if gender_lower == 'мальчик':
+            profile.gender = 'Мужчина'
+            update_fields.append('gender')
+        elif gender_lower == 'девочка':
+            profile.gender = 'Женщина'
+            update_fields.append('gender')
+
+        if update_fields:
+            profile.save(update_fields=update_fields)
+
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response(
+            {
+                "message": "Логин, пароль и Telegram ID успешно обновлены.",
+                "token": token.key,
+            },
+            status=status.HTTP_200_OK,
+        )
 class LoginAPIView(APIView):
     serializer_class = LoginSer
 

@@ -245,7 +245,40 @@ class RegistrationFirstSer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         return user
 
+class UpdateAdultCredentialsSer(serializers.Serializer):
+    login = serializers.CharField(required=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=True)
+    password2 = serializers.CharField(write_only=True, required=True)
+    telegram_id = serializers.IntegerField(required=False, allow_null=True)
 
+    def validate_login(self, value):
+        user = self.context['request'].user
+        if User.objects.filter(username=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError(
+                "Это имя пользователя уже занято. Пожалуйста, выберите другое."
+            )
+        return value
+
+    def validate_email(self, value):
+        if not value:
+            return value
+        user = self.context['request'].user
+        if User.objects.filter(email=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError(
+                "Этот адрес электронной почты уже зарегистрирован. Пожалуйста, используйте другой."
+            )
+        return value
+
+    def validate_password(self, value):
+        if len(value) < 6:
+            raise serializers.ValidationError("Пароль должен быть не менее 6 символов в длину.")
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['password2']:
+            raise serializers.ValidationError("Пароли не совпадают.")
+        return data
 class RegistrationSerializer(serializers.ModelSerializer):
     name = serializers.CharField()
     lastname = serializers.CharField()
@@ -1381,6 +1414,7 @@ class DoctorCabinetSerializer(serializers.ModelSerializer):
     service_commission_percent = serializers.IntegerField(read_only=True)
     doctor_payout = serializers.IntegerField(read_only=True)
     consultation_history = serializers.SerializerMethodField()
+    reviews_count = serializers.SerializerMethodField()
 
     class Meta:
         model = DoctorProfile

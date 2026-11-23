@@ -7,7 +7,7 @@ urlpatterns=[
  path('api/profile/male/system',views.MaleSystemView.as_view()),
  path('api/profile/male/critical_analis/<int:pk>', views.CriticalTestDetailAPIView.as_view()),
 
-
+ path('api/profile/upgrade-adult', views.UpdateAdultCredentialsAPIView.as_view(), name='upgrade-adult-credentials'),
  path('api/profile/female/period',views.CyclePeriodListAPIView.as_view()),
  path('api/profile/female/period/<int:id>',views.CyclePeriodListAPIView.as_view()),
  path('api/profile/female/calendar',views.CalendarMonthAPIView.as_view()),
