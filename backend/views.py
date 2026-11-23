@@ -6386,7 +6386,10 @@ class ChildIllnessSurveyCreateAPIView(APIView):
 
             # 3. Генерируем текст анализа через ИИ
             try:
-                analysis_text = get_child_health_analysis(user_data)
+                analysis_text = get_child_health_analysis(
+                    user_data,
+                    birth_date=request.user.profile.date_birth
+                )
             except Exception as e:
                 analysis_text = "Не удалось сгенерировать автоматический анализ."
 

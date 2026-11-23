@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation,DoctorWithdrawal
+from .models import Profile,Categories_Quest,Quest,Tests,Chat,Habit,Tracking_Habit,Drugs,Check_Drugs,Daily_check,Rentgen,Rentgen_Image,Pet,Calories,PetChat,Pet_Drugs,Pet_Check_Drugs,PetDaily_check,PetRentgen,PetRentgen_Image,Test, Question, Choice,Notification_drugs,NutritionGoal,Notification,NutritionGoalPet,PetCalories,Notification_Pet_drugs,Tests_Pet,PetShare,Critical_analysis,Question_critical,Choice_critical,CyclePeriod,DailyLog,MenHealthProfile,FemaleHealthProfile,ChildMeasurement,ChildIllnessReport,ChildCalendarEvent,CaloriesReportProfile,GeneralHealthReportProfile,DoctorProfile,ConsultationSettings,Consultation,DoctorWithdrawal,ChildHealthAnalysisProfile
 from django.utils.html import format_html
 import re
 
@@ -121,6 +121,11 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         extra_context['title'] = "Выбор врача для изменения"
         # Передаем extra_context только один раз (по ключевому слову)
         return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(ChildHealthAnalysisProfile)
+class ChildHealthAnalysisProfileadmin(admin.ModelAdmin):
+    pass
 @admin.register(GeneralHealthReportProfile)
 class GeneralHealthReportProfileadmin(admin.ModelAdmin):
     pass
