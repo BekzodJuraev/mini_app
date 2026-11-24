@@ -7888,7 +7888,12 @@ class ClientCreateAndMatchConsultationAPIView(APIView):
         filename = file_obj.name if file_obj else None
 
         # ИИ подбирает подходящего врача среди тех, кто сейчас Online
-        matched_doctor = match_online_doctor_with_ai(profile, complaint, filename)
+        matched_doctor = match_online_doctor_with_ai(
+            profile=profile,
+            complaint_text=complaint,
+            filename=filename,
+            file_obj=file_obj
+        )
 
         # Экран "Врач не найден" (по ТЗ со скрина 3)
         if not matched_doctor:
@@ -8051,6 +8056,7 @@ class ClientPayConsultationMockAPIView(APIView):
                     profile=profile,
                     complaint_text=consultation.initial_complaint,
                     filename=filename,
+                    file_obj=consultation.initial_file if consultation.initial_file else None,
                     exclude_doctor_ids=[doctor.id]
                 )
 
