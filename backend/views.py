@@ -7407,7 +7407,10 @@ class DoctorShiftToggleAPIView(APIView):
         operation_summary="Переключить статус врача Online / Offline",
         manual_parameters=DOCTOR_SWAGGER_PARAMS,
         request_body=DoctorOnlineToggleSerializer,
-        responses={status.HTTP_200_OK: "Статус успешно изменен"}
+        responses={
+            status.HTTP_200_OK: "Статус успешно изменен",
+            status.HTTP_400_BAD_REQUEST: "Не заполнены обязательные данные профиля для выхода в Online"
+        }
     )
     def post(self, request):
         doctor = get_current_doctor(request)
@@ -7420,7 +7423,26 @@ class DoctorShiftToggleAPIView(APIView):
         serializer = DoctorOnlineToggleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        doctor.is_online = serializer.validated_data['is_online']
+        want_online = serializer.validated_data['is_online']
+
+        # Не даём включить Online, пока не заполнены обязательные поля профиля
+        if want_online and not doctor.is_cabinet_ready:
+            missing_fields = []
+            if not (doctor.short_description and doctor.short_description.strip()):
+                missing_fields.append("«Коротко о себе»")
+            if not doctor.consultation_price or doctor.consultation_price <= 0:
+                missing_fields.append("«Стоимость консультации» (должна быть больше 0)")
+
+            return Response(
+                {
+                    "error": f"Чтобы выйти в Online, заполните: {', '.join(missing_fields)}.",
+                    "missing_fields": missing_fields,
+                    "is_online": False,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        doctor.is_online = want_online
         doctor.save(update_fields=['is_online'])
 
         status_label = "Online" if doctor.is_online else "Offline"
@@ -7984,43 +8006,108 @@ class DoctorOwnReviewsAPIView(APIView):
 # ==============================================================================
 
 class ClientPayConsultationMockAPIView(APIView):
-    """
-    POST: Экран 'Оплата консультации'.
-    Переводит консультацию в статус 'active', создаёт первое сообщение в чате из жалобы клиента
-    и открывает доступ к чату и для клиента, и для врача.
-    """
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Клиент: Онлайн-консультации"],
         operation_summary="Оплатить консультацию (тестовый режим) и открыть чат",
-        operation_description=(
-            "Принимает выбранный способ оплаты (`payment_method`: `card`, `sbp`, `yookassa`, `cryptomus`). "
-            "Отмечает консультацию оплаченной (`is_paid=True`, `status='active'`), автоматически отправляет "
-            "описание проблемы и прикрепленный файл первым сообщением в чат и открывает чат со специалистом."
-        ),
         request_body=ClientPayConsultationSerializer,
-        responses={status.HTTP_200_OK: "Оплата прошла успешно, чат открыт"}
+        responses={
+            status.HTTP_200_OK: "Оплата прошла успешно, чат открыт",
+            status.HTTP_409_CONFLICT: "Врач перешёл в Offline (подобран другой врач или врач не найден)"
+        }
     )
     def post(self, request, consultation_id):
         profile = request.user.profile
-        consultation = get_object_or_404(Consultation, id=consultation_id, client=profile)
+        consultation = get_object_or_404(
+            Consultation.objects.select_related('doctor'),
+            id=consultation_id,
+            client=profile
+        )
 
         if consultation.status == 'completed':
             return Response({"error": "Эта консультация уже завершена."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if consultation.status == 'cancelled':
+            return Response({"error": "Эта консультация была отменена."}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = ClientPayConsultationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         payment_method = serializer.validated_data.get('payment_method', 'card')
 
         if consultation.status == 'waiting_payment':
+            doctor = consultation.doctor
+            doctor.refresh_from_db()
+
+            is_doctor_busy = Consultation.objects.filter(
+                doctor=doctor,
+                status='active'
+            ).exclude(id=consultation.id).exists()
+
+            # Повторная проверка перед оплатой: врач ушёл в Offline / отключен / занят
+            if not doctor.is_online or not doctor.is_active or is_doctor_busy:
+                filename = consultation.initial_file.name if consultation.initial_file else None
+                replacement_doctor = match_online_doctor_with_ai(
+                    profile=profile,
+                    complaint_text=consultation.initial_complaint,
+                    filename=filename,
+                    exclude_doctor_ids=[doctor.id]
+                )
+
+                if replacement_doctor:
+                    consultation.doctor = replacement_doctor
+                    consultation.price_for_client = replacement_doctor.consultation_price
+                    consultation.commission_percent = replacement_doctor.service_commission_percent
+                    consultation.doctor_earning = replacement_doctor.doctor_payout
+                    consultation.save(update_fields=[
+                        'doctor', 'price_for_client', 'commission_percent', 'doctor_earning'
+                    ])
+
+                    doctor_photo_url = (
+                        request.build_absolute_uri(replacement_doctor.photo.url)
+                        if replacement_doctor.photo else None
+                    )
+                    reviews_count = Consultation.objects.filter(
+                        doctor=replacement_doctor,
+                        rating__isnull=False
+                    ).count()
+
+                    return Response({
+                        "doctor_found": True,
+                        "doctor_replaced": True,
+                        "title": "Выбранный врач перешёл в Offline",
+                        "message": "Мы подобрали для вас другого свободного специалиста. Подтвердите оплату.",
+                        "consultation_id": consultation.id,
+                        "status": consultation.status,
+                        "price": consultation.price_for_client,
+                        "price_display": f"{consultation.price_for_client:,}".replace(",", " ") + " ₽",
+                        "doctor": {
+                            "id": replacement_doctor.id,
+                            "full_name": replacement_doctor.full_name,
+                            "specialization": replacement_doctor.specialization,
+                            "photo": doctor_photo_url,
+                            "rating": replacement_doctor.rating,
+                            "reviews_count": reviews_count,
+                            "experience_display": replacement_doctor.experience_display,
+                        }
+                    }, status=status.HTTP_409_CONFLICT)
+
+                # Свободной замены нет — отменяем заявку, чат не открываем
+                consultation.status = 'cancelled'
+                consultation.save(update_fields=['status'])
+                return Response({
+                    "doctor_found": False,
+                    "doctor_replaced": False,
+                    "title": "Подходящий врач сейчас не найден",
+                    "message": "Выбранный врач перешёл в Offline, а других подходящих специалистов онлайн сейчас нет."
+                }, status=status.HTTP_409_CONFLICT)
+
+            # Врач всё ещё Online и свободен — подтверждаем оплату и открываем чат
             consultation.status = 'active'
             consultation.is_paid = True
             consultation.payment_method = payment_method
             consultation.save(update_fields=['status', 'is_paid', 'payment_method'])
 
-            # Автоматически создаем первое сообщение от клиента в чате из его жалобы и файла
             if not consultation.messages.exists() and (consultation.initial_complaint or consultation.initial_file):
                 ConsultationMessage.objects.create(
                     consultation=consultation,
@@ -8292,14 +8379,12 @@ class ClientConsultationResultAPIView(APIView):
             "status": consultation.status,
             "title": "Консультация завершена",
             "doctor_conclusion": consultation.doctor_conclusion or "",
-            # Если врач прикрепил файл — отображается кнопка скачивания, иначе кнопка отсутствует
             "has_conclusion_file": has_file,
+            "conclusion_file": file_url,  # <-- добавили для фронта
             "conclusion_file_url": file_url,
-            # Если отмечен пункт 'Требуется очный осмотр' — отображается кнопка 'Записаться на очный осмотр'
             "needs_in_person_visit": consultation.needs_in_person_visit,
             "show_in_person_button": consultation.needs_in_person_visit,
             "in_person_button_text": "Записаться на очный осмотр" if consultation.needs_in_person_visit else None,
-            # Оценена ли уже консультация
             "is_reviewed": consultation.rating is not None,
             "rating": consultation.rating,
             "review_comment": consultation.review_comment,

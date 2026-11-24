@@ -1,21 +1,40 @@
 import json
 import openai
-from .models import DoctorProfile
-
+from .models import DoctorProfile,Consultation
+from django.db.models import Max, F
 MODEL = "gpt-4o-mini"
 
 
-def match_online_doctor_with_ai(profile, complaint_text: str, filename: str = None) -> DoctorProfile:
+def match_online_doctor_with_ai(
+    profile,
+    complaint_text: str,
+    filename: str = None,
+    exclude_doctor_ids: list = None
+) -> DoctorProfile:
     """
-    ИИ анализирует описание проблемы клиента, прикрепленный файл и данные профиля,
-    после чего выбирает подходящего врача среди тех, кто сейчас Online (is_online=True).
-    Если подходящего специалиста нет — возвращает None (для экрана 'Врач не найден').
+    Подбирает подходящего СВОБОДНОГО врача со статусом Online.
+    Между подходящими свободными врачами распределяет заявки по очереди (Round-Robin):
+    первым идёт врач, которому дольше всего не назначали заявки.
     """
-    online_doctors = list(DoctorProfile.objects.filter(is_active=True, is_online=True))
+    # 1. Исключаем врачей, у которых сейчас идёт активная консультация
+    busy_doctor_ids = list(
+        Consultation.objects.filter(status='active').values_list('doctor_id', flat=True)
+    )
+    excluded = set(busy_doctor_ids)
+    if exclude_doctor_ids:
+        excluded.update(exclude_doctor_ids)
+
+    # 2. Берём свободных врачей Online и сразу сортируем по очереди (давно не получал заявку -> первый)
+    online_doctors = list(
+        DoctorProfile.objects.filter(is_active=True, is_online=True)
+        .exclude(id__in=excluded)
+        .annotate(last_assigned_at=Max('doctor_consultations__created_at'))
+        .order_by(F('last_assigned_at').asc(nulls_first=True), 'id')
+    )
     if not online_doctors:
         return None
 
-    doctors_Catalog = [
+    doctors_catalog = [
         {
             "doctor_id": doc.id,
             "full_name": doc.full_name,
@@ -38,17 +57,17 @@ def match_online_doctor_with_ai(profile, complaint_text: str, filename: str = No
     }
 
     system_prompt = """Ты — медицинский диспетчер системы телемедицины MEDAVATAR.
-Проанализируй проблему пациента, данные его медицинской карты и список врачей, которые сейчас находятся в статусе Online.
+Проанализируй проблему пациента, данные его медицинской карты и список свободных врачей Online.
 
 Правила подбора:
-1. Выбери наиболее подходящего врача по специализации и опыту из списка доступных онлайн-врачей.
-2. Если жалоба общая (простуда, давление, слабость, температура, анализы и т.д.) — отлично подходит Терапевт или Врач общей практики.
-3. Если среди врачей онлайн есть подходящий специалист (или терапевт для первичного приёма), верни его ID в поле "selected_doctor_id".
-4. Если проблема узкоспециализированная, а среди врачей онлайн нет ни профильного специалиста, ни терапевта — верни "selected_doctor_id": null.
+1. Найди ВСЕХ врачей из списка, чья специализация подходит под жалобу пациента.
+2. Если жалоба общая (простуда, давление, слабость, температура, анализы и т.д.) — подходят Терапевты и Врачи общей практики.
+3. Если есть несколько подходящих врачей одной специальности (например, два Кардиолога) — ОБЯЗАТЕЛЬНО верни ID ВСЕХ подходящих врачей в массиве "suitable_doctor_ids".
+4. Если проблема узкоспециализированная, а среди врачей онлайн нет ни профильного специалиста, ни терапевта — верни пустой массив "suitable_doctor_ids": [].
 
 Верни ответ СТРОГО в формате JSON:
 {
-  "selected_doctor_id": 12,
+  "suitable_doctor_ids": [12, 15],
   "reason": "Краткое обоснование выбора"
 }
 """
@@ -62,20 +81,23 @@ def match_online_doctor_with_ai(profile, complaint_text: str, filename: str = No
                     "role": "user",
                     "content": (
                         f"Данные пациента и жалоба:\n{json.dumps(patient_context, ensure_ascii=False, default=str)}\n\n"
-                        f"Список врачей Online:\n{json.dumps(doctors_Catalog, ensure_ascii=False)}"
+                        f"Список свободных врачей Online:\n{json.dumps(doctors_catalog, ensure_ascii=False)}"
                     )
                 }
             ],
             response_format={"type": "json_object"}
         )
         res_data = json.loads(response["choices"][0]["message"]["content"])
-        selected_id = res_data.get("selected_doctor_id")
-        if selected_id:
-            for doc in online_doctors:
-                if doc.id == int(selected_id):
-                    return doc
+        suitable_ids = {int(i) for i in (res_data.get("suitable_doctor_ids") or [])}
+
+        # Так как online_doctors уже отсортирован по очереди (last_assigned_at ASC NULLS FIRST),
+        # первый совпавший врач — это именно тот, чья сейчас очередь.
+        for doc in online_doctors:
+            if doc.id in suitable_ids:
+                return doc
+
         return None
     except Exception as e:
         print(f"AI doctor match error: {e}")
-        # Fallback: если OpenAI недоступен, берем первого онлайн-врача с лучшим рейтингом
-        return sorted(online_doctors, key=lambda x: x.rating, reverse=True)[0]
+        # Fallback: берём первого по очереди среди свободных онлайн-врачей
+        return online_doctors[0]
