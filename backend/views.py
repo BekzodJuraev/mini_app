@@ -6427,17 +6427,17 @@ class ChildIllnessSurveyCreateAPIView(APIView):
 
 class DownloadIllnessReportPDFAPIView(APIView):
     """
-    GET: Выгрузка PDF-отчёта по истории симптомов и жалоб ребёнка:
-    - Правка 1: время записи в локальном часовом поясе (timezone.localtime)
-    - Правка 7: логотип MED AVATAR и номер страницы внизу
-    - Правка 9: в таблице ссылка на приложение ('Фото (приложение 1)' / 'Не прикреплено') + раздел 'Приложения' в конце
-    - Правка 10: расширена колонка 'Интенсивность', чтобы буква 'ь' не переносилась
+    GET: Выгрузка PDF-отчёта по истории симптомов и жалоб ребёнка (Отчёт для педиатра):
+    - Локальное время записи
+    - В таблице ссылка на приложение ('Фото (приложение 1)' / 'имя.pdf (приложение 2)' / 'Не прикреплено')
+    - В конце отчёта раздел 'Приложения': каждая страница прикреплённого PDF выводится крупно на отдельной странице
+      с указанием номера приложения, имени файла и номера страницы (стр. X из N).
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
-            import fitz  # PyMuPDF для конвертации страниц прикрепленных PDF
+            import fitz  # PyMuPDF
         except ImportError:
             fitz = None
 
@@ -6491,7 +6491,7 @@ class DownloadIllnessReportPDFAPIView(APIView):
             fontSize=10.5,
             leading=14,
             textColor=colors.HexColor('#1D4ED8'),
-            spaceBefore=10,
+            spaceBefore=6,
             spaceAfter=6,
             keepWithNext=True,
         )
@@ -6561,7 +6561,6 @@ class DownloadIllnessReportPDFAPIView(APIView):
         app_counter = 1
 
         for s in surveys:
-            # ПРАВКА 1: Конвертация времени из UTC в локальный часовой пояс приложения
             local_dt = timezone.localtime(s.created_at) if timezone.is_aware(s.created_at) else s.created_at
             date_str = local_dt.strftime('%d.%m.%Y %H:%M') if local_dt else '-'
 
@@ -6571,7 +6570,6 @@ class DownloadIllnessReportPDFAPIView(APIView):
             started_str = str(s.started_at or '-')
             actions_str = str(s.actions_taken or '-')
 
-            # ПРАВКА 9: Ссылка на конкретное приложение или «Не прикреплено»
             if s.file_attachment and getattr(s.file_attachment, 'name', None):
                 raw_filename = os.path.basename(s.file_attachment.name)
                 ext = os.path.splitext(raw_filename)[1].lower()
@@ -6601,7 +6599,6 @@ class DownloadIllnessReportPDFAPIView(APIView):
                 Paragraph(file_str, cell_body_style),
             ])
 
-        # ПРАВКА 10: Ширина колонки «Интенсивность» увеличена до 92, чтобы слово помещалось целиком
         history_table = Table(table_data, colWidths=[72, 93, 92, 75, 113, 90], repeatRows=1)
         history_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
@@ -6611,48 +6608,62 @@ class DownloadIllnessReportPDFAPIView(APIView):
             ('TOPPADDING', (0, 0), (-1, -1), 5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ]))
-
         elements.append(history_table)
 
-        # ПРАВКА 9: Раздел «Приложения» в конце отчёта (фотографии и страницы прикреплённых PDF)
+        # 4. Раздел «Приложения» — каждая страница PDF и каждое фото крупно на отдельной странице
         if attachments_to_render:
-            elements.append(PageBreak())
-            elements.append(Paragraph("Приложения", title_style))
-            elements.append(Spacer(1, 6))
-
-            for att in attachments_to_render:
-                header_text = (
-                    f"Приложение {att['num']}: {att['raw_filename']} "
-                    f"(запись от {att['date_str']} — {att['complaints_str']})"
-                )
-                elements.append(Paragraph(header_text, section_heading))
+            for idx_att, att in enumerate(attachments_to_render):
+                elements.append(PageBreak())
+                if idx_att == 0:
+                    elements.append(Paragraph("Приложения", title_style))
 
                 try:
                     file_path = att['file_field'].path
                     ext = att['ext']
 
                     if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp']:
-                        rl_img = make_scaled_rl_image(file_path, max_w=480, max_h=520)
+                        header_text = (
+                            f"Приложение {att['num']}: {att['raw_filename']} "
+                            f"(запись от {att['date_str']} — {att['complaints_str']})"
+                        )
+                        elements.append(Paragraph(header_text, section_heading))
+                        max_h = 565 if idx_att == 0 else 600
+                        rl_img = make_scaled_rl_image(file_path, max_w=530, max_h=max_h)
                         if rl_img:
                             elements.append(rl_img)
-                            elements.append(Spacer(1, 14))
+
                     elif ext == '.pdf' and fitz is not None:
                         with fitz.open(file_path) as pdf_doc:
+                            total_pages = len(pdf_doc)
                             for page_idx, page in enumerate(pdf_doc, start=1):
-                                pix = page.get_pixmap(dpi=150)
+                                if page_idx > 1:
+                                    elements.append(PageBreak())
+
+                                page_header = (
+                                    f"Приложение {att['num']}: {att['raw_filename']} — "
+                                    f"стр. {page_idx} из {total_pages} "
+                                    f"(запись от {att['date_str']})"
+                                )
+                                elements.append(Paragraph(page_header, section_heading))
+
+                                pix = page.get_pixmap(dpi=180)
                                 img_bytes = io.BytesIO(pix.tobytes("png"))
-                                rl_img = make_scaled_rl_image(img_bytes, max_w=480, max_h=520)
+                                img_bytes.seek(0)
+
+                                max_h = 565 if (idx_att == 0 and page_idx == 1) else 600
+                                rl_img = make_scaled_rl_image(img_bytes, max_w=530, max_h=max_h)
                                 if rl_img:
-                                    if len(pdf_doc) > 1:
-                                        elements.append(Paragraph(f"Страница {page_idx}", cell_body_style))
                                     elements.append(rl_img)
-                                    elements.append(Spacer(1, 10))
                     else:
+                        elements.append(Paragraph(
+                            f"Приложение {att['num']}: {att['raw_filename']}", section_heading
+                        ))
                         elements.append(Paragraph(f"Файл вложения: {att['raw_filename']}", cell_body_style))
-                        elements.append(Spacer(1, 10))
                 except Exception as e:
-                    elements.append(Paragraph(f"Не удалось отобразить вложение ({att['raw_filename']}).", cell_body_style))
-                    elements.append(Spacer(1, 10))
+                    print(f"Attachment render error ({att['raw_filename']}): {e}")
+                    elements.append(Paragraph(
+                        f"Не удалось отобразить вложение ({att['raw_filename']}).", cell_body_style
+                    ))
 
         doc.build(elements, canvasmaker=MedAvatarNumberedCanvas)
         pdf_bytes = buffer.getvalue()
