@@ -9,6 +9,8 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.http import FileResponse
 import io
+import hashlib
+
 import os
 import uuid
 from reportlab.lib import colors
@@ -152,7 +154,7 @@ from .models import Profile,Quest,Categories_Quest,Tests,Chat,Tracking_Habit,Hab
 from django.db.models.functions import ExtractYear,TruncDate
 from django.utils.timezone import now
 import time
-from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis,get_main_avatar_url,get_child_health_analysis
+from .prompt import chat_system,crash_test,lifestyle_test,symptoms_test,lestnica_test,breath_test,genchi_test,ruffier_test,kotova_test,martinet_test,cooper_test,chat_update,daily_check,rentgen,get_health_scale_pet,lifestyle_test_dog,habit_test_dog,emotion_test_dog,emotion_test_cat,sleep_test_cat,apetit_test_cat,povidenie_test_grizuna,apetit_test_grizuna,forma_test_grizuna,calories,petrentgen,petdaily_check,pet_calories,chat_update_pet,chat_system_pet,calories_edit,testadmin,calories_pet_edit,blood_pressure_test,life_expectancy,single_pressure_analysis,detect_context,evaluate_food_healthiness,critical_analysis_ai,get_full_men_health_analysis,get_female_health_analysis,get_main_avatar_url,get_child_health_analysis,translate_text_on_the_fly
 from .tools import nutrition_chat_system
 from django.utils.timezone import localtime, now
 from django.shortcuts import get_object_or_404
@@ -2118,7 +2120,6 @@ class MonthlyStatisticsView(APIView):
         profile = request.user.profile
         today = localtime(now()).date()
 
-        # 1. Параметры месяца (с валидацией аргументов)
         try:
             year = int(request.query_params.get("year", today.year))
             month = int(request.query_params.get("month", today.month))
@@ -2131,18 +2132,15 @@ class MonthlyStatisticsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 2. Безопасное получение цели
         goal = getattr(profile, "nutrition_goal", None)
         has_goal = goal is not None and getattr(goal, "calories", 0) > 0
 
-        # 3. Выборка данных
         queryset = Calories.objects.filter(
             profile=profile,
-            created_at__range=[start_of_month, end_of_month],
+            created_at__date__range=[start_of_month, end_of_month],
             saved=True,
         ).values("created_at", "total")
 
-        # 4. Группировка
         daily_data = defaultdict(
             lambda: {
                 "calories": 0.0,
@@ -2154,7 +2152,8 @@ class MonthlyStatisticsView(APIView):
         )
 
         for entry in queryset:
-            day = entry["created_at"]
+            dt = entry["created_at"]
+            day = localtime(dt).date() if timezone.is_aware(dt) else (dt.date() if hasattr(dt, "date") else dt)
             t = entry["total"] or {}
 
             daily_data[day]["calories"] += float(t.get("ккал", 0))
@@ -2163,15 +2162,13 @@ class MonthlyStatisticsView(APIView):
             daily_data[day]["uglevod"] += float(t.get("углеводы", 0))
             daily_data[day]["klechatka"] += float(t.get("клетчатка", 0))
 
-        # 5. Сборка результатов
-        total_monthly_percent = 0
+        total_monthly_percent = 0.0
         daily_details = {}
 
         for day, stats in daily_data.items():
-            # Если цель есть — считаем %, иначе None
             if has_goal:
                 raw_percent = (stats["calories"] / goal.calories) * 100
-                day_percent = min(round(raw_percent, 1), 100.0)
+                day_percent = round(raw_percent, 1)  # без обрезки на 100%
                 goal_data = {
                     "calories": goal.calories,
                     "belok": getattr(goal, "proteins", 0),
@@ -2192,7 +2189,6 @@ class MonthlyStatisticsView(APIView):
             if day_percent is not None:
                 total_monthly_percent += day_percent
 
-        # Средний процент за месяц (только если была цель)
         days_tracked = len(daily_data)
         average_monthly_percent = (
             round(total_monthly_percent / days_tracked, 1)
@@ -3241,7 +3237,7 @@ class CaroiesView(APIView):
         # 3. Считаем процент выполнения для круга (81% на макете)
         percentage = 0
         if g_cal > 0:
-            percentage = int((calories / g_cal) * 100)
+            percentage = round((calories / g_cal) * 100) if g_cal > 0 else 0
             # Ограничиваем 100%, если нужно для красоты диаграммы,
             # либо оставляем как есть, если важен перебор
             if percentage > 100:
@@ -6018,32 +6014,40 @@ def make_scaled_rl_image(img_source, max_w=480, max_h=520):
     ratio = min(max_w / float(iw), max_h / float(ih), 1.0)
     return RLImage(img_source, width=iw * ratio, height=ih * ratio)
 
-
-def build_medication_chart(dates_list, percentages_list):
+import math
+def build_medication_chart(dates_list, percentages_list, allow_over_100=False):
     """
-    Векторный график (30 дней, ось Y 0..100%, ось X даты ДД.ММ вертикально).
+    Векторный график (30 дней).
+    - Подписи дат сдвинуты ниже оси X (не сливаются с линией).
+    - При allow_over_100=True ось Y автоматически расширяется, если есть значения > 100%.
     """
-    drawing = Drawing(515, 230)
+    drawing = Drawing(515, 245)
 
-    chart_x = 40
-    chart_y = 45
-    chart_w = 460
-    chart_h = 165
+    chart_x = 42
+    chart_y = 55
+    chart_w = 458
+    chart_h = 170
 
     grid_color = colors.HexColor('#E2E8F0')
     axis_color = colors.HexColor('#0F172A')
     line_color = colors.HexColor('#3B82F6')
     text_color = colors.HexColor('#334155')
 
-    for i in range(11):
-        pct = i * 10
-        y_pos = chart_y + (pct / 100.0) * chart_h
+    max_pct = max(percentages_list) if percentages_list else 100.0
+    if allow_over_100 and max_pct > 100.0:
+        max_scale = int(math.ceil(max_pct / 20.0) * 20)
+        step_pct = 20 if max_scale <= 200 else 50
+    else:
+        max_scale = 100
+        step_pct = 10
+
+    for pct in range(0, max_scale + 1, step_pct):
+        y_pos = chart_y + (pct / float(max_scale)) * chart_h
 
         drawing.add(Line(
             chart_x, y_pos, chart_x + chart_w, y_pos,
             strokeColor=grid_color, strokeWidth=0.6, strokeDashArray=[2, 2]
         ))
-
         drawing.add(String(
             chart_x - 6, y_pos - 3, f"{pct}%",
             fontName=FONT_NAME, fontSize=7, fillColor=text_color, textAnchor='end'
@@ -6054,8 +6058,9 @@ def build_medication_chart(dates_list, percentages_list):
     points = []
 
     for idx, (d, pct) in enumerate(zip(dates_list, percentages_list)):
+        val = pct if allow_over_100 else min(pct, 100.0)
         x_pos = chart_x + idx * step_x
-        y_pos = chart_y + (pct / 100.0) * chart_h
+        y_pos = chart_y + (val / float(max_scale)) * chart_h
         points.extend([x_pos, y_pos])
 
         drawing.add(Line(
@@ -6065,9 +6070,9 @@ def build_medication_chart(dates_list, percentages_list):
 
         date_str = d.strftime('%d.%m')
         g = Group()
-        g.translate(x_pos + 2, chart_y - 18)
+        g.translate(x_pos + 2, chart_y - 6)
         g.rotate(90)
-        g.add(String(0, 0, date_str, fontName=FONT_NAME, fontSize=6.5, fillColor=text_color))
+        g.add(String(0, 0, date_str, fontName=FONT_NAME, fontSize=6.5, fillColor=text_color, textAnchor='end'))
         drawing.add(g)
 
     drawing.add(Line(chart_x, chart_y, chart_x, chart_y + chart_h, strokeColor=axis_color, strokeWidth=1))
@@ -6849,15 +6854,27 @@ class AddVaccineReactionAPIView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+def pdf_t(text: str, lang: str = "ru") -> str:
+    """Переводит текст для PDF с кэшированием на 30 дней, если выбран не русский язык."""
+    if not text or lang == "ru":
+        return str(text) if text is not None else ""
+    text_str = str(text)
+    h = hashlib.md5(f"pdf_{text_str}_{lang}".encode("utf-8")).hexdigest()
+    cache_key = f"pdf_trans_{h}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    translated = translate_text_on_the_fly(text_str, lang)
+    cache.set(cache_key, translated, timeout=60 * 60 * 24 * 30)
+    return translated
+def generate_combined_user_health_pdf_response(profile, lang: str = "ru"):
+    """
+    Единый PDF-отчёт пользователя (4 раздела) с поддержкой языка (ru / en),
+    актуальным пересчётом ИИ-текста, шкалой >100% и учётом времени приёма лекарств.
+    """
+    def t(s):
+        return pdf_t(s, lang)
 
-def generate_combined_user_health_pdf_response(profile):
-    """
-    Формирует единый PDF-отчёт пользователя со всеми 4 разделами на отдельных страницах:
-    - Стр 1: Общее состояние здоровья (Персональные данные + Пройденные анализы)
-    - Стр 2: Сводка состояния здоровья на основе всех шкал
-    - Стр 3: Режим питания (последний месяц) — с актуальным ИИ-отчётом, проверкой удаленной цели и точным расчётом воды
-    - Стр 4: Режим приёма лекарств (последний месяц) — без учёта дней до старта курса как пропусков
-    """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -6871,145 +6888,101 @@ def generate_combined_user_health_pdf_response(profile):
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle(
-        'NutrTitle',
-        parent=styles['Heading1'],
-        fontName=FONT_NAME_BOLD,
-        fontSize=16,
-        leading=20,
-        textColor=colors.HexColor('#1E3A8A'),
-        spaceAfter=4,
+        'NutrTitle', parent=styles['Heading1'], fontName=FONT_NAME_BOLD,
+        fontSize=16, leading=20, textColor=colors.HexColor('#1E3A8A'), spaceAfter=4,
     )
     subtitle_style = ParagraphStyle(
-        'NutrSubTitle',
-        parent=styles['Normal'],
-        fontName=FONT_NAME,
-        fontSize=8.5,
-        leading=12,
-        textColor=colors.HexColor('#334155'),
-        spaceAfter=14,
+        'NutrSubTitle', parent=styles['Normal'], fontName=FONT_NAME,
+        fontSize=8.5, leading=12, textColor=colors.HexColor('#334155'), spaceAfter=14,
     )
     section_style = ParagraphStyle(
-        'NutrSection',
-        parent=styles['Heading2'],
-        fontName=FONT_NAME_BOLD,
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor('#1E3A8A'),
-        spaceBefore=12,
-        spaceAfter=6,
-        keepWithNext=True,
+        'NutrSection', parent=styles['Heading2'], fontName=FONT_NAME_BOLD,
+        fontSize=10, leading=14, textColor=colors.HexColor('#1E3A8A'),
+        spaceBefore=12, spaceAfter=6, keepWithNext=True,
     )
     cell_style = ParagraphStyle(
-        'NutrCell',
-        parent=styles['Normal'],
-        fontName=FONT_NAME,
-        fontSize=8.5,
-        leading=11,
-        textColor=colors.HexColor('#0F172A'),
+        'NutrCell', parent=styles['Normal'], fontName=FONT_NAME,
+        fontSize=8.5, leading=11, textColor=colors.HexColor('#0F172A'),
     )
     cell_center_bold = ParagraphStyle(
-        'NutrCellCenterBold',
-        parent=cell_style,
-        fontName=FONT_NAME_BOLD,
-        alignment=1,
+        'NutrCellCenterBold', parent=cell_style, fontName=FONT_NAME_BOLD, alignment=1,
     )
     cell_right = ParagraphStyle(
-        'NutrCellRight',
-        parent=cell_style,
-        alignment=2,
+        'NutrCellRight', parent=cell_style, alignment=2,
     )
     body_text_style = ParagraphStyle(
-        'NutrBodyText',
-        parent=styles['Normal'],
-        fontName=FONT_NAME,
-        fontSize=8.5,
-        leading=12.5,
-        textColor=colors.HexColor('#1E293B'),
-        spaceAfter=8,
+        'NutrBodyText', parent=styles['Normal'], fontName=FONT_NAME,
+        fontSize=8.5, leading=12.5, textColor=colors.HexColor('#1E293B'), spaceAfter=8,
     )
     empty_style = ParagraphStyle(
-        'NutrEmpty',
-        parent=styles['Normal'],
-        fontName=FONT_NAME_BOLD,
-        fontSize=11,
-        leading=15,
-        textColor=colors.HexColor('#64748B'),
-        spaceBefore=20,
+        'NutrEmpty', parent=styles['Normal'], fontName=FONT_NAME_BOLD,
+        fontSize=11, leading=15, textColor=colors.HexColor('#64748B'), spaceBefore=20,
     )
 
+    subtitle_text = t("Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR")
+
     # --------------------------------------------------------------------------
-    # РАЗДЕЛ 1: ОБЩЕЕ СОСТОЯНИЕ ЗДОРОВЬЯ (ПЕРСОНАЛЬНЫЕ ДАННЫЕ И АНАЛИЗЫ)
+    # РАЗДЕЛ 1: ОБЩЕЕ СОСТОЯНИЕ ЗДОРОВЬЯ
     # --------------------------------------------------------------------------
     collected_data = collect_all_user_health_data(profile)
     p_table = collected_data["personal_table"]
     analyses = collected_data["analyses"]
 
-    elements.append(Paragraph("Общее состояние здоровья", title_style))
-    elements.append(Paragraph(
-        "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
-        subtitle_style
-    ))
+    elements.append(Paragraph(t("Общее состояние здоровья"), title_style))
+    elements.append(Paragraph(subtitle_text, subtitle_style))
+    elements.append(Paragraph(t("Персональные данные"), section_style))
 
-    elements.append(Paragraph("Персональные данные", section_style))
     table1_data = [
-        [Paragraph("Имя Фамилия Отчество", cell_style), Paragraph(p_table["full_name"], cell_style)],
-        [Paragraph("Пол", cell_style), Paragraph(p_table["gender"], cell_style)],
-        [Paragraph("Возраст", cell_style), Paragraph(p_table["age"], cell_style)],
-        [Paragraph("Рост / Вес", cell_style), Paragraph(p_table["height_weight"], cell_style)],
+        [Paragraph(t("Имя Фамилия Отчество"), cell_style), Paragraph(p_table["full_name"], cell_style)],
+        [Paragraph(t("Пол"), cell_style), Paragraph(t(p_table["gender"]), cell_style)],
+        [Paragraph(t("Возраст"), cell_style), Paragraph(t(p_table["age"]), cell_style)],
+        [Paragraph(t("Рост / Вес"), cell_style), Paragraph(t(p_table["height_weight"]), cell_style)],
     ]
     t1 = Table(table1_data, colWidths=[240, 275])
     t1.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
     ]))
     elements.append(t1)
     elements.append(Spacer(1, 10))
 
     table2_data = [
-        [Paragraph("ИМТ", cell_style), Paragraph(p_table["bmi"], cell_style)],
-        [Paragraph("Индекс курения", cell_style), Paragraph(p_table["smoking"], cell_style)],
-        [Paragraph("Хронические неинфекционные заболевания", cell_style), Paragraph(p_table["chronic_diseases"], cell_style)],
-        [Paragraph("Приём лекарств", cell_style), Paragraph(p_table["drugs"], cell_style)],
-        [Paragraph("Группа крови и резус-фактор", cell_style), Paragraph(p_table["blood_group"], cell_style)],
-        [Paragraph("Место проживания", cell_style), Paragraph(p_table["place_of_residence"], cell_style)],
+        [Paragraph(t("ИМТ"), cell_style), Paragraph(t(p_table["bmi"]), cell_style)],
+        [Paragraph(t("Индекс курения"), cell_style), Paragraph(t(p_table["smoking"]), cell_style)],
+        [Paragraph(t("Хронические неинфекционные заболевания"), cell_style), Paragraph(t(p_table["chronic_diseases"]), cell_style)],
+        [Paragraph(t("Приём лекарств"), cell_style), Paragraph(t(p_table["drugs"]), cell_style)],
+        [Paragraph(t("Группа крови и резус-фактор"), cell_style), Paragraph(t(p_table["blood_group"]), cell_style)],
+        [Paragraph(t("Место проживания"), cell_style), Paragraph(t(p_table["place_of_residence"]), cell_style)],
     ]
     t2 = Table(table2_data, colWidths=[240, 275])
     t2.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
     ]))
     elements.append(t2)
     elements.append(Spacer(1, 12))
 
-    elements.append(Paragraph("Пройденные анализы", section_style))
-    analyses_rows = []
-    for item in analyses:
-        analyses_rows.append([
-            Paragraph(item["title"], cell_style),
-            Paragraph(item["result"], cell_style)
-        ])
+    elements.append(Paragraph(t("Пройденные анализы"), section_style))
+    analyses_rows = [
+        [Paragraph(t(item["title"]), cell_style), Paragraph(t(item["result"]), cell_style)]
+        for item in analyses
+    ]
     if not analyses_rows:
         analyses_rows.append([
-            Paragraph("Анализы не добавлены", cell_style),
-            Paragraph("В разделе «Анализы» отсутствуют загруженные данные", cell_style)
+            Paragraph(t("Анализы не добавлены"), cell_style),
+            Paragraph(t("В разделе «Анализы» отсутствуют загруженные данные"), cell_style)
         ])
 
     t3 = Table(analyses_rows, colWidths=[180, 335], splitByRow=1)
     t3.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
     ]))
     elements.append(t3)
 
@@ -7019,117 +6992,93 @@ def generate_combined_user_health_pdf_response(profile):
     elements.append(PageBreak())
     report_scales_obj = get_or_update_scales_summary_report(profile)
 
-    elements.append(Paragraph("Сводка состояния здоровья на основе всех шкал", title_style))
-    elements.append(Paragraph(
-        "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
-        subtitle_style
-    ))
-    elements.append(Paragraph("Краткий отчет по здоровью", section_style))
-    elements.append(Paragraph(report_scales_obj.brief_summary or "Данные не указаны", body_text_style))
+    elements.append(Paragraph(t("Сводка состояния здоровья на основе всех шкал"), title_style))
+    elements.append(Paragraph(subtitle_text, subtitle_style))
 
-    elements.append(Paragraph("Анализ динамики здоровья", section_style))
-    elements.append(Paragraph(report_scales_obj.dynamics_analysis or "Данные не указаны", body_text_style))
+    elements.append(Paragraph(t("Краткий отчет по здоровью"), section_style))
+    elements.append(Paragraph(t(report_scales_obj.brief_summary or "Данные не указаны"), body_text_style))
 
-    elements.append(Paragraph("Сравнение с нормами по возрасту и полу", section_style))
-    elements.append(Paragraph(report_scales_obj.norms_comparison or "Данные не указаны", body_text_style))
+    elements.append(Paragraph(t("Анализ динамики здоровья"), section_style))
+    elements.append(Paragraph(t(report_scales_obj.dynamics_analysis or "Данные не указаны"), body_text_style))
 
-    elements.append(Paragraph("Краткие персональные рекомендации", section_style))
-    elements.append(Paragraph(report_scales_obj.personal_recommendations or "Данные не указаны", body_text_style))
+    elements.append(Paragraph(t("Сравнение с нормами по возрасту и полу"), section_style))
+    elements.append(Paragraph(t(report_scales_obj.norms_comparison or "Данные не указаны"), body_text_style))
+
+    elements.append(Paragraph(t("Краткие персональные рекомендации"), section_style))
+    elements.append(Paragraph(t(report_scales_obj.personal_recommendations or "Данные не указаны"), body_text_style))
 
     # --------------------------------------------------------------------------
-    # РАЗДЕЛ 3: РЕЖИМ ПИТАНИЯ (Правки 3, 4, 5)
+    # РАЗДЕЛ 3: РЕЖИМ ПИТАНИЯ (Правки 2, 4, 5, 7, 8)
     # --------------------------------------------------------------------------
     elements.append(PageBreak())
     profile.refresh_from_db()
     stats = calculate_monthly_nutrition_stats(profile)
 
-    elements.append(Paragraph("Режим питания (последний месяц)", title_style))
-    elements.append(Paragraph(
-        "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
-        subtitle_style
-    ))
+    elements.append(Paragraph(t("Режим питания (последний месяц)"), title_style))
+    elements.append(Paragraph(subtitle_text, subtitle_style))
 
     if not stats:
-        elements.append(Paragraph("Данные о питании за выбранный период отсутствуют", empty_style))
+        elements.append(Paragraph(t("Данные о питании за выбранный период отсутствуют"), empty_style))
     else:
-        # ПРАВКА 5: Среднее потребление воды за день = общий объём воды за период ÷ количество дней с записями
         today_dt = localtime(now()).date()
         start_30_dt = today_dt - timedelta(days=29)
         cal_qs_30 = Calories.objects.filter(
-            profile=profile,
-            saved=True,
-            created_at__date__range=(start_30_dt, today_dt)
+            profile=profile, saved=True, created_at__date__range=(start_30_dt, today_dt)
         )
         distinct_days_count = cal_qs_30.annotate(d=TruncDate('created_at')).values('d').distinct().count()
         total_water_30 = sum(float(c.water_intake or 0.0) for c in cal_qs_30)
         if distinct_days_count > 0:
             stats["averages"]["water_liters"] = round(total_water_30 / distinct_days_count, 2)
 
-        # ПРАВКА 4: Проверяем актуальную цель прямо из базы
         goal_obj = NutritionGoal.objects.filter(profile=profile).first()
         has_active_goal = bool(goal_obj and getattr(goal_obj, 'calories', 0) and goal_obj.calories > 0)
         stats["has_goal"] = has_active_goal
 
         if has_active_goal:
-            elements.append(Paragraph("График выполнения нормы питания", section_style))
-            elements.append(build_medication_chart(stats["dates_list"], stats["percentages_list"]))
+            elements.append(Paragraph(t("График выполнения нормы питания"), section_style))
+            elements.append(
+                build_medication_chart(stats["dates_list"], stats["percentages_list"], allow_over_100=True)
+            )
             elements.append(Spacer(1, 10))
 
-        elements.append(Paragraph("Статистика", section_style))
+        elements.append(Paragraph(t("Статистика"), section_style))
         avg = stats["averages"]
-        meals_str = f"{str(avg['meals_per_day']).replace('.', ',')} раза в день"
-        water_str = f"{str(avg['water_liters']).replace('.', ',')} л"
+        meals_str = t(f"{str(avg['meals_per_day']).replace('.', ',')} раза в день")
+        water_str = t(f"{str(avg['water_liters']).replace('.', ',')} л")
 
         table_data = [
+            [Paragraph(t("Частота приёмов пищи"), cell_style), "", Paragraph(meals_str, cell_style), ""],
+            [Paragraph(t("Средняя пищевая ценность в день"), cell_center_bold), "", "", ""],
             [
-                Paragraph("Частота приёмов пищи", cell_style),
-                "",
-                Paragraph(meals_str, cell_style),
-                ""
+                Paragraph(t("Калории"), cell_style), Paragraph(t(f"{avg['calories']} ккал"), cell_right),
+                Paragraph(t("Потребление воды"), cell_style), Paragraph(water_str, cell_right),
             ],
             [
-                Paragraph("Средняя пищевая ценность в день", cell_center_bold),
-                "",
-                "",
-                ""
+                Paragraph(t("Углеводы"), cell_style), Paragraph(t(f"{avg['carbs']} г"), cell_right),
+                Paragraph(t("Белки"), cell_style), Paragraph(t(f"{avg['proteins']} г"), cell_right),
             ],
             [
-                Paragraph("Калории", cell_style),
-                Paragraph(f"{avg['calories']} ккал", cell_right),
-                Paragraph("Потребление воды", cell_style),
-                Paragraph(water_str, cell_right),
-            ],
-            [
-                Paragraph("Углеводы", cell_style),
-                Paragraph(f"{avg['carbs']} г", cell_right),
-                Paragraph("Белки", cell_style),
-                Paragraph(f"{avg['proteins']} г", cell_right),
-            ],
-            [
-                Paragraph("Клетчатка", cell_style),
-                Paragraph(f"{avg['fiber']} г", cell_right),
-                Paragraph("Жиры", cell_style),
-                Paragraph(f"{avg['fats']} г", cell_right),
+                Paragraph(t("Клетчатка"), cell_style), Paragraph(t(f"{avg['fiber']} г"), cell_right),
+                Paragraph(t("Жиры"), cell_style), Paragraph(t(f"{avg['fats']} г"), cell_right),
             ],
         ]
 
         stats_table = Table(table_data, colWidths=[140, 117.5, 140, 117.5])
         stats_table.setStyle(TableStyle([
-            ('SPAN', (0, 0), (1, 0)),
-            ('SPAN', (2, 0), (3, 0)),
-            ('SPAN', (0, 1), (3, 1)),
+            ('SPAN', (0, 0), (1, 0)), ('SPAN', (2, 0), (3, 0)), ('SPAN', (0, 1), (3, 1)),
             ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(stats_table)
         elements.append(Spacer(1, 10))
 
-        # ПРАВКИ 3 и 4: Обновляем текстовые блоки при каждой выгрузке по актуальным данным таблицы и цели
-
+        # Обновляем ИИ-анализ при каждой выгрузке по актуальным данным таблицы и цели
+        try:
+            update_nutrition_ai_report_for_profile(profile)
+        except Exception as e:
+            print(f"Nutrition AI report update error: {e}")
 
         report_obj = CaloriesReportProfile.objects.filter(profile=profile).first()
         diet_text = (
@@ -7143,28 +7092,27 @@ def generate_combined_user_health_pdf_response(profile):
             else "Сохранять регулярный режим питания, равномерно распределять приёмы пищи в течение дня и контролировать количество воды."
         )
 
-        elements.append(Paragraph("Отчёт о вредности/полезности рациона", section_style))
-        elements.append(Paragraph(diet_text, body_text_style))
+        elements.append(Paragraph(t("Отчёт о вредности/полезности рациона"), section_style))
+        elements.append(Paragraph(t(diet_text), body_text_style))
 
-        elements.append(Paragraph("Общие рекомендации", section_style))
-        elements.append(Paragraph(rec_text, body_text_style))
+        elements.append(Paragraph(t("Общие рекомендации"), section_style))
+        elements.append(Paragraph(t(rec_text), body_text_style))
 
     # --------------------------------------------------------------------------
-    # РАЗДЕЛ 4: РЕЖИМ ПРИЁМА ЛЕКАРСТВ (Правки 2 и 6)
+    # РАЗДЕЛ 4: РЕЖИМ ПРИЁМА ЛЕКАРСТВ (Правки 1 и 7)
     # --------------------------------------------------------------------------
     elements.append(PageBreak())
     drugs_qs = Drugs.objects.filter(profile=profile).prefetch_related('notifications_drugs')
 
-    elements.append(Paragraph("Режим приёма лекарств (последний месяц)", title_style))
-    elements.append(Paragraph(
-        "Общая сводка по здоровью пациента на основе мониторинга в приложении MEDAVATAR",
-        subtitle_style
-    ))
+    elements.append(Paragraph(t("Режим приёма лекарств (последний месяц)"), title_style))
+    elements.append(Paragraph(subtitle_text, subtitle_style))
 
     if not drugs_qs.exists():
-        elements.append(Paragraph("Данные о приёме лекарств отсутствуют", empty_style))
+        elements.append(Paragraph(t("Данные о приёме лекарств отсутствуют"), empty_style))
     else:
-        today = localtime(now()).date()
+        now_local = localtime(now())
+        today = now_local.date()
+        current_time = now_local.time()
         start_date = today - timedelta(days=29)
         dates_list = [start_date + timedelta(days=i) for i in range(30)]
 
@@ -7173,21 +7121,42 @@ def generate_combined_user_health_pdf_response(profile):
             date__range=(start_date, today),
             is_taken=True
         )
-
         taken_by_date = defaultdict(int)
         for chk in checks_qs:
             taken_by_date[chk.date] += 1
 
-        # ПРАВКИ 2 и 6: Учитываем ТОЛЬКО фактически запланированные приёмы в пределах курса (со дня d_start)
+        import re
+        from datetime import datetime as dt_cls, time as time_cls
+
+        def _to_time(val):
+            if isinstance(val, time_cls):
+                return val
+            if isinstance(val, str):
+                match = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?)', val)
+                if match:
+                    s = match.group(1)
+                    for fmt in ("%H:%M:%S", "%H:%M"):
+                        try:
+                            return dt_cls.strptime(s, fmt).time()
+                        except ValueError:
+                            continue
+            return None
+
         drug_schedule_info = []
         for drug in drugs_qs:
-            notif_count = drug.notifications_drugs.count()
-            daily_intakes = notif_count if notif_count > 0 else max(int(drug.time_day or 1), 1)
-            duration_days = max(int(drug.day or 1), 1)
+            notifs = list(drug.notifications_drugs.all())
+            notif_times = []
+            for n in notifs:
+                raw_t = getattr(n, 'time', None) or getattr(n, 'notification_time', None)
+                parsed_t = _to_time(raw_t)
+                if parsed_t is not None:
+                    notif_times.append(parsed_t)
 
+            daily_intakes = len(notifs) if notifs else max(int(drug.time_day or 1), 1)
+            duration_days = max(int(drug.day or 1), 1)
             d_start = drug.created_at.date() if hasattr(drug.created_at, 'date') else drug.created_at
             d_end = d_start + timedelta(days=duration_days)
-            drug_schedule_info.append((d_start, d_end, daily_intakes))
+            drug_schedule_info.append((d_start, d_end, daily_intakes, notif_times))
 
         percentages_list = []
         total_planned = 0
@@ -7196,9 +7165,15 @@ def generate_combined_user_health_pdf_response(profile):
 
         for d in dates_list:
             planned_for_day = 0
-            for d_start, d_end, daily_intakes in drug_schedule_info:
+            for d_start, d_end, daily_intakes, notif_times in drug_schedule_info:
                 if d_start <= d < d_end and d <= today:
-                    planned_for_day += daily_intakes
+                    if d < today:
+                        planned_for_day += daily_intakes
+                    else:
+                        planned_for_day += (
+                            sum(1 for tm in notif_times if tm <= current_time)
+                            if notif_times else daily_intakes
+                        )
 
             if planned_for_day > 0:
                 taken_for_day = min(taken_by_date.get(d, 0), planned_for_day)
@@ -7208,47 +7183,44 @@ def generate_combined_user_health_pdf_response(profile):
                     missed_days_count += 1
                 day_pct = round((taken_for_day / planned_for_day) * 100, 1)
             else:
-                # Дни до начала курса не считаются в пропуски!
                 day_pct = 0.0
 
             percentages_list.append(day_pct)
 
         missed_intakes = max(total_planned - total_taken, 0)
-        regularity_pct = round((total_taken / total_planned) * 100, 1) if total_planned > 0 else 0.0
-        if regularity_pct == int(regularity_pct):
-            regularity_pct = int(regularity_pct)
-        score_10 = round(regularity_pct / 10)
-
-        if score_10 >= 8:
-            score_label = "высокая регулярность"
-        elif score_10 >= 5:
-            score_label = "средняя регулярность"
+        if total_planned > 0:
+            regularity_pct = round((total_taken / total_planned) * 100, 1)
+            if regularity_pct == int(regularity_pct):
+                regularity_pct = int(regularity_pct)
+            score_10 = round(regularity_pct / 10)
+            score_label = (
+                "высокая регулярность" if score_10 >= 8
+                else ("средняя регулярность" if score_10 >= 5 else "низкая регулярность")
+            )
+            regularity_str = f"{str(regularity_pct).replace('.', ',')}%"
+            score_str = t(f"{score_10} из 10 — {score_label}")
         else:
-            score_label = "низкая регулярность"
+            regularity_str = "—"
+            score_str = t("Нет приёмов, время которых уже наступило")
 
-        elements.append(Paragraph("График приема лекарств", section_style))
-        elements.append(build_medication_chart(dates_list, percentages_list))
+        misses_str = t(f"{missed_intakes} из {total_planned} запланированных приёмов ({missed_days_count} дн.)")
+
+        elements.append(Paragraph(t("График приема лекарств"), section_style))
+        elements.append(build_medication_chart(dates_list, percentages_list, allow_over_100=False))
         elements.append(Spacer(1, 15))
 
-        elements.append(Paragraph("Статистика", section_style))
-        regularity_str = f"{str(regularity_pct).replace('.', ',')}%"
-        misses_str = f"{missed_intakes} из {total_planned} запланированных приёмов ({missed_days_count} дн.)"
-        score_str = f"{score_10} из 10 — {score_label}"
-
+        elements.append(Paragraph(t("Статистика"), section_style))
         stats_data = [
-            [Paragraph("Пропуски", cell_style), Paragraph(misses_str, cell_style)],
-            [Paragraph("Регулярность", cell_style), Paragraph(regularity_str, cell_style)],
-            [Paragraph("Оценка соблюдения режима", cell_style), Paragraph(score_str, cell_style)],
+            [Paragraph(t("Пропуски"), cell_style), Paragraph(misses_str, cell_style)],
+            [Paragraph(t("Регулярность"), cell_style), Paragraph(regularity_str, cell_style)],
+            [Paragraph(t("Оценка соблюдения режима"), cell_style), Paragraph(score_str, cell_style)],
         ]
-
         stats_table = Table(stats_data, colWidths=[260, 255])
         stats_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.7, colors.HexColor('#94A3B8')),
-            ('TOPPADDING', (0, 0), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 7), ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
         ]))
         elements.append(stats_table)
 
@@ -7257,44 +7229,40 @@ def generate_combined_user_health_pdf_response(profile):
     buffer.seek(0)
 
     filename = f"medavatar_report_{profile.id}_{date.today().strftime('%Y%m%d')}.pdf"
-    send_pdf_to_telegram_async(profile, pdf_bytes, filename, caption="📄 Ваш общий PDF-отчёт MED AVATAR")
+    send_pdf_to_telegram_async(profile, pdf_bytes, filename, caption=t("📄 Ваш общий PDF-отчёт MED AVATAR"))
 
     return FileResponse(
-        buffer,
-        as_attachment=True,
-        filename=filename,
-        content_type='application/pdf'
+        buffer, as_attachment=True, filename=filename, content_type='application/pdf'
     )
-
 # ПРАВКА 8: Все вьюшки взрослого отчёта теперь отдают единый 4-раздельный PDF-файл
+
+
+def _get_request_lang(request) -> str:
+    return (request.query_params.get('lang') or request.headers.get('Accept-Language', 'ru'))[:2].lower()
 
 
 class DownloadMedicationRegimePDFAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        return generate_combined_user_health_pdf_response(request.user.profile)
+        return generate_combined_user_health_pdf_response(request.user.profile, lang=_get_request_lang(request))
 
 
 class DownloadNutritionRegimePDFAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        return generate_combined_user_health_pdf_response(request.user.profile)
+        return generate_combined_user_health_pdf_response(request.user.profile, lang=_get_request_lang(request))
 
 
 class DownloadGeneralHealthPersonalPDFAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        return generate_combined_user_health_pdf_response(request.user.profile)
+        return generate_combined_user_health_pdf_response(request.user.profile, lang=_get_request_lang(request))
 
 
 class DownloadHealthScalesSummaryPDFAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        return generate_combined_user_health_pdf_response(request.user.profile)
+        return generate_combined_user_health_pdf_response(request.user.profile, lang=_get_request_lang(request))
 from .models import DoctorProfile, Consultation, ConsultationMessage,DoctorWithdrawal
 from .serializers import (
     DoctorCabinetSerializer,
